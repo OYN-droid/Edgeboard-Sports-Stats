@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EdgeBoard Sports Stats</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Primary">
+        <a class="brand" href="#" aria-label="EdgeBoard home">
+          <span class="brand-mark">E</span>
+          <span>EdgeBoard</span>
+        </a>
+        <nav class="sport-tabs" aria-label="Sports">
+          <button class="tab active" data-sport="NBA">NBA</button>
+          <button class="tab" data-sport="NFL">NFL</button>
+          <button class="tab" data-sport="MLB">MLB</button>
+          <button class="tab" data-sport="NHL">NHL</button>
+        </nav>
+        <div class="theme-switch" role="group" aria-label="Color theme">
+          <button class="theme-option active" type="button" data-theme-option="dark">Dark</button>
+          <button class="theme-option" type="button" data-theme-option="light">Light</button>
+        </div>
+      </header>
+
+      <main>
+        <section class="hero" aria-label="Sports betting research">
+          <img src="assets/analytics-desk.png" alt="" class="hero-image" />
+          <div class="hero-shade"></div>
+          <div class="hero-content">
+            <div class="hero-copy">
+              <p class="eyebrow">Sports stats for sharper bet research</p>
+              <h1>Ask a betting question. Build the slip with context.</h1>
+            </div>
+            <form class="ask-panel" id="queryForm">
+              <label for="queryInput">Research query</label>
+              <div class="query-row">
+                <input
+                  id="queryInput"
+                  type="search"
+                  autocomplete="off"
+                  value="Which guards are safest for over 24.5 points tonight?"
+                />
+                <button class="primary-button" type="submit">Analyze</button>
+              </div>
+              <div class="quick-prompts" aria-label="Example queries">
+                <button type="button" data-query="Find plus-money NBA props with hit rate over 60%">Plus-money props</button>
+                <button type="button" id="sportParlayPrompt" data-query="Best 4 leg parlay for points">4-leg points parlay</button>
+                <button type="button" data-query="Which teams cover after two days rest?">Rest trends</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="workspace" aria-label="Betting research workspace">
+          <aside class="filters" aria-label="Filters">
+            <div class="panel-heading">
+              <h2>Markets</h2>
+              <span id="sportLabel">NBA</span>
+            </div>
+            <div class="segmented" role="group" aria-label="Bet type">
+              <button class="active" data-market="props">Props</button>
+              <button data-market="spreads">Spreads</button>
+              <button data-market="totals">Totals</button>
+            </div>
+            <label class="control-label" for="confidenceRange">Minimum confidence</label>
+            <input id="confidenceRange" type="range" min="50" max="82" value="58" />
+            <div class="range-readout"><span id="confidenceValue">58%</span><span>model signal</span></div>
+            <label class="toggle-row">
+              <input id="showOnlyAvailable" type="checkbox" checked />
+              <span>Show available lines only</span>
+            </label>
+            <label class="toggle-row">
+              <input id="avoidSameGame" type="checkbox" />
+              <span>Flag same-game correlation</span>
+            </label>
+          </aside>
+
+          <section class="results-panel" aria-live="polite">
+            <div class="section-title">
+              <div>
+                <p class="eyebrow">Answer</p>
+                <h2 id="answerTitle">Best-fit edges for tonight</h2>
+              </div>
+              <span class="timestamp">Sample board - updated locally</span>
+            </div>
+            <div class="answer-card">
+              <p id="answerText">
+                The strongest profile is high-usage players facing bottom-third defensive matchups, with recent minutes stability and a line within one point of projection.
+              </p>
+              <div class="answer-metrics">
+                <span><strong id="edgeCount">6</strong> qualified picks</span>
+                <span><strong id="avgConfidence">64%</strong> avg confidence</span>
+                <span><strong id="riskLevel">Medium</strong> parlay risk</span>
+              </div>
+            </div>
+
+            <div class="bet-grid" id="betGrid"></div>
+          </section>
+
+          <aside class="slip" aria-label="Parlay builder">
+            <div class="panel-heading">
+              <h2>Bet Slip</h2>
+              <button class="text-button" id="clearSlip" type="button">Clear</button>
+            </div>
+            <div id="slipList" class="slip-list empty">Add legs from the board.</div>
+            <div class="slip-summary">
+              <div><span>Legs</span><strong id="legCount">0</strong></div>
+              <div><span>Est. odds</span><strong id="combinedOdds">+0</strong></div>
+              <div><span>Risk</span><strong id="slipRisk">None</strong></div>
+            </div>
+            <div class="risk-box" id="riskBox">Combine independent edges first. Correlated legs can inflate payout while reducing true probability.</div>
+            <div class="player-fact" id="playerFact" aria-live="polite">
+              <p class="eyebrow">Edge note</p>
+              <h3>Select a player</h3>
+              <p>Add or select a leg to see a quick player fact.</p>
+            </div>
+          </aside>
+        </section>
+
+        <section class="market-board" aria-label="Matchup board">
+          <div class="section-title">
+            <div>
+              <p class="eyebrow">Board</p>
+              <h2>Games to watch</h2>
+            </div>
+          </div>
+          <div class="matchup-grid" id="matchupGrid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
