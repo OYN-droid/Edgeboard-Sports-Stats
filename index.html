@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>EdgeBoard Sports Stats</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -12,18 +13,51 @@
         <a class="brand" href="#" aria-label="EdgeBoard home">
           <span class="brand-mark">E</span>
           <span>EdgeBoard</span>
+          <span class="sample-badge" id="modeBadge">Sample</span>
         </a>
-        <nav class="sport-tabs" aria-label="Sports">
-          <button class="tab active" data-sport="NBA">NBA</button>
-          <button class="tab" data-sport="NFL">NFL</button>
-          <button class="tab" data-sport="MLB">MLB</button>
-          <button class="tab" data-sport="NHL">NHL</button>
-        </nav>
+        <nav class="sport-tabs" id="sportTabs" aria-label="Sports"></nav>
+        <div class="data-status sample" id="dataStatus" role="status" aria-live="polite">
+          <span class="data-status-dot" aria-hidden="true"></span>
+          <span><strong>Sample data</strong><small>EdgeBoard Mock</small></span>
+        </div>
         <div class="theme-switch" role="group" aria-label="Color theme">
           <button class="theme-option active" type="button" data-theme-option="dark">Dark</button>
           <button class="theme-option" type="button" data-theme-option="light">Light</button>
         </div>
       </header>
+
+      <nav class="research-intent-nav" id="researchIntentNav" aria-label="Research by intent">
+        <button class="active" type="button" data-intent="markets" aria-pressed="true">Markets</button>
+        <button type="button" data-intent="live" aria-pressed="false">Live</button>
+        <button type="button" data-intent="player-props" aria-pressed="false">Player Props</button>
+        <button type="button" data-intent="game-props" aria-pressed="false">Game Props</button>
+        <button type="button" data-intent="sgp" aria-pressed="false">SGP Builder</button>
+        <button type="button" data-intent="value" aria-pressed="false">Value Bets</button>
+        <button type="button" data-intent="movement" aria-pressed="false">Line Movement</button>
+        <button type="button" data-intent="ai-research" aria-pressed="false">AI Research</button>
+        <button type="button" data-intent="trending" aria-pressed="false">Trending</button>
+      </nav>
+
+      <div class="discovery-backdrop" id="discoveryBackdrop" hidden></div>
+      <aside class="discovery-drawer" id="discoveryDrawer" aria-label="Sports discovery" aria-hidden="true">
+        <div class="discovery-header">
+          <div>
+            <p class="eyebrow">Sample availability</p>
+            <h2 id="discoveryTitle">All Sports</h2>
+          </div>
+          <button class="text-button" id="closeDiscovery" type="button" aria-label="Close sports discovery">Close</button>
+        </div>
+        <nav class="discovery-filters" id="discoveryFilters" aria-label="Discover sports">
+          <button type="button" data-discovery-view="all">All Sports</button>
+          <button type="button" data-discovery-view="upcoming">Upcoming</button>
+          <button type="button" data-discovery-view="offseason">Offseason</button>
+          <button type="button" data-discovery-view="futures">Futures</button>
+          <button type="button" data-discovery-view="tier2">Tier 2</button>
+          <button type="button" data-discovery-view="tier3">Tier 3</button>
+          <button type="button" data-discovery-view="unavailable">Unavailable</button>
+        </nav>
+        <div class="discovery-content" id="discoveryContent"></div>
+      </aside>
 
       <main>
         <section class="hero" aria-label="Sports betting research">
@@ -41,31 +75,44 @@
                   id="queryInput"
                   type="search"
                   autocomplete="off"
-                  value="Which guards are safest for over 24.5 points tonight?"
+                  value="Which available markets have the strongest sample signal today?"
                 />
                 <button class="primary-button" type="submit">Analyze</button>
               </div>
               <div class="quick-prompts" aria-label="Example queries">
-                <button type="button" data-query="Find plus-money NBA props with hit rate over 60%">Plus-money props</button>
+                <button type="button" data-query="Find NBA plus-money player props with hit rate over 60%">Plus-money props</button>
                 <button type="button" id="sportParlayPrompt" data-query="Best 4 leg parlay for points">4-leg points parlay</button>
-                <button type="button" data-query="Which teams cover after two days rest?">Rest trends</button>
+                <button type="button" data-query="UFC method of victory props for confirmed fighters">Fight research</button>
+                <button type="button" data-query="Formula 1 podium props at plus money">Race research</button>
+                <button type="button" data-query="MLS three-way moneyline">Soccer research</button>
               </div>
             </form>
           </div>
+        </section>
+
+        <section class="today-board" aria-labelledby="todayBoardTitle">
+          <div class="today-board-heading">
+            <div>
+              <p class="eyebrow">Cross-sport discovery</p>
+              <h2 id="todayBoardTitle">Today’s Markets</h2>
+              <p id="todayBoardSummary">Sample market availability across active sports and leagues.</p>
+            </div>
+            <button class="text-button" type="button" data-open-discovery="all">Explore all sports</button>
+          </div>
+          <div class="today-market-grid" id="todayMarketGrid" aria-live="polite" aria-busy="true"></div>
         </section>
 
         <section class="workspace" aria-label="Betting research workspace">
           <aside class="filters" aria-label="Filters">
             <div class="panel-heading">
               <h2>Markets</h2>
-              <span id="sportLabel">NBA</span>
+              <span id="sportLabel">League</span>
             </div>
-            <div class="segmented" role="group" aria-label="Bet type">
-              <button class="active" data-market="props">Props</button>
-              <button data-market="spreads">Spreads</button>
-              <button data-market="totals">Totals</button>
-            </div>
-            <label class="control-label" for="confidenceRange">Minimum confidence</label>
+            <div class="segmented" id="marketFilters" role="group" aria-label="Bet type"></div>
+            <label class="control-label" for="confidenceRange">
+              Minimum confidence
+              <button class="info-button" type="button" aria-label="About confidence" title="Model confidence describes signal strength and data agreement. It is not a guaranteed win probability.">i</button>
+            </label>
             <input id="confidenceRange" type="range" min="50" max="82" value="58" />
             <div class="range-readout"><span id="confidenceValue">58%</span><span>model signal</span></div>
             <label class="toggle-row">
@@ -84,7 +131,10 @@
                 <p class="eyebrow">Answer</p>
                 <h2 id="answerTitle">Best-fit edges for tonight</h2>
               </div>
-              <span class="timestamp">Sample board - updated locally</span>
+              <div class="result-source">
+                <strong id="selectedLeagueContext">Selected league</strong>
+                <span class="timestamp">Sample source - updated locally</span>
+              </div>
             </div>
             <div class="answer-card">
               <p id="answerText">
@@ -97,13 +147,31 @@
               </div>
             </div>
 
+            <section class="analyst-workflow" id="analystWorkflow" aria-labelledby="analystWorkflowTitle" aria-live="polite" hidden>
+              <div class="analyst-workflow-header">
+                <div>
+                  <p class="eyebrow">Structured AI research</p>
+                  <h3 id="analystWorkflowTitle">Analyst workflow</h3>
+                </div>
+                <span class="workflow-status" id="analystWorkflowStatus">Ready</span>
+              </div>
+              <div class="analyst-scope" id="analystScope"></div>
+              <ol class="workflow-steps" id="analystWorkflowSteps"></ol>
+              <div class="analyst-warnings" id="analystWarnings"></div>
+              <p class="analyst-disclaimer">This workflow structures available evidence. It does not generate guaranteed picks or treat confidence as win probability.</p>
+            </section>
+
             <div class="bet-grid" id="betGrid"></div>
           </section>
 
-          <aside class="slip" aria-label="Parlay builder">
+          <aside class="slip" id="betSlip" aria-label="Parlay builder">
             <div class="panel-heading">
               <h2>Bet Slip</h2>
-              <button class="text-button" id="clearSlip" type="button">Clear</button>
+              <div class="slip-heading-actions">
+                <button class="info-button" type="button" aria-label="About correlation" title="Correlation means two legs may depend on the same game outcome. Correlated legs can increase risk.">i</button>
+                <button class="text-button" id="clearSlip" type="button">Clear</button>
+                <button class="text-button mobile-slip-close" id="closeMobileSlip" type="button">Close</button>
+              </div>
             </div>
             <div id="slipList" class="slip-list empty">Add legs from the board.</div>
             <div class="slip-summary">
@@ -130,8 +198,11 @@
           <div class="matchup-grid" id="matchupGrid"></div>
         </section>
       </main>
+      <button class="mobile-slip-toggle" id="mobileSlipToggle" type="button" aria-controls="betSlip" aria-expanded="false">
+        Bet Slip <span id="mobileLegCount">0</span>
+      </button>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

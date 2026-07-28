@@ -1,581 +1,27 @@
-const picks = [
-  {
-    id: "maxey-points",
-    sport: "NBA",
-    market: "props",
-    name: "Tyrese Maxey",
-    line: "Over 24.5 points",
-    odds: -112,
-    confidence: 68,
-    hitRate: "7 of last 10",
-    matchup: "vs CHI",
-    trend: "+3.8 projected edge",
-    note: "Usage rises when opponent allows early-clock guard drives.",
-    game: "PHI-CHI",
-    team: "PHI",
-    opponent: "CHI",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "lavine-points",
-    sport: "NBA",
-    market: "props",
-    name: "Zach LaVine",
-    line: "Over 21.5 points",
-    odds: -106,
-    confidence: 61,
-    hitRate: "6 of last 9",
-    matchup: "vs PHI",
-    trend: "+2.1 projected edge",
-    note: "Shot volume is stable when Chicago trails by one possession or more.",
-    game: "PHI-CHI",
-    team: "CHI",
-    opponent: "PHI",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "embiid-points",
-    sport: "NBA",
-    market: "props",
-    name: "Joel Embiid",
-    line: "Over 29.5 points",
-    odds: -115,
-    confidence: 65,
-    hitRate: "64% season hit",
-    matchup: "at CHI",
-    trend: "+3.0 projected edge",
-    note: "Post touches project well against a thinner interior rotation.",
-    game: "PHI-CHI",
-    team: "PHI",
-    opponent: "CHI",
-    propType: "points",
-    confirmed: false,
-    available: true,
-  },
-  {
-    id: "fox-assists",
-    sport: "NBA",
-    market: "props",
-    name: "De'Aaron Fox",
-    line: "Over 6.5 assists",
-    odds: 104,
-    confidence: 62,
-    hitRate: "61% season hit",
-    matchup: "at DAL",
-    trend: "Pace-up spot",
-    note: "Assist chances climb against switching-heavy defenses.",
-    game: "SAC-DAL",
-    team: "SAC",
-    opponent: "DAL",
-    propType: "assists",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "fox-points",
-    sport: "NBA",
-    market: "props",
-    name: "De'Aaron Fox",
-    line: "Over 25.5 points",
-    odds: -110,
-    confidence: 64,
-    hitRate: "7 of last 11",
-    matchup: "at DAL",
-    trend: "+2.6 projected edge",
-    note: "Dallas allows strong rim frequency to downhill guards.",
-    game: "SAC-DAL",
-    team: "SAC",
-    opponent: "DAL",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "doncic-points",
-    sport: "NBA",
-    market: "props",
-    name: "Luka Doncic",
-    line: "Over 30.5 points",
-    odds: -120,
-    confidence: 67,
-    hitRate: "8 of last 12",
-    matchup: "vs SAC",
-    trend: "+3.4 projected edge",
-    note: "Usage and free-throw rate both stay elite in pace-up games.",
-    game: "SAC-DAL",
-    team: "DAL",
-    opponent: "SAC",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "knicks-spread",
-    sport: "NBA",
-    market: "spreads",
-    name: "New York Knicks",
-    line: "+3.5 spread",
-    odds: -108,
-    confidence: 59,
-    hitRate: "8-4 ATS away",
-    matchup: "at BOS",
-    trend: "Rest edge +1 day",
-    note: "Half-court profile keeps blowout risk moderate.",
-    game: "NYK-BOS",
-    team: "NYK",
-    opponent: "BOS",
-    propType: "spread",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "brunson-points",
-    sport: "NBA",
-    market: "props",
-    name: "Jalen Brunson",
-    line: "Over 26.5 points",
-    odds: -108,
-    confidence: 63,
-    hitRate: "62% road hit",
-    matchup: "at BOS",
-    trend: "+2.4 projected edge",
-    note: "Pull-up volume gives him a clean path even in slower games.",
-    game: "NYK-BOS",
-    team: "NYK",
-    opponent: "BOS",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "tatum-points",
-    sport: "NBA",
-    market: "props",
-    name: "Jayson Tatum",
-    line: "Over 27.5 points",
-    odds: 102,
-    confidence: 60,
-    hitRate: "5 of last 8",
-    matchup: "vs NYK",
-    trend: "Plus-money edge",
-    note: "Wing isolation usage rises against New York's switch coverage.",
-    game: "NYK-BOS",
-    team: "BOS",
-    opponent: "NYK",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "wolves-total",
-    sport: "NBA",
-    market: "totals",
-    name: "MIN at DEN",
-    line: "Under 219.5",
-    odds: -105,
-    confidence: 64,
-    hitRate: "5 straight unders",
-    matchup: "late window",
-    trend: "Slowest combined pace",
-    note: "Both teams project to rank top eight in half-court frequency.",
-    game: "MIN-DEN",
-    team: "MIN",
-    opponent: "DEN",
-    propType: "total",
-    confirmed: true,
-    available: false,
-  },
-  {
-    id: "edwards-points",
-    sport: "NBA",
-    market: "props",
-    name: "Anthony Edwards",
-    line: "Over 26.5 points",
-    odds: -104,
-    confidence: 62,
-    hitRate: "6 of last 10",
-    matchup: "at DEN",
-    trend: "+2.0 projected edge",
-    note: "Minnesota leans on his creation when half-court possessions tighten.",
-    game: "MIN-DEN",
-    team: "MIN",
-    opponent: "DEN",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "jokic-points",
-    sport: "NBA",
-    market: "props",
-    name: "Nikola Jokic",
-    line: "Over 25.5 points",
-    odds: -111,
-    confidence: 66,
-    hitRate: "68% home hit",
-    matchup: "vs MIN",
-    trend: "+2.9 projected edge",
-    note: "Paint-touch efficiency is strong even against elite rim protection.",
-    game: "MIN-DEN",
-    team: "DEN",
-    opponent: "MIN",
-    propType: "points",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "cmc-rush",
-    sport: "NFL",
-    market: "props",
-    name: "Christian McCaffrey",
-    line: "Over 82.5 rush+rec yds",
-    odds: -118,
-    confidence: 66,
-    hitRate: "69% role hit",
-    matchup: "vs SEA",
-    trend: "Elite usage floor",
-    note: "Route share and red-zone work keep multiple paths alive.",
-    game: "SF-SEA",
-    team: "SF",
-    opponent: "SEA",
-    propType: "yards",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "deebo-td",
-    sport: "NFL",
-    market: "props",
-    name: "Deebo Samuel",
-    line: "Anytime touchdown",
-    odds: 145,
-    confidence: 63,
-    hitRate: "Red-zone touch in 6 of last 8",
-    matchup: "vs SEA",
-    trend: "Designed-touch spike",
-    note: "Motion usage creates goal-line looks against aggressive linebackers.",
-    game: "SF-SEA",
-    team: "SF",
-    opponent: "SEA",
-    propType: "touchdowns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "walker-td",
-    sport: "NFL",
-    market: "props",
-    name: "Kenneth Walker III",
-    line: "Anytime touchdown",
-    odds: 128,
-    confidence: 61,
-    hitRate: "5 TDs in last 7 active games",
-    matchup: "at SF",
-    trend: "Short-yardage role",
-    note: "Seattle keeps him involved near the goal line even as an underdog.",
-    game: "SF-SEA",
-    team: "SEA",
-    opponent: "SF",
-    propType: "touchdowns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "ravens-spread",
-    sport: "NFL",
-    market: "spreads",
-    name: "Baltimore Ravens",
-    line: "-2.5 spread",
-    odds: -110,
-    confidence: 60,
-    hitRate: "10-5 ATS favorites",
-    matchup: "vs CIN",
-    trend: "Trench mismatch",
-    note: "Pressure rate gap supports short-field chances.",
-    game: "BAL-CIN",
-    team: "BAL",
-    opponent: "CIN",
-    propType: "spread",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "lamar-td",
-    sport: "NFL",
-    market: "props",
-    name: "Lamar Jackson",
-    line: "Anytime touchdown",
-    odds: 172,
-    confidence: 62,
-    hitRate: "Rush TD in 4 of last 6 divisional games",
-    matchup: "vs CIN",
-    trend: "QB run package",
-    note: "Designed keepers project better inside the 10-yard line.",
-    game: "BAL-CIN",
-    team: "BAL",
-    opponent: "CIN",
-    propType: "touchdowns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "chase-td",
-    sport: "NFL",
-    market: "props",
-    name: "Ja'Marr Chase",
-    line: "Anytime touchdown",
-    odds: 118,
-    confidence: 60,
-    hitRate: "End-zone target in 5 of last 8",
-    matchup: "at BAL",
-    trend: "Volume ceiling",
-    note: "Cincinnati's condensed-formation looks isolate him near the pylon.",
-    game: "BAL-CIN",
-    team: "CIN",
-    opponent: "BAL",
-    propType: "touchdowns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "judge-bases",
-    sport: "MLB",
-    market: "props",
-    name: "Aaron Judge",
-    line: "Over 1.5 total bases",
-    odds: 122,
-    confidence: 63,
-    hitRate: "Top 12% barrel spot",
-    matchup: "vs RHP",
-    trend: "Wind out to left",
-    note: "Pitch mix leans into his pull-side damage zone.",
-    game: "NYY-TOR",
-    team: "NYY",
-    opponent: "TOR",
-    propType: "bases",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "judge-hr",
-    sport: "MLB",
-    market: "props",
-    name: "Aaron Judge",
-    line: "To hit a home run",
-    odds: 310,
-    confidence: 64,
-    hitRate: "Top 12% barrel spot",
-    matchup: "vs TOR",
-    trend: "Pull-side weather boost",
-    note: "Pitch mix leans into his elevated fastball damage zone.",
-    game: "NYY-TOR",
-    team: "NYY",
-    opponent: "TOR",
-    propType: "homeruns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "vlad-hr",
-    sport: "MLB",
-    market: "props",
-    name: "Vladimir Guerrero Jr.",
-    line: "To hit a home run",
-    odds: 390,
-    confidence: 60,
-    hitRate: "Hard-hit edge",
-    matchup: "at NYY",
-    trend: "Mistake-pitch profile",
-    note: "Projected starter allows above-average pull-side lift to righties.",
-    game: "NYY-TOR",
-    team: "TOR",
-    opponent: "NYY",
-    propType: "homeruns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "ohtani-hr",
-    sport: "MLB",
-    market: "props",
-    name: "Shohei Ohtani",
-    line: "To hit a home run",
-    odds: 295,
-    confidence: 66,
-    hitRate: "Elite launch-angle form",
-    matchup: "vs ATL",
-    trend: "Park factor edge",
-    note: "His power profile plays up against lower-slot right-handed pitching.",
-    game: "LAD-ATL",
-    team: "LAD",
-    opponent: "ATL",
-    propType: "homeruns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "olson-hr",
-    sport: "MLB",
-    market: "props",
-    name: "Matt Olson",
-    line: "To hit a home run",
-    odds: 360,
-    confidence: 61,
-    hitRate: "Barrel rate trending up",
-    matchup: "at LAD",
-    trend: "Platoon lift",
-    note: "Fastball-heavy sequences give him a clean power path.",
-    game: "LAD-ATL",
-    team: "ATL",
-    opponent: "LAD",
-    propType: "homeruns",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "oilers-total",
-    sport: "NHL",
-    market: "totals",
-    name: "EDM at VAN",
-    line: "Over 6.0 goals",
-    odds: -102,
-    confidence: 61,
-    hitRate: "High-event profile",
-    matchup: "west slate",
-    trend: "Goalie rest concern",
-    note: "Both power plays rate above average in shot quality.",
-    game: "EDM-VAN",
-    team: "EDM",
-    opponent: "VAN",
-    propType: "total",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "mcdavid-goal",
-    sport: "NHL",
-    market: "props",
-    name: "Connor McDavid",
-    line: "Anytime goal scorer",
-    odds: 135,
-    confidence: 66,
-    hitRate: "Goal in 5 of last 8",
-    matchup: "at VAN",
-    trend: "Shot quality edge",
-    note: "Rush chances and power-play touches both project above baseline.",
-    game: "EDM-VAN",
-    team: "EDM",
-    opponent: "VAN",
-    propType: "goals",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "pettersson-goal",
-    sport: "NHL",
-    market: "props",
-    name: "Elias Pettersson",
-    line: "Anytime goal scorer",
-    odds: 175,
-    confidence: 60,
-    hitRate: "Top-line minutes stable",
-    matchup: "vs EDM",
-    trend: "Power-play leverage",
-    note: "Edmonton's penalty profile creates a viable scorer angle.",
-    game: "EDM-VAN",
-    team: "VAN",
-    opponent: "EDM",
-    propType: "goals",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "panarin-goal",
-    sport: "NHL",
-    market: "props",
-    name: "Artemi Panarin",
-    line: "Anytime goal scorer",
-    odds: 168,
-    confidence: 63,
-    hitRate: "High-danger share up",
-    matchup: "vs CAR",
-    trend: "Top unit volume",
-    note: "Shot attempts rise when New York faces aggressive forechecks.",
-    game: "NYR-CAR",
-    team: "NYR",
-    opponent: "CAR",
-    propType: "goals",
-    confirmed: true,
-    available: true,
-  },
-  {
-    id: "aho-goal",
-    sport: "NHL",
-    market: "props",
-    name: "Sebastian Aho",
-    line: "Anytime goal scorer",
-    odds: 154,
-    confidence: 62,
-    hitRate: "Goal in 4 of last 7",
-    matchup: "at NYR",
-    trend: "Slot-touch edge",
-    note: "Carolina's cycle offense creates repeatable slot chances.",
-    game: "NYR-CAR",
-    team: "CAR",
-    opponent: "NYR",
-    propType: "goals",
-    confirmed: true,
-    available: true,
-  },
-];
+import { createSportsRepository } from "./src/services/sports-repository.js";
+import { loadProviderPayload } from "./src/services/provider-client.js";
+import {
+  buildParlay,
+  getAvailableMarketFilters,
+  getFilteredPicks,
+  getPickBySelectionId,
+  parseResearchQuery,
+} from "./src/services/research-service.js";
+import {
+  createNavigationModel,
+  getLeagueStatusMetadata,
+} from "./src/services/navigation-service.js";
+import { createEventPresentation } from "./src/services/presentation-service.js";
+import { runAnalystWorkflow } from "./src/services/analyst-service.js";
 
-const matchups = [
-  { sport: "NBA", away: "PHI", home: "CHI", spread: "PHI -4.5", total: "229.5", edge: "Guard props" },
-  { sport: "NBA", away: "NYK", home: "BOS", spread: "BOS -3.5", total: "214.0", edge: "Dog spread" },
-  { sport: "NBA", away: "MIN", home: "DEN", spread: "DEN -2.0", total: "219.5", edge: "Under lean" },
-  { sport: "NFL", away: "CIN", home: "BAL", spread: "BAL -2.5", total: "47.5", edge: "Home pressure" },
-  { sport: "MLB", away: "TOR", home: "NYY", spread: "NYY -1.5", total: "8.5", edge: "Power bats" },
-  { sport: "MLB", away: "ATL", home: "LAD", spread: "LAD -1.5", total: "9.0", edge: "HR props" },
-  { sport: "NHL", away: "EDM", home: "VAN", spread: "VAN -1.5", total: "6.0", edge: "Total pace" },
-  { sport: "NHL", away: "CAR", home: "NYR", spread: "NYR -1.5", total: "5.5", edge: "Goal scorers" },
-];
-
-const teamAliases = {
-  PHI: ["phi", "sixers", "76ers", "philadelphia"],
-  CHI: ["chi", "bulls", "chicago"],
-  SAC: ["sac", "kings", "sacramento"],
-  DAL: ["dal", "mavericks", "mavs", "dallas"],
-  NYK: ["nyk", "knicks", "new york"],
-  BOS: ["bos", "celtics", "boston"],
-  MIN: ["min", "wolves", "timberwolves", "minnesota"],
-  DEN: ["den", "nuggets", "denver"],
-  SF: ["sf", "49ers", "san francisco"],
-  SEA: ["sea", "seahawks", "seattle"],
-  BAL: ["bal", "ravens", "baltimore"],
-  CIN: ["cin", "bengals", "cincinnati"],
-  NYY: ["nyy", "yankees"],
-  TOR: ["tor", "blue jays", "toronto"],
-  LAD: ["lad", "dodgers", "los angeles dodgers"],
-  ATL: ["atl", "braves", "atlanta"],
-  EDM: ["edm", "oilers", "edmonton"],
-  VAN: ["van", "canucks", "vancouver"],
-  NYR: ["nyr", "rangers", "new york rangers"],
-  CAR: ["car", "hurricanes", "canes", "carolina"],
-};
-
-const sportParlayPrompts = {
-  NBA: { label: "4-leg points parlay", query: "Best 4 leg parlay for points" },
-  NFL: { label: "4-leg TD parlay", query: "Best 4 leg TD parlay" },
-  MLB: { label: "4-leg homerun parlay", query: "Best 4 leg homerun parlay" },
-  NHL: { label: "4 goal scorers parlay", query: "Best 4 goal scorers parlay" },
-};
+const providerPayload = await loadProviderPayload();
+const sportsRepository = createSportsRepository(providerPayload);
+const leagues = sportsRepository.getLeagues();
+const navigationModel = createNavigationModel(leagues);
+const defaultLeague = navigationModel.primaryLeagues[0] || navigationModel.allLeagues[0] || null;
 
 const state = {
-  sport: "NBA",
+  leagueId: defaultLeague?.leagueId || "",
   market: "props",
   minConfidence: 58,
   availableOnly: true,
@@ -585,108 +31,321 @@ const state = {
   parlayNote: "",
   slip: [],
   selectedPickId: "",
+  discoveryView: "all",
+  researchIntent: "markets",
+  marketBoardLoading: true,
+  analystWorkflow: null,
 };
 
-const betGrid = document.querySelector("#betGrid");
-const matchupGrid = document.querySelector("#matchupGrid");
-const slipList = document.querySelector("#slipList");
-const sportLabel = document.querySelector("#sportLabel");
-const confidenceRange = document.querySelector("#confidenceRange");
-const confidenceValue = document.querySelector("#confidenceValue");
-const availableToggle = document.querySelector("#showOnlyAvailable");
-const correlationToggle = document.querySelector("#avoidSameGame");
-const queryInput = document.querySelector("#queryInput");
-const answerCard = document.querySelector(".answer-card");
-const sportParlayPrompt = document.querySelector("#sportParlayPrompt");
-const playerFact = document.querySelector("#playerFact");
+const elements = {
+  sportTabs: document.querySelector("#sportTabs"),
+  marketFilters: document.querySelector("#marketFilters"),
+  betGrid: document.querySelector("#betGrid"),
+  matchupGrid: document.querySelector("#matchupGrid"),
+  slipList: document.querySelector("#slipList"),
+  sportLabel: document.querySelector("#sportLabel"),
+  confidenceRange: document.querySelector("#confidenceRange"),
+  confidenceValue: document.querySelector("#confidenceValue"),
+  availableToggle: document.querySelector("#showOnlyAvailable"),
+  correlationToggle: document.querySelector("#avoidSameGame"),
+  queryInput: document.querySelector("#queryInput"),
+  answerCard: document.querySelector(".answer-card"),
+  sportParlayPrompt: document.querySelector("#sportParlayPrompt"),
+  playerFact: document.querySelector("#playerFact"),
+  timestamp: document.querySelector(".timestamp"),
+  discoveryDrawer: document.querySelector("#discoveryDrawer"),
+  discoveryBackdrop: document.querySelector("#discoveryBackdrop"),
+  discoveryFilters: document.querySelector("#discoveryFilters"),
+  discoveryContent: document.querySelector("#discoveryContent"),
+  discoveryTitle: document.querySelector("#discoveryTitle"),
+  researchIntentNav: document.querySelector("#researchIntentNav"),
+  todayMarketGrid: document.querySelector("#todayMarketGrid"),
+  todayBoardSummary: document.querySelector("#todayBoardSummary"),
+  mobileSlipToggle: document.querySelector("#mobileSlipToggle"),
+  mobileLegCount: document.querySelector("#mobileLegCount"),
+  betSlip: document.querySelector("#betSlip"),
+  analystWorkflow: document.querySelector("#analystWorkflow"),
+  analystWorkflowStatus: document.querySelector("#analystWorkflowStatus"),
+  analystScope: document.querySelector("#analystScope"),
+  analystWorkflowSteps: document.querySelector("#analystWorkflowSteps"),
+  analystWarnings: document.querySelector("#analystWarnings"),
+  dataStatus: document.querySelector("#dataStatus"),
+  modeBadge: document.querySelector("#modeBadge"),
+};
+
+let renderedPicks = new Map();
+let marketBoardLoadTimer = 0;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatOdds(odds) {
+  return Number.isFinite(odds) ? `${odds > 0 ? "+" : ""}${odds}` : "N/A";
+}
+
+function formatDateTime(value, fallback = "Time unavailable") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
 
 function americanToDecimal(odds) {
+  if (!Number.isFinite(odds) || odds === 0) return null;
   return odds > 0 ? odds / 100 + 1 : 100 / Math.abs(odds) + 1;
 }
 
 function decimalToAmerican(decimal) {
+  if (!Number.isFinite(decimal) || decimal <= 1) return "+0";
   const american = decimal >= 2 ? (decimal - 1) * 100 : -100 / (decimal - 1);
   return `${american > 0 ? "+" : ""}${Math.round(american)}`;
 }
 
-function getLegCount(query) {
-  const lower = query.toLowerCase();
-  const numeric = lower.match(/\b([2-8])\s*[- ]?\s*(leg|legs)\b/);
-  if (numeric) return Number(numeric[1]);
-
-  const words = { two: 2, three: 3, four: 4, five: 5, six: 6 };
-  const word = Object.entries(words).find(([label]) => lower.includes(`${label} leg`));
-  return word ? word[1] : lower.includes("parlay") ? 4 : 0;
+function currentLeague() {
+  return sportsRepository.getLeague(state.leagueId);
 }
 
-function getRequestedPropType(query) {
-  const lower = query.toLowerCase();
-  if (lower.includes("td") || lower.includes("touchdown")) return "touchdowns";
-  if (lower.includes("homerun") || lower.includes("home run") || lower.includes("hr")) return "homeruns";
-  if (lower.includes("goal scorer") || lower.includes("goalscorer") || lower.includes("goal scorers") || lower.includes("goal")) return "goals";
-  if (lower.includes("point")) return "points";
-  if (lower.includes("assist")) return "assists";
-  if (lower.includes("yard")) return "yards";
-  if (lower.includes("base") || lower.includes("hit")) return "bases";
-  if (lower.includes("shot")) return "shots";
-  return "";
+function renderNavigation() {
+  const concepts = [
+    { id: "for-you", label: "For You", status: "Top edges" },
+    { id: "live", label: "Live", status: `${navigationModel.liveLeagues.length} active` },
+    { id: "today", label: "Today", status: `${navigationModel.todayLeagues.length} sports` },
+  ];
+  const conceptButtons = concepts.map((concept) => `
+    <button class="tab has-status" type="button" data-nav-view="${concept.id}">
+      <span>${concept.label}</span><span class="nav-status">${concept.status}</span>
+    </button>
+  `).join("");
+  const leagueButtons = navigationModel.primaryLeagues.map((league) => {
+    const status = getLeagueStatusMetadata(league);
+    return `
+    <button
+      class="tab has-status${league.leagueId === state.leagueId ? " active" : ""}"
+      type="button"
+      data-league="${escapeHtml(league.leagueId)}"
+      aria-pressed="${league.leagueId === state.leagueId}"
+    ><span>${escapeHtml(league.leagueDisplayName)}</span><span class="nav-status">${escapeHtml(status.label)}</span></button>
+  `;
+  }).join("");
+  const soccerActive = navigationModel.soccerLeagues.filter((league) => league.liveEventCount || league.todayEventCount).length;
+  elements.sportTabs.innerHTML = `${conceptButtons}${leagueButtons}
+    <button class="tab has-status" type="button" data-nav-view="soccer">
+      <span>Soccer</span><span class="nav-status">${soccerActive} active</span>
+    </button>
+    <button class="tab has-status" type="button" data-nav-view="more">
+      <span>More</span><span class="nav-status">${leagues.length} leagues</span>
+    </button>`;
 }
 
-function findMentionedTeams(query) {
-  const lower = query.toLowerCase();
-  return Object.entries(teamAliases)
-    .filter(([, aliases]) => aliases.some((alias) => lower.includes(alias)))
-    .map(([team]) => team);
+function leagueDiscoveryCard(league) {
+  const status = getLeagueStatusMetadata(league);
+  return `
+    <button class="league-discovery-card${league.leagueId === state.leagueId ? " active" : ""}" type="button" data-league="${escapeHtml(league.leagueId)}">
+      <strong>${escapeHtml(league.leagueDisplayName)}</strong>
+      <span class="league-status">${escapeHtml(status.label)}</span>
+      <span class="league-detail">${escapeHtml(league.sportDisplayName)} · ${escapeHtml(status.detail)}</span>
+      <span class="league-tier">Tier ${league.priorityTier}</span>
+    </button>
+  `;
 }
 
-function findMentionedGame(query) {
-  const teams = findMentionedTeams(query);
-  if (teams.length < 2) return "";
-
-  const game = matchups.find((matchup) => teams.includes(matchup.away) && teams.includes(matchup.home));
-  return game ? `${game.away}-${game.home}` : "";
+function discoveryGroupsForView(view) {
+  if (view === "soccer") {
+    return ["United States", "Mexico", "Europe", "International"].map((name) => ({
+      name,
+      leagues: navigationModel.soccerLeagues.filter((league) => league.soccerGroup === name),
+    }));
+  }
+  const viewMap = {
+    upcoming: navigationModel.upcomingLeagues,
+    offseason: navigationModel.offseasonLeagues,
+    futures: navigationModel.futuresLeagues,
+    tier2: navigationModel.tierTwoLeagues,
+    tier3: navigationModel.tierThreeLeagues,
+    unavailable: navigationModel.unavailableLeagues,
+  };
+  if (viewMap[view]) return [{ name: view === "tier2" ? "Expanded Sports" : view === "tier3" ? "Specialty Sports" : view, leagues: viewMap[view] }];
+  return [1, 2, 3].map((tier) => ({
+    name: tier === 1 ? "Tier 1 · Core" : tier === 2 ? "Tier 2 · Expanded" : "Tier 3 · Specialty",
+    leagues: navigationModel.allLeagues.filter((league) => league.priorityTier === tier),
+  }));
 }
 
-function pickParlayLegs(query) {
-  const legCount = getLegCount(query);
-  if (!legCount) return [];
+function renderDiscovery() {
+  const titles = {
+    all: "All Sports & Leagues",
+    soccer: "Soccer",
+    upcoming: "Upcoming",
+    offseason: "Offseason",
+    futures: "Futures",
+    tier2: "Tier 2 Sports",
+    tier3: "Tier 3 Sports",
+    unavailable: "Unavailable Leagues",
+  };
+  elements.discoveryTitle.textContent = titles[state.discoveryView] || "All Sports";
+  elements.discoveryFilters.querySelectorAll("[data-discovery-view]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.discoveryView === state.discoveryView);
+  });
+  const groups = discoveryGroupsForView(state.discoveryView).filter((group) => group.leagues.length);
+  elements.discoveryContent.innerHTML = groups.length ? groups.map((group) => `
+    <section class="discovery-group">
+      <h3>${escapeHtml(group.name)}</h3>
+      <div class="league-discovery-list">${group.leagues.map(leagueDiscoveryCard).join("")}</div>
+    </section>
+  `).join("") : `<div class="discovery-empty">No sample leagues match this view.</div>`;
+}
 
-  const requestedPropType = getRequestedPropType(query);
-  const mentionedGame = findMentionedGame(query);
-  state.queryGame = mentionedGame;
-  let candidates = picks
-    .filter((pick) => pick.sport === state.sport)
-    .filter((pick) => pick.market === "props")
-    .filter((pick) => pick.available)
-    .filter((pick) => pick.confirmed)
-    .filter((pick) => pick.confidence >= state.minConfidence)
-    .filter((pick) => !requestedPropType || pick.propType === requestedPropType)
-    .sort((a, b) => b.confidence - a.confidence);
+function openDiscovery(view = "all") {
+  state.discoveryView = view;
+  renderDiscovery();
+  elements.discoveryBackdrop.hidden = false;
+  elements.discoveryDrawer.classList.add("open");
+  elements.discoveryDrawer.setAttribute("aria-hidden", "false");
+}
 
-  if (mentionedGame) {
-    candidates = candidates.filter((pick) => pick.game === mentionedGame && pick.confirmed);
-    state.parlayNote = candidates.length
-      ? `Specific-game mode: only confirmed players from ${mentionedGame} were considered.`
-      : `Specific-game mode: I could not find enough confirmed ${state.sport} players from ${mentionedGame} in the sample board.`;
-    const legs = candidates.slice(0, legCount);
-    state.selectedPickId = legs[0]?.id || "";
-    return legs;
+function closeDiscovery() {
+  elements.discoveryDrawer.classList.remove("open");
+  elements.discoveryDrawer.setAttribute("aria-hidden", "true");
+  elements.discoveryBackdrop.hidden = true;
+}
+
+function leaguesForResearchIntent(intent) {
+  const active = navigationModel.allLeagues.filter((league) =>
+    !["unavailable", "error"].includes(league.availabilityStatus)
+    && (league.liveEventCount || league.todayEventCount || league.upcomingEventCount || league.availableMarketCount),
+  );
+  const filters = {
+    live: (league) => league.liveEventCount > 0,
+    "player-props": (league) => league.playerPropCount > 0,
+    "game-props": (league) => league.supportedMarketTypes.includes("team-prop") && league.availableMarketCount > 0,
+    sgp: (league) => league.category === "team-sport" && league.playerPropCount > 0,
+    value: (league) => league.availableMarketCount >= 30,
+    movement: (league) => league.liveEventCount > 0 || league.todayEventCount > 0,
+    trending: (league) => league.todayEventCount > 0 || league.featuredEventWeight >= 70,
+  };
+  return (filters[intent] ? active.filter(filters[intent]) : active).slice(0, 6);
+}
+
+function renderResearchIntentNavigation() {
+  elements.researchIntentNav.querySelectorAll("[data-intent]").forEach((button) => {
+    const active = button.dataset.intent === state.researchIntent;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
+
+function renderTodayMarketBoard() {
+  renderResearchIntentNavigation();
+  if (state.marketBoardLoading) {
+    elements.todayMarketGrid.setAttribute("aria-busy", "true");
+    elements.todayMarketGrid.innerHTML = Array.from({ length: 6 }, () => `<div class="skeleton-card" aria-hidden="true"></div>`).join("");
+    elements.todayBoardSummary.textContent = "Loading sample market availability…";
+    return;
   }
 
-  const usedTeams = new Set();
-  const legs = [];
-  candidates.forEach((pick) => {
-    if (legs.length >= legCount || usedTeams.has(pick.team)) return;
-    usedTeams.add(pick.team);
-    legs.push(pick);
-  });
+  const intentLabels = {
+    markets: "active market coverage",
+    live: "live events",
+    "player-props": "player-prop availability",
+    "game-props": "game-prop availability",
+    sgp: "same-game parlay research",
+    value: "high-availability value research",
+    movement: "line-movement monitoring",
+    "ai-research": "AI-assisted research",
+    trending: "trending events",
+  };
+  const leaguesForBoard = leaguesForResearchIntent(state.researchIntent);
+  elements.todayBoardSummary.textContent = `Sample data ranked for ${intentLabels[state.researchIntent] || "market research"} across sports.`;
+  elements.todayMarketGrid.setAttribute("aria-busy", "false");
 
-  state.parlayNote =
-    legs.length >= legCount
-      ? `Broad parlay mode: selected ${legs.length} legs from ${legs.length} different teams to reduce same-team dependence.`
-      : `Broad parlay mode: found ${legs.length} qualifying legs from different teams; add more sample props or lower confidence for a full ${legCount}-leg slip.`;
-  state.selectedPickId = legs[0]?.id || "";
-  return legs;
+  if (!leaguesForBoard.length) {
+    const emptyMessages = {
+      live: "No live sample events are available. Upcoming events remain accessible in More.",
+      "player-props": "No supported player props are available for this view.",
+      sgp: "No same-game parlay sample markets are currently available.",
+      movement: "No active sample lines are available for movement monitoring.",
+    };
+    elements.todayMarketGrid.innerHTML = `<div class="discovery-empty">${escapeHtml(emptyMessages[state.researchIntent] || "Data is temporarily unavailable for this research view.")}</div>`;
+    return;
+  }
+
+  elements.todayMarketGrid.innerHTML = leaguesForBoard.map((league) => {
+    const status = getLeagueStatusMetadata(league);
+    const nextEvent = sportsRepository.getEvents(league.leagueId)
+      .filter((event) => event.startsAt)
+      .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))[0];
+    const todayText = league.todayEventCount
+      ? `${league.todayEventCount} today`
+      : league.availabilityStatus === "futures-only" ? "Futures only" : status.label;
+    return `
+      <button class="today-market-card" type="button" data-market-league="${escapeHtml(league.leagueId)}" aria-label="Open ${escapeHtml(league.leagueDisplayName)} research board">
+        <span class="market-card-header">
+          <span><strong>${escapeHtml(league.leagueDisplayName)}</strong>${escapeHtml(league.sportDisplayName)}</span>
+          <span class="market-status">${escapeHtml(status.label)}</span>
+        </span>
+        <span class="market-card-metrics">
+          <span>Live<strong>${league.liveEventCount}</strong></span>
+          <span>Events<strong>${escapeHtml(todayText)}</strong></span>
+          <span>Markets<strong>${league.availableMarketCount}</strong></span>
+          <span>Player props<strong>${league.playerPropCount || "Not supported"}</strong></span>
+        </span>
+        <span class="market-card-footer">
+          <span>${nextEvent ? `Next ${formatDateTime(nextEvent.startsAt)}` : status.label}</span>
+          <span>Fresh ${formatDateTime(league.lastUpdatedAt, "unknown")}</span>
+        </span>
+        <span class="market-card-footer"><span class="sample-inline">Sample data</span><span>${escapeHtml(league.dataQualityStatus)} quality</span></span>
+      </button>
+    `;
+  }).join("");
+}
+
+function scheduleMarketBoardLoad() {
+  state.marketBoardLoading = true;
+  renderTodayMarketBoard();
+  window.clearTimeout(marketBoardLoadTimer);
+  marketBoardLoadTimer = window.setTimeout(() => {
+    state.marketBoardLoading = false;
+    renderTodayMarketBoard();
+  }, 420);
+}
+
+function renderMarketFilters() {
+  const filters = getAvailableMarketFilters(sportsRepository, state.leagueId);
+  if (!filters.some((filter) => filter.id === state.market && filter.supported)) {
+    state.market = filters.find((filter) => filter.supported)?.id || "props";
+  }
+  elements.marketFilters.innerHTML = filters.map((filter) => `
+    <button
+      class="${filter.id === state.market ? "active" : ""}"
+      type="button"
+      data-market="${escapeHtml(filter.id)}"
+      ${filter.supported ? "" : "disabled"}
+      aria-pressed="${filter.id === state.market}"
+      title="${filter.available ? "" : "No current sample markets"}"
+    >${escapeHtml(filter.displayName)}</button>
+  `).join("");
+}
+
+function updateSportParlayPrompt() {
+  const prompt = currentLeague()?.parlayPrompt;
+  if (!prompt) {
+    elements.sportParlayPrompt.hidden = true;
+    return;
+  }
+  elements.sportParlayPrompt.hidden = false;
+  elements.sportParlayPrompt.textContent = prompt.label;
+  elements.sportParlayPrompt.dataset.query = prompt.query;
 }
 
 function getPlayerFact(pick) {
@@ -699,16 +358,14 @@ function getPlayerFact(pick) {
     yards: "Yardage props are floor plays when snaps, routes, and game script all point the same way.",
     bases: "Total bases props reward damage, not just contact. Doubles count, and that makes hard-hit form useful.",
   };
-
-  return pick.funFact || propFacts[pick.propType] || "The best prop angles usually come from role, matchup, and line value agreeing at the same time.";
+  return propFacts[pick.propType] || "The best prop angles usually come from role, matchup, and line value agreeing at the same time.";
 }
 
 function renderPlayerFact() {
   const selectedPick = state.slip.find((pick) => pick.id === state.selectedPickId) || state.slip[0];
-
   if (!selectedPick) {
     state.selectedPickId = "";
-    playerFact.innerHTML = `
+    elements.playerFact.innerHTML = `
       <p class="eyebrow">Edge note</p>
       <h3>Select a player</h3>
       <p>Add or select a leg to see a quick player fact.</p>
@@ -717,259 +374,485 @@ function renderPlayerFact() {
   }
 
   state.selectedPickId = selectedPick.id;
-  playerFact.innerHTML = `
+  elements.playerFact.innerHTML = `
     <p class="eyebrow">Edge note</p>
-    <h3>${selectedPick.name}</h3>
-    <p>${getPlayerFact(selectedPick)}</p>
+    <h3>${escapeHtml(selectedPick.name)}</h3>
+    <p>${escapeHtml(getPlayerFact(selectedPick))}</p>
     <div class="fact-chips">
-      <span>${selectedPick.team} vs ${selectedPick.opponent}</span>
-      <span>${selectedPick.hitRate}</span>
-      <span>${selectedPick.trend}</span>
+      <span>${escapeHtml(selectedPick.team || "TBD")} vs ${escapeHtml(selectedPick.opponent || "TBD")}</span>
+      <span>${escapeHtml(selectedPick.hitRate)}</span>
+      <span>${escapeHtml(selectedPick.trend)}</span>
     </div>
   `;
 }
 
-function filteredPicks() {
-  let list = picks.filter((pick) => pick.sport === state.sport && pick.market === state.market);
-  if (!list.length) list = picks.filter((pick) => pick.sport === state.sport);
-  if (state.availableOnly) list = list.filter((pick) => pick.available);
-  list = list.filter((pick) => pick.confidence >= state.minConfidence);
-  if (state.queryGame) list = list.filter((pick) => pick.game === state.queryGame && pick.confirmed);
+function renderAnswer(list) {
+  const leagueName = currentLeague()?.leagueDisplayName || "League";
+  const title = state.query ? `Analysis for "${state.query}"` : `${leagueName} ${state.market} matching your filters`;
+  const hasPlusMoney = list.some((pick) => Number.isFinite(pick.odds) && pick.odds > 0);
+  const topPick = list[0];
+  const parlayLead = state.parlayNote ? `${state.parlayNote} ` : "";
+  document.querySelector("#answerTitle").textContent = title;
+  document.querySelector("#answerText").textContent = topPick
+    ? `${parlayLead}I found ${list.length} ${leagueName} ${state.market} angle${list.length === 1 ? "" : "s"}. Start with ${topPick.name} ${topPick.line} at ${formatOdds(topPick.odds)}; it has the strongest sample signal at ${topPick.confidence}%. ${hasPlusMoney ? "There is at least one plus-money leg in this result set." : "These are mostly price-efficient legs, so parlay risk matters more than payout size."}`
+    : `${parlayLead}I could not find a sample ${leagueName} ${state.market} pick above ${state.minConfidence}% confidence. Try lowering the confidence slider or switching markets.`;
+}
 
-  if (!state.query) return list;
+function renderAnalystWorkflow() {
+  const workflow = state.analystWorkflow;
+  elements.analystWorkflow.hidden = !workflow;
+  if (!workflow) return;
 
-  const tokens = state.query
-    .toLowerCase()
-    .split(/\W+/)
-    .filter((token) => token.length > 2 && !["the", "for", "are", "with", "tonight", "show", "find", "which"].includes(token));
-
-  const scored = list
-    .map((pick) => {
-      const searchable = `${pick.name} ${pick.line} ${pick.hitRate} ${pick.matchup} ${pick.trend} ${pick.note} ${pick.game} ${pick.team} ${pick.opponent} ${pick.propType}`.toLowerCase();
-      const score = tokens.reduce((total, token) => total + (searchable.includes(token) ? 1 : 0), 0);
-      return { pick, score };
-    })
-    .sort((a, b) => b.score - a.score || b.pick.confidence - a.pick.confidence);
-
-  const directMatches = scored.filter((item) => item.score > 0).map((item) => item.pick);
-  return directMatches.length ? directMatches : scored.map((item) => item.pick);
+  elements.analystWorkflow.dataset.status = workflow.status;
+  elements.analystWorkflowStatus.textContent = workflow.status === "ready"
+    ? "Evidence ready"
+    : workflow.status === "limited" ? "Limited evidence" : "Blocked";
+  elements.analystScope.innerHTML = `
+    <div><span>Resolved scope</span><strong>${escapeHtml(workflow.sportName)} · ${escapeHtml(workflow.leagueName)}</strong></div>
+    <div><span>Event model</span><strong>${escapeHtml(workflow.category)}</strong></div>
+    <div><span>Market intent</span><strong>${escapeHtml(workflow.marketLabel)}</strong></div>
+    <div><span>Evidence</span><strong>${workflow.evidence.availableCount} available / ${workflow.evidence.marketCount} scoped</strong></div>
+  `;
+  elements.analystWorkflowSteps.innerHTML = workflow.steps.map((step) => `
+    <li class="workflow-step ${escapeHtml(step.status)}">
+      <span class="workflow-step-marker" aria-hidden="true"></span>
+      <div><strong>${escapeHtml(step.label)}</strong><p>${escapeHtml(step.detail)}</p></div>
+      <span class="workflow-step-status">${escapeHtml(step.status)}</span>
+    </li>
+  `).join("");
+  elements.analystWarnings.innerHTML = `
+    <div class="analyst-constraints"><strong>Applied constraints</strong>${workflow.constraints.map((constraint) => `<span>${escapeHtml(constraint)}</span>`).join("")}</div>
+    <details>
+      <summary>Data-quality notes · ${workflow.warnings.length}</summary>
+      <ul>${workflow.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>
+    </details>
+  `;
 }
 
 function renderPicks() {
-  const list = filteredPicks();
-  betGrid.innerHTML = "";
+  const list = getFilteredPicks(sportsRepository, {
+    leagueId: state.leagueId,
+    market: state.market,
+    minConfidence: state.minConfidence,
+    availableOnly: state.availableOnly,
+    query: state.query,
+    queryGame: state.queryGame,
+  });
+  renderedPicks = new Map(list.map((pick) => [pick.id, pick]));
 
-  if (!list.length) {
-    betGrid.innerHTML = `<div class="answer-card">No sample picks match these filters. Lower confidence or switch markets.</div>`;
-  }
+  const league = currentLeague();
+  const emptyMessage = league?.availabilityStatus === "error"
+    ? "Market data is temporarily unavailable for this league."
+    : league?.availabilityStatus === "stale"
+      ? "The latest odds are stale. Refresh the sample provider before researching this board."
+      : league?.availabilityStatus === "futures-only"
+        ? "This league currently has futures only; game and player props are not supported."
+        : league?.todayEventCount === 0 && league?.upcomingEventCount > 0
+          ? league.statusLabel || "No games today. The next event is upcoming."
+          : "No sample picks match these filters. Lower confidence or switch markets.";
 
-  list.forEach((pick) => {
-    const article = document.createElement("article");
-    article.className = "bet-card";
-    article.innerHTML = `
+  elements.betGrid.innerHTML = list.length ? list.map((pick) => {
+    const actionable = pick.available && !pick.stale;
+    const cardState = pick.stale ? " stale" : !pick.available ? " unavailable" : "";
+    return `
+    <article class="bet-card${cardState}">
       <div class="bet-top">
         <div>
-          <p class="bet-title">${pick.name}</p>
-          <div class="bet-market">${pick.line} - ${pick.matchup}</div>
+          <p class="bet-title">${escapeHtml(pick.name)}</p>
+          <div class="bet-market">${escapeHtml(pick.matchup)} · ${escapeHtml(pick.competitorStatus)}</div>
         </div>
-        <div class="odds">${pick.odds > 0 ? "+" : ""}${pick.odds}</div>
+        <div class="odds">${formatOdds(pick.odds)}</div>
       </div>
-      <div class="stat-line"><span>Confidence</span><strong>${pick.confidence}%</strong></div>
+      <div class="bet-source-row"><span>${escapeHtml(pick.sportsbook)}</span><span>Updated ${formatDateTime(pick.lastUpdatedAt)}</span></div>
+      <div class="prop-metrics">
+        <div class="prop-metric">
+          <span class="prop-metric-label">Line <button class="info-button" type="button" aria-label="About line" title="The displayed threshold or outcome for this sample market.">i</button></span>
+          <strong>${escapeHtml(pick.line)}</strong>
+        </div>
+        <div class="prop-metric">
+          <span class="prop-metric-label">Projection <button class="info-button" type="button" aria-label="About projection" title="The model estimate for the selected outcome.">i</button></span>
+          <strong>${escapeHtml(pick.projection)}</strong>
+        </div>
+        <div class="prop-metric">
+          <span class="prop-metric-label">Projected edge <button class="info-button" type="button" aria-label="About projected edge" title="The model projection compared with the offered line or price.">i</button></span>
+          <strong>${escapeHtml(pick.trend)}</strong>
+        </div>
+        <div class="prop-metric">
+          <span class="prop-metric-label">Historical hit rate <button class="info-button" type="button" aria-label="About historical hit rate" title="How often the historical sample cleared this type of line. It does not predict a guaranteed result.">i</button></span>
+          <strong>${escapeHtml(pick.hitRate)}</strong>
+        </div>
+      </div>
+      <div class="stat-line"><span>Model confidence <button class="info-button" type="button" aria-label="About model confidence" title="Signal strength and data agreement, not a guaranteed win probability.">i</button></span><strong>${pick.confidence}%</strong></div>
       <div class="signal-bar" aria-hidden="true"><span style="width:${pick.confidence}%"></span></div>
-      <div class="stat-line"><span>${pick.hitRate}</span><strong>${pick.trend}</strong></div>
-      <div class="stat-line"><span>Team</span><strong>${pick.team || "Board"}</strong></div>
-      <div class="stat-line"><span>Status</span><strong>${pick.confirmed ? "Confirmed" : "Unconfirmed"}</strong></div>
-      <p class="bet-market">${pick.note}</p>
-      <div class="card-actions">
-        <button class="add-button" type="button" data-add="${pick.id}">Add leg</button>
-        <span class="tag">${pick.game}</span>
+      <div class="bet-event-row"><span>Event ${formatDateTime(pick.eventTime, "Time TBD")}</span><span>${escapeHtml(pick.game || "Event TBD")}</span></div>
+      <p class="bet-market">${escapeHtml(pick.note)}</p>
+      <div class="data-warning" title="${pick.stale ? "Stale data may no longer match the current sportsbook market." : "This application is using sample provider data."}">
+        ${escapeHtml(pick.stale ? "Odds are stale — verify before using." : pick.dataQualityWarning || "Data-quality status unavailable.")}
       </div>
-    `;
-    betGrid.appendChild(article);
-  });
+      <div class="card-actions">
+        <button class="add-button" type="button" data-add="${escapeHtml(pick.id)}" ${actionable ? "" : "disabled"}>${actionable ? "Add to slip" : "Unavailable"}</button>
+        <span class="tag">${escapeHtml(pick.competitorStatus)}</span>
+      </div>
+    </article>
+  `;
+  }).join("") : `<div class="answer-card">${escapeHtml(emptyMessage)}</div>`;
 
   const avg = list.length ? Math.round(list.reduce((sum, pick) => sum + pick.confidence, 0) / list.length) : 0;
   document.querySelector("#edgeCount").textContent = String(list.length);
   document.querySelector("#avgConfidence").textContent = `${avg}%`;
   document.querySelector("#riskLevel").textContent = list.length > 4 ? "Medium" : "Selective";
   renderAnswer(list);
-}
-
-function renderAnswer(list) {
-  const title = state.query ? `Analysis for "${state.query}"` : `${state.sport} ${state.market} matching your filters`;
-  const hasPlusMoney = list.some((pick) => pick.odds > 0);
-  const topPick = list[0];
-  const parlayLead = state.parlayNote ? `${state.parlayNote} ` : "";
-  document.querySelector("#answerTitle").textContent = title;
-  document.querySelector("#answerText").textContent = topPick
-    ? `${parlayLead}I found ${list.length} ${state.sport} ${state.market} angle${list.length === 1 ? "" : "s"}. Start with ${topPick.name} ${topPick.line} at ${topPick.odds > 0 ? "+" : ""}${topPick.odds}; it has the strongest sample signal at ${topPick.confidence}%. ${hasPlusMoney ? "There is at least one plus-money leg in this result set." : "These are mostly price-efficient legs, so parlay risk matters more than payout size."}`
-    : `${parlayLead}I could not find a sample ${state.sport} ${state.market} pick above ${state.minConfidence}% confidence. Try lowering the confidence slider or switching markets.`;
+  renderAnalystWorkflow();
 }
 
 function renderSlip() {
-  slipList.innerHTML = "";
-  slipList.classList.toggle("empty", state.slip.length === 0);
-
+  elements.slipList.innerHTML = "";
+  elements.slipList.classList.toggle("empty", state.slip.length === 0);
   if (!state.slip.length) {
-    slipList.textContent = "Add legs from the board.";
+    elements.slipList.textContent = "Add legs from the board.";
   } else {
-    state.slip.forEach((pick) => {
-      const item = document.createElement("div");
-      item.className = `slip-item${pick.id === state.selectedPickId ? " active" : ""}`;
-      item.dataset.pickId = pick.id;
-      item.tabIndex = 0;
-      item.setAttribute("role", "button");
-      item.innerHTML = `
-        <strong>${pick.name}</strong>
-        <span>${pick.team || pick.game} - ${pick.line} - ${pick.odds > 0 ? "+" : ""}${pick.odds}</span>
-      `;
-      slipList.appendChild(item);
-    });
+    elements.slipList.innerHTML = state.slip.map((pick) => `
+      <div class="slip-item${pick.id === state.selectedPickId ? " active" : ""}" data-pick-id="${escapeHtml(pick.id)}" tabindex="0" role="button">
+        <strong>${escapeHtml(pick.name)}</strong>
+        <span>${escapeHtml(pick.team || pick.game || "Event TBD")} - ${escapeHtml(pick.line)} - ${formatOdds(pick.odds)}</span>
+      </div>
+    `).join("");
   }
 
-  const combinedDecimal = state.slip.reduce((product, pick) => product * americanToDecimal(pick.odds), 1);
+  const decimalOdds = state.slip.map((pick) => americanToDecimal(pick.odds));
+  const combinedDecimal = decimalOdds.some((odds) => odds === null) ? null : decimalOdds.reduce((product, odds) => product * odds, 1);
   const duplicateGames = new Set();
   const games = new Set();
   state.slip.forEach((pick) => {
-    if (games.has(pick.game)) duplicateGames.add(pick.game);
-    games.add(pick.game);
+    if (pick.game && games.has(pick.game)) duplicateGames.add(pick.game);
+    if (pick.game) games.add(pick.game);
   });
-
   const uniqueTeams = new Set(state.slip.map((pick) => pick.team).filter(Boolean));
   const broadUniqueParlay = state.slip.length >= 4 && uniqueTeams.size === state.slip.length && !duplicateGames.size;
   const risk = !state.slip.length ? "None" : duplicateGames.size ? "High" : broadUniqueParlay ? "Medium" : state.slip.length >= 4 ? "High" : state.slip.length >= 3 ? "Medium" : "Low";
+
   document.querySelector("#legCount").textContent = String(state.slip.length);
-  document.querySelector("#combinedOdds").textContent = state.slip.length ? decimalToAmerican(combinedDecimal) : "+0";
+  elements.mobileLegCount.textContent = String(state.slip.length);
+  document.querySelector("#combinedOdds").textContent = state.slip.length && combinedDecimal ? decimalToAmerican(combinedDecimal) : "+0";
   document.querySelector("#slipRisk").textContent = risk;
   document.querySelector("#riskBox").textContent = duplicateGames.size
     ? `Correlation warning: ${Array.from(duplicateGames).join(", ")} has multiple legs. Check whether one outcome depends on another.`
     : broadUniqueParlay
       ? "Multi-team parlay: legs come from different teams and games, reducing obvious correlation. Price and variance still matter."
-    : "Combine independent edges first. Correlated legs can inflate payout while reducing true probability.";
+      : "Combine independent edges first. Correlated legs can inflate payout while reducing true probability.";
   renderPlayerFact();
 }
 
-function renderMatchups() {
-  matchupGrid.innerHTML = "";
-  matchups
-    .filter((game) => game.sport === state.sport)
-    .slice(0, 4)
-    .forEach((game) => {
-      const card = document.createElement("article");
-      card.className = "matchup-card";
-      card.innerHTML = `
-        <div class="teams">
-          <div class="team-row"><span>${game.away}</span><span>Away</span></div>
-          <div class="team-row"><span>${game.home}</span><span>Home</span></div>
+function renderPresentationDetails(details = []) {
+  return details.map(([label, value]) => `
+    <div class="presentation-detail">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value ?? "Unavailable from sample provider")}</strong>
+    </div>
+  `).join("");
+}
+
+function renderMarketSupport(markets = []) {
+  return markets.map((market) => `
+    <span class="market-support${market.available ? " available" : ""}" aria-disabled="${!market.available}">
+      ${escapeHtml(market.label)} · ${market.available ? "Available" : "Unavailable"}
+    </span>
+  `).join("");
+}
+
+function renderMarketSnapshot(selections = []) {
+  if (!selections.length) {
+    return `<div class="event-market-empty">No current sample prices for this event.</div>`;
+  }
+  return `
+    <div class="event-market-snapshot" aria-label="Available event markets">
+      ${selections.map((selection) => `
+        <div class="event-market-row${selection.stale ? " stale" : ""}">
+          <span>
+            <strong>${escapeHtml(selection.name)}</strong>
+            <small>${escapeHtml(selection.line)} · ${escapeHtml(selection.sportsbook)}</small>
+          </span>
+          <span class="event-market-action">
+            <strong>${formatOdds(selection.odds)}</strong>
+            <button class="event-add-button" type="button" data-event-add="${escapeHtml(selection.id)}" ${selection.stale ? "disabled" : ""}>
+              ${selection.stale ? "Stale" : "Add"}
+            </button>
+          </span>
         </div>
-        <div class="board-line"><span>Spread</span><strong>${game.spread}</strong></div>
-        <div class="board-line"><span>Total</span><strong>${game.total}</strong></div>
-        <div class="board-line"><span>Lean</span><strong>${game.edge}</strong></div>
-      `;
-      matchupGrid.appendChild(card);
-    });
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderFighter(fighter) {
+  if (!fighter) return `<div class="fighter-panel unavailable">Fighter data unavailable</div>`;
+  return `
+    <div class="fighter-panel">
+      <strong>${escapeHtml(fighter.name || "Fighter unavailable")}</strong>
+      <span>${escapeHtml(fighter.record || "Record unavailable")} · ${escapeHtml(fighter.stance || "Stance unavailable")}</span>
+      <span>Reach ${escapeHtml(fighter.reach ?? "Unavailable")} · Age ${escapeHtml(fighter.age ?? "Unavailable")}</span>
+      <span>Layoff ${escapeHtml(fighter.layoff_days ?? "Unavailable")} · ${fighter.short_notice ? "Short notice" : "Standard notice"}</span>
+      <span>${fighter.weight_miss ? "Weight miss flagged" : fighter.catchweight ? "Catchweight bout" : "No weight flag supplied"}</span>
+    </div>
+  `;
+}
+
+function renderBout(label, bout) {
+  if (!bout) return `<section class="bout-panel"><h4>${escapeHtml(label)}</h4><p>Fight details unavailable.</p></section>`;
+  return `
+    <section class="bout-panel">
+      <div class="bout-heading"><h4>${escapeHtml(label)}</h4><span>${escapeHtml(bout.weight_class || "Weight class unavailable")}</span></div>
+      <div class="fighter-grid">${renderFighter(bout.fighter_a)}${renderFighter(bout.fighter_b)}</div>
+    </section>
+  `;
+}
+
+function renderEventPresentation(presentation) {
+  const commonHeader = `
+    <div class="presentation-header">
+      <div><p class="eyebrow">${escapeHtml(presentation.sportName)} · ${escapeHtml(presentation.leagueName)}</p><h3>${escapeHtml(presentation.title)}</h3><p>${escapeHtml(presentation.subtitle)}</p></div>
+      <div class="presentation-status"><strong>${escapeHtml(presentation.status)}</strong><span>${formatDateTime(presentation.startsAt, "Time unavailable")}</span><small>Updated ${formatDateTime(presentation.lastUpdatedAt)}</small></div>
+    </div>
+  `;
+  const markets = `<div class="market-support-grid">${renderMarketSupport(presentation.markets)}</div>`;
+  const marketSnapshot = renderMarketSnapshot(presentation.marketSnapshot);
+  const warning = `<p class="presentation-warning">${escapeHtml(presentation.dataQualityWarning)}</p>`;
+
+  if (presentation.kind === "fight-card") {
+    const undercard = presentation.undercard.length
+      ? `<details class="undercard-panel"><summary>Undercard · ${presentation.undercard.length} bout${presentation.undercard.length === 1 ? "" : "s"}</summary>${presentation.undercard.map((bout, index) => renderBout(`Bout ${index + 1}`, bout)).join("")}</details>`
+      : `<div class="event-market-empty">Undercard unavailable from sample provider.</div>`;
+    return `<article class="event-presentation fight-card-view">${commonHeader}${renderBout("Main event", presentation.mainEvent)}${renderBout("Co-main event", presentation.coMainEvent)}
+      ${undercard}<div class="presentation-detail-grid">${renderPresentationDetails(presentation.details)}</div>${marketSnapshot}${markets}${warning}</article>`;
+  }
+  if (presentation.kind === "race-weekend") {
+    const sessions = presentation.sessions.map(([name, status, results, startsAt]) => `
+      <div class="race-session"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(status || "Status unavailable")}</span><small>${formatDateTime(startsAt, "Time unavailable")}</small><small>${escapeHtml(results || "Results unavailable")}</small></div>
+    `).join("");
+    const entrants = presentation.entrants.length ? `
+      <div class="race-entrants">${presentation.entrants.map((entrant) => `
+        <div><span>${escapeHtml(entrant.starting_position ?? "—")}</span><strong>${escapeHtml(entrant.name || "Driver unavailable")}</strong><small>${escapeHtml(entrant.manufacturer || "Manufacturer unavailable")}</small></div>
+      `).join("")}</div>` : `<div class="event-market-empty">Starting grid unavailable from sample provider.</div>`;
+    return `<article class="event-presentation race-weekend-view">${commonHeader}<div class="race-sessions">${sessions}</div>
+      ${entrants}<div class="presentation-detail-grid">${renderPresentationDetails(presentation.details)}</div>${marketSnapshot}${markets}${warning}</article>`;
+  }
+  if (presentation.kind === "individual-event") {
+    const competitors = presentation.participants.map((participant) => `
+      <div class="competitor-row"><strong>${escapeHtml(participant.name)}</strong><span>${escapeHtml(participant.role)}</span></div>
+    `).join("");
+    return `<article class="event-presentation individual-event-view">${commonHeader}<div class="competitor-list">${competitors || "Competitors unavailable"}</div>
+      <div class="presentation-detail-grid">${renderPresentationDetails(presentation.details)}</div>${marketSnapshot}${markets}${warning}</article>`;
+  }
+
+  const lineRows = `<div class="presentation-line-grid">${renderPresentationDetails(presentation.lines)}</div>`;
+  return `<article class="event-presentation ${presentation.kind === "soccer-match" ? "soccer-match-view" : presentation.kind === "international-team-game" ? "international-event-view" : "team-game-view"}">${commonHeader}${lineRows}
+    <div class="presentation-detail-grid">${renderPresentationDetails(presentation.details)}</div>${marketSnapshot}${markets}${warning}</article>`;
+}
+
+function renderMatchups() {
+  const events = sportsRepository.getEvents(state.leagueId, { featuredOnly: true }).slice(0, 4);
+  const league = currentLeague();
+  const leagueMarkets = sportsRepository.getMarkets(state.leagueId);
+  const presentations = events.map((event) =>
+    createEventPresentation(event, league, leagueMarkets.filter((market) => market.eventId === event.id)),
+  ).filter(Boolean);
+  elements.matchupGrid.dataset.presentationKind = presentations[0]?.kind || "empty";
+  elements.matchupGrid.innerHTML = presentations.length
+    ? presentations.map(renderEventPresentation).join("")
+    : `<div class="answer-card">No sample events are currently available for this league. Check Upcoming, Offseason, Futures, or All Sports in More.</div>`;
+}
+
+function renderTimestamp() {
+  const metadata = sportsRepository.getMetadata();
+  if (!metadata.generatedAt) {
+    elements.timestamp.textContent = `${metadata.provider} · update time unavailable`;
+    return;
+  }
+  const time = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(metadata.generatedAt));
+  elements.timestamp.textContent = `${metadata.provider} · ${metadata.stale ? "stale since" : "updated"} ${time}`;
+}
+
+function renderDataStatus() {
+  const metadata = sportsRepository.getMetadata();
+  const state = metadata.offlineFallback
+    ? "offline-fallback"
+    : metadata.partial ? "partial"
+      : metadata.stale ? "stale"
+        : metadata.mode === "sample" ? "sample" : metadata.state;
+  const labels = {
+    sample: "Sample data",
+    fresh: "Fresh",
+    delayed: "Delayed",
+    stale: "Stale",
+    partial: "Partial",
+    "offline-fallback": "Offline fallback",
+    error: "Provider error",
+  };
+  const updated = formatDateTime(metadata.lastSuccessfulUpdateAt || metadata.generatedAt, "Update unavailable");
+  elements.dataStatus.className = `data-status ${escapeHtml(state)}`;
+  elements.dataStatus.innerHTML = `
+    <span class="data-status-dot" aria-hidden="true"></span>
+    <span><strong>${escapeHtml(labels[state] || state)}</strong><small>${escapeHtml(metadata.provider)} · ${escapeHtml(updated)}</small></span>
+  `;
+  elements.dataStatus.title = `${metadata.sources.length} source domain${metadata.sources.length === 1 ? "" : "s"} · ${metadata.errors.length} provider error${metadata.errors.length === 1 ? "" : "s"}${metadata.mode === "sample" ? " · no live provider configured" : ""}`;
+  elements.modeBadge.textContent = metadata.mode === "sample" ? "Sample" : "Provider";
+  elements.modeBadge.title = metadata.mode === "sample"
+    ? "EdgeBoard is using sample data."
+    : "A server-side provider is configured; verify the data-status indicator before use.";
 }
 
 function renderAll() {
-  sportLabel.textContent = state.sport;
-  confidenceValue.textContent = `${state.minConfidence}%`;
+  const league = currentLeague();
+  const status = getLeagueStatusMetadata(league);
+  elements.sportLabel.textContent = league ? `${league.leagueDisplayName} · ${status.label}` : "Unavailable";
+  document.querySelector("#selectedLeagueContext").textContent = league
+    ? `${league.sportDisplayName} · ${league.leagueDisplayName} · ${status.label}`
+    : "League unavailable";
+  elements.confidenceValue.textContent = `${state.minConfidence}%`;
+  renderNavigation();
+  renderMarketFilters();
   updateSportParlayPrompt();
   renderPicks();
   renderSlip();
   renderMatchups();
+  renderTimestamp();
+  renderDataStatus();
+  renderTodayMarketBoard();
+  if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
 }
 
-function updateSportParlayPrompt() {
-  const prompt = sportParlayPrompts[state.sport];
-  if (!prompt) return;
-  sportParlayPrompt.textContent = prompt.label;
-  sportParlayPrompt.dataset.query = prompt.query;
+function setActiveLeague(leagueId) {
+  const league = sportsRepository.getLeague(leagueId);
+  if (!league?.enabled) return;
+  state.leagueId = leagueId;
 }
 
-function setActiveSport(sport) {
-  state.sport = sport;
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.sport === sport);
-  });
-}
-
-function setActiveMarket(market) {
-  state.market = market;
-  document.querySelectorAll(".segmented button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.market === market);
-  });
-}
-
-function detectQueryState(query) {
-  const lower = query.toLowerCase();
-  const sportMatches = [
-    { sport: "NBA", terms: ["nba", "basketball", "guard", "guards", "points", "rebounds", "assists"] },
-    { sport: "NFL", terms: ["nfl", "football", "touchdown", "td", "rush", "passing", "receiving"] },
-    { sport: "MLB", terms: ["mlb", "baseball", "bases", "hits", "pitcher", "homer", "homerun", "home run"] },
-    { sport: "NHL", terms: ["nhl", "hockey", "goals", "goal scorer", "goal scorers", "shots", "goalie", "power play"] },
-  ];
-
-  const sportMatch = sportMatches.find((item) => item.terms.some((term) => lower.includes(term)));
-  if (sportMatch) setActiveSport(sportMatch.sport);
-
-  const propTerms = ["prop", "player", "points", "assist", "yards", "bases", "shots", "rebounds", "td", "touchdown", "homerun", "home run", "hr", "goal scorer", "goal scorers"];
-
-  if (lower.includes("spread") || lower.includes("cover") || lower.includes("ats")) {
-    setActiveMarket("spreads");
-  } else if (propTerms.some((term) => lower.includes(term))) {
-    setActiveMarket("props");
-  } else if (lower.includes("total") || lower.includes("under") || lower.includes("over/under")) {
-    setActiveMarket("totals");
+function activateLeague(leagueId) {
+  setActiveLeague(leagueId);
+  const availableGroups = sportsRepository.getMarkets(state.leagueId)
+    .filter((market) => market.available)
+    .map((market) => market.filterGroup);
+  if (!availableGroups.includes(state.market) && availableGroups.length) {
+    state.market = availableGroups.includes("props") ? "props" : availableGroups[0];
   }
+  state.query = "";
+  state.queryGame = "";
+  state.parlayNote = "";
+  state.analystWorkflow = null;
+  state.selectedPickId = "";
+  state.slip = state.slip.filter((pick) => pick.leagueId === state.leagueId);
+  closeDiscovery();
+  setMobileSlipOpen(false);
+  renderAll();
 }
 
-document.querySelectorAll(".tab").forEach((button) => {
-  button.addEventListener("click", () => {
-    setActiveSport(button.dataset.sport);
-    state.query = "";
-    state.queryGame = "";
-    state.parlayNote = "";
-    state.selectedPickId = "";
-    state.slip = state.slip.filter((pick) => pick.sport === state.sport);
-    renderAll();
-  });
+elements.sportTabs.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-league]");
+  if (button) {
+    activateLeague(button.dataset.league);
+    return;
+  }
+  const viewButton = event.target.closest("[data-nav-view]");
+  if (!viewButton) return;
+  const view = viewButton.dataset.navView;
+  if (view === "for-you" && navigationModel.primaryLeagues[0]) activateLeague(navigationModel.primaryLeagues[0].leagueId);
+  else if (view === "live" && navigationModel.liveLeagues[0]) activateLeague(navigationModel.liveLeagues[0].leagueId);
+  else if (view === "today" && navigationModel.todayLeagues[0]) activateLeague(navigationModel.todayLeagues[0].leagueId);
+  else if (view === "soccer") openDiscovery("soccer");
+  else openDiscovery("all");
 });
 
-document.querySelectorAll(".segmented button").forEach((button) => {
-  button.addEventListener("click", () => {
-    setActiveMarket(button.dataset.market);
-    state.query = "";
-    state.queryGame = "";
-    state.parlayNote = "";
-    state.selectedPickId = "";
-    renderAll();
-  });
+elements.discoveryFilters.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-discovery-view]");
+  if (!button) return;
+  state.discoveryView = button.dataset.discoveryView;
+  renderDiscovery();
 });
 
-confidenceRange.addEventListener("input", (event) => {
+elements.discoveryContent.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-league]");
+  if (!button) return;
+  activateLeague(button.dataset.league);
+});
+
+document.querySelectorAll("[data-open-discovery]").forEach((button) => {
+  button.addEventListener("click", () => openDiscovery(button.dataset.openDiscovery || "all"));
+});
+
+elements.researchIntentNav.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-intent]");
+  if (!button) return;
+  state.researchIntent = button.dataset.intent;
+  if (state.researchIntent === "ai-research") {
+    elements.queryInput.focus();
+    document.querySelector(".hero").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  scheduleMarketBoardLoad();
+});
+
+elements.todayMarketGrid.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-market-league]");
+  if (!card) return;
+  activateLeague(card.dataset.marketLeague);
+  document.querySelector(".workspace").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+document.querySelector("#closeDiscovery").addEventListener("click", closeDiscovery);
+elements.discoveryBackdrop.addEventListener("click", closeDiscovery);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeDiscovery();
+    setMobileSlipOpen(false);
+  }
+});
+
+elements.marketFilters.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-market]");
+  if (!button || button.disabled) return;
+  state.market = button.dataset.market;
+  state.query = "";
+  state.queryGame = "";
+  state.parlayNote = "";
+  state.selectedPickId = "";
+  renderAll();
+});
+
+elements.confidenceRange.addEventListener("input", (event) => {
   state.minConfidence = Number(event.target.value);
   renderAll();
 });
 
-availableToggle.addEventListener("change", (event) => {
+elements.availableToggle.addEventListener("change", (event) => {
   state.availableOnly = event.target.checked;
   renderAll();
 });
 
-correlationToggle.addEventListener("change", (event) => {
+elements.correlationToggle.addEventListener("change", (event) => {
   state.flagCorrelation = event.target.checked;
   document.querySelector("#riskBox").style.borderColor = event.target.checked ? "var(--coral)" : "var(--gold)";
   renderSlip();
 });
 
-betGrid.addEventListener("click", (event) => {
+elements.betGrid.addEventListener("click", (event) => {
   const addButton = event.target.closest("[data-add]");
   if (!addButton) return;
-  const pick = picks.find((item) => item.id === addButton.dataset.add);
-  if (!pick || state.slip.some((item) => item.id === pick.id)) return;
+  const pick = renderedPicks.get(addButton.dataset.add);
+  if (!pick?.available || pick.stale || state.slip.some((item) => item.id === pick.id)) return;
   state.slip.push(pick);
   state.selectedPickId = pick.id;
   renderSlip();
+});
+
+elements.matchupGrid.addEventListener("click", (event) => {
+  const addButton = event.target.closest("[data-event-add]");
+  if (!addButton) return;
+  const pick = getPickBySelectionId(sportsRepository, state.leagueId, addButton.dataset.eventAdd);
+  if (!pick?.available || pick.stale || state.slip.some((item) => item.id === pick.id)) return;
+  state.slip.push(pick);
+  state.selectedPickId = pick.id;
+  renderSlip();
+  addButton.textContent = "Added";
+  addButton.disabled = true;
 });
 
 document.querySelector("#clearSlip").addEventListener("click", () => {
@@ -978,62 +861,89 @@ document.querySelector("#clearSlip").addEventListener("click", () => {
   renderSlip();
 });
 
-slipList.addEventListener("click", (event) => {
-  const item = event.target.closest("[data-pick-id]");
-  if (!item) return;
-  state.selectedPickId = item.dataset.pickId;
-  renderSlip();
-});
+function setMobileSlipOpen(open) {
+  elements.betSlip.classList.toggle("mobile-open", open);
+  elements.mobileSlipToggle.setAttribute("aria-expanded", String(open));
+}
 
-slipList.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" && event.key !== " ") return;
+elements.mobileSlipToggle.addEventListener("click", () => {
+  setMobileSlipOpen(!elements.betSlip.classList.contains("mobile-open"));
+});
+document.querySelector("#closeMobileSlip").addEventListener("click", () => setMobileSlipOpen(false));
+
+function selectSlipItem(event) {
   const item = event.target.closest("[data-pick-id]");
   if (!item) return;
-  event.preventDefault();
   state.selectedPickId = item.dataset.pickId;
   renderSlip();
+}
+
+elements.slipList.addEventListener("click", selectSlipItem);
+elements.slipList.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  selectSlipItem(event);
 });
 
 document.querySelector("#queryForm").addEventListener("submit", (event) => {
   event.preventDefault();
-  const query = queryInput.value.trim();
+  const query = elements.queryInput.value.trim();
+  const parsed = parseResearchQuery(query, sportsRepository, state.leagueId, state.market);
   state.query = query;
   state.parlayNote = "";
-  detectQueryState(query);
-  state.queryGame = findMentionedGame(query);
-  const parlayLegs = pickParlayLegs(query);
-  if (parlayLegs.length) {
-    state.slip = parlayLegs;
-    state.selectedPickId = parlayLegs[0].id;
-    setActiveMarket("props");
+  setActiveLeague(parsed.leagueId);
+  state.market = parsed.market;
+  state.queryGame = parsed.gameId;
+  state.analystWorkflow = runAnalystWorkflow(sportsRepository, query, {
+    currentLeagueId: state.leagueId,
+    currentMarket: state.market,
+    minimumConfidence: state.minConfidence,
+  });
+  const parlay = buildParlay(sportsRepository, query, { leagueId: state.leagueId, minConfidence: state.minConfidence });
+  state.queryGame = parlay.gameId || state.queryGame;
+  state.parlayNote = parlay.note;
+  if (parlay.legs.length) {
+    state.slip = parlay.legs;
+    state.selectedPickId = parlay.legs[0].id;
+    state.market = "props";
   }
   renderAll();
-  answerCard.classList.remove("analyzed");
-  requestAnimationFrame(() => answerCard.classList.add("analyzed"));
+  elements.answerCard.classList.remove("analyzed");
+  requestAnimationFrame(() => elements.answerCard.classList.add("analyzed"));
   document.querySelector(".workspace").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-document.querySelectorAll(".quick-prompts button").forEach((button) => {
-  button.addEventListener("click", () => {
-    queryInput.value = button.dataset.query;
-    document.querySelector("#queryForm").requestSubmit();
-  });
+document.querySelector(".quick-prompts").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-query]");
+  if (!button) return;
+  elements.queryInput.value = button.dataset.query;
+  document.querySelector("#queryForm").requestSubmit();
 });
 
 function setTheme(theme) {
-  document.body.dataset.theme = theme;
-  localStorage.setItem("edgeboard-theme", theme);
+  const safeTheme = theme === "light" ? "light" : "dark";
+  document.body.dataset.theme = safeTheme;
+  try {
+    localStorage.setItem("edgeboard-theme", safeTheme);
+  } catch {
+    // Theme still works when storage is unavailable.
+  }
   document.querySelectorAll("[data-theme-option]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.themeOption === theme);
+    button.classList.toggle("active", button.dataset.themeOption === safeTheme);
+    button.setAttribute("aria-pressed", String(button.dataset.themeOption === safeTheme));
   });
 }
 
 document.querySelectorAll("[data-theme-option]").forEach((button) => {
-  button.addEventListener("click", () => {
-    setTheme(button.dataset.themeOption);
-  });
+  button.addEventListener("click", () => setTheme(button.dataset.themeOption));
 });
 
-const savedTheme = localStorage.getItem("edgeboard-theme");
-setTheme(savedTheme === "light" ? "light" : "dark");
+let savedTheme = "dark";
+try {
+  savedTheme = localStorage.getItem("edgeboard-theme") || "dark";
+} catch {
+  savedTheme = "dark";
+}
+setTheme(savedTheme);
 renderAll();
+scheduleMarketBoardLoad();
