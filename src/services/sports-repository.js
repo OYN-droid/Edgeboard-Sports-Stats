@@ -1,4 +1,5 @@
 import { AVAILABILITY_STATES, SPORTS_REGISTRY } from "../config/sports-registry.js";
+import { getMarketDefinition, resolveCanonicalMarketId } from "../config/market-catalog.js";
 import { mockProviderPayload } from "../data/mock-provider.js";
 
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
@@ -46,6 +47,7 @@ function normalizeLeague(entry, providerStatus = {}) {
     statusLabel: fallbackText(providerStatus.status_label, ""),
     enabled: entry.enabled === true,
     supportedMarketTypes: Array.isArray(entry.supportedMarketTypes) ? [...new Set(entry.supportedMarketTypes)] : [],
+    supportedCanonicalMarketIds: Array.isArray(entry.supportedCanonicalMarketIds) ? [...new Set(entry.supportedCanonicalMarketIds)] : [],
     queryTerms: Array.isArray(entry.queryTerms) ? entry.queryTerms.filter(Boolean) : [],
     parlayPrompt: entry.parlayPrompt || null,
     region: fallbackText(entry.region, "Global"),
@@ -96,8 +98,16 @@ function normalizeEvent(raw) {
   });
 }
 
-function normalizeMarket(raw, eventMap) {
+function normalizeMarket(raw, eventMap, leagueMap) {
   const event = eventMap.get(raw?.event_id) || null;
+  const leagueId = fallbackText(raw?.league_key, event?.leagueId || "unknown-league");
+  const league = leagueMap.get(leagueId);
+  const canonicalMarketId = resolveCanonicalMarketId(
+    raw?.canonical_market_id || raw?.provider_market_id || raw?.market_name
+      || raw?.selections?.[0]?.prop_type || raw?.market_type,
+    { sportId: league?.sportId, leagueId, eventType: event?.eventType },
+  );
+  const definition = getMarketDefinition(canonicalMarketId);
   const selections = (Array.isArray(raw?.selections) ? raw.selections : []).map((selection, index) => {
     const odds = normalizeOdds(selection?.american_odds);
     const participantName = fallbackText(selection?.participant?.name, fallbackText(selection?.label, "Unknown participant"));
@@ -110,8 +120,15 @@ function normalizeMarket(raw, eventMap) {
         name: participantName,
         participantType: fallbackText(selection.participant.participant_type, "unknown"),
       } : null,
+      participantId: fallbackText(selection?.participant?.id, ""),
+      teamId: fallbackText(selection?.team_id, ""),
+      competitorId: fallbackText(selection?.competitor_id, fallbackText(selection?.participant?.id, "")),
       name: participantName,
       line: fallbackText(selection?.line_display, "Line unavailable"),
+      numericLine: Number.isFinite(Number(selection?.line)) ? Number(selection.line) : null,
+      side: fallbackText(selection?.side,
+        /^over\b/i.test(selection?.line_display || "") ? "over"
+          : /^under\b/i.test(selection?.line_display || "") ? "under" : ""),
       odds,
       confidence: Math.min(100, Math.max(0, Number(selection?.model_confidence) || 0)),
       hitRate: fallbackText(selection?.trend_summary, "Trend unavailable"),
@@ -124,22 +141,38 @@ function normalizeMarket(raw, eventMap) {
       eventTime: event?.startsAt || null,
       competitorStatus: selection?.confirmed === true ? "Confirmed" : "Unconfirmed",
       dataQualityWarning: fallbackText(selection?.data_quality_warning, stale ? "Odds may be stale" : ""),
+      dataQualityStatus: fallbackText(selection?.data_quality_status, stale ? "stale" : "sample"),
       stale,
       team: fallbackText(selection?.team_id, ""),
       opponent: fallbackText(selection?.opponent_id, ""),
       propType: fallbackText(selection?.prop_type, "other"),
       confirmed: selection?.confirmed === true,
       available: raw?.status === "open" && selection?.available !== false && odds !== null,
+      suspended: raw?.status === "suspended" || selection?.suspended === true,
     });
   });
 
   return Object.freeze({
     id: fallbackText(raw?.offer_id, "unknown-market"),
-    leagueId: fallbackText(raw?.league_key, event?.leagueId || "unknown-league"),
+    leagueId,
     eventId: fallbackText(raw?.event_id, "unknown-event"),
     event,
-    marketType: fallbackText(raw?.market_type, "unknown"),
-    filterGroup: fallbackText(raw?.ui_group, "unavailable"),
+    canonicalMarketId,
+    canonicalType: definition?.canonicalType || canonicalMarketId || "unknown",
+    providerMarketId: fallbackText(raw?.provider_market_id, fallbackText(raw?.market_type, "unknown")),
+    displayName: definition?.displayName || fallbackText(raw?.market_name, fallbackText(raw?.market_type, "Unknown market")),
+    category: definition?.category || "Specials",
+    browseGroup: definition?.browseGroup || "Other",
+    marketType: definition?.marketType || fallbackText(raw?.market_type, "unknown"),
+    filterGroup: definition?.filterGroup || fallbackText(raw?.ui_group, "unavailable"),
+    period: fallbackText(raw?.period, definition?.period || "full-event"),
+    settlementScope: fallbackText(raw?.settlement_scope, definition?.settlementScope || "provider-rules"),
+    isLive: raw?.is_live === true,
+    isAlternate: raw?.is_alternate === true,
+    isSgpEligible: raw?.sgp_eligible === true,
+    source: fallbackText(raw?.source, "Sample Sportsbook"),
+    openedAt: normalizeTimestamp(raw?.opened_at),
+    lastUpdatedAt: normalizeTimestamp(raw?.last_updated_at),
     status: fallbackText(raw?.status, "unavailable"),
     available: raw?.status === "open" && selections.some((selection) => selection.available),
     selections,
@@ -156,7 +189,8 @@ export function createSportsRepository(payload = mockProviderPayload) {
     .sort((a, b) => a.priorityTier - b.priorityTier);
   const events = (Array.isArray(payload?.events) ? payload.events : []).map(normalizeEvent);
   const eventMap = new Map(events.map((event) => [event.id, event]));
-  const markets = (Array.isArray(payload?.offers) ? payload.offers : []).map((market) => normalizeMarket(market, eventMap));
+  const leagueMap = new Map(leagues.map((league) => [league.leagueId, league]));
+  const markets = (Array.isArray(payload?.offers) ? payload.offers : []).map((market) => normalizeMarket(market, eventMap, leagueMap));
   const aliases = payload?.aliases && typeof payload.aliases === "object" ? payload.aliases : {};
 
   return Object.freeze({
@@ -164,6 +198,24 @@ export function createSportsRepository(payload = mockProviderPayload) {
     getLeague: (leagueId) => leagues.find((league) => league.leagueId === leagueId) || null,
     getEvents: (leagueId, { featuredOnly = false } = {}) => events.filter((event) => event.leagueId === leagueId && (!featuredOnly || event.display.featured)),
     getMarkets: (leagueId) => markets.filter((market) => market.leagueId === leagueId),
+    getMarketAvailability: (leagueId, { eventId = "" } = {}) => {
+      const league = leagueMap.get(leagueId);
+      const leagueMarkets = markets.filter((market) =>
+        market.leagueId === leagueId && (!eventId || market.eventId === eventId));
+      return (league?.supportedCanonicalMarketIds || []).map((canonicalMarketId) => {
+        const instances = leagueMarkets.filter((market) => market.canonicalMarketId === canonicalMarketId);
+        return Object.freeze({
+          definition: getMarketDefinition(canonicalMarketId),
+          canonicalMarketId,
+          supported: true,
+          available: instances.some((market) => market.available),
+          activeCount: instances.filter((market) => market.available).length,
+          suspended: instances.length > 0 && instances.every((market) => market.status === "suspended"),
+          hasOdds: instances.some((market) => market.selections.some((selection) => Number.isFinite(selection.odds))),
+          hasAnalysis: instances.some((market) => market.selections.some((selection) => selection.projection !== "Projection unavailable")),
+        });
+      });
+    },
     getMarketBySelectionId: (selectionId) => markets.find((market) => market.selections.some((selection) => selection.id === selectionId)) || null,
     getAliases: () => ({ ...aliases }),
     getMetadata: () => {

@@ -1,5 +1,30 @@
 const SAMPLE_UPDATED_AT = "2026-07-28T15:20:00.000Z";
 
+const CANONICAL_BY_PROP = Object.freeze({
+  nba: { points: "basketball-points", assists: "basketball-assists", rebounds: "basketball-rebounds", threes: "basketball-three-pointers-made", spread: "basketball-spread", total: "basketball-total" },
+  nfl: { yards: "football-rush-receiving-yards", touchdowns: "football-anytime-touchdown", "passing-touchdowns": "football-passing-touchdowns", spread: "football-spread", total: "football-total" },
+  mlb: { bases: "baseball-total-bases", homeruns: "baseball-home-runs", "pitcher-strikeouts": "baseball-pitcher-strikeouts", spread: "baseball-spread", total: "baseball-total" },
+  nhl: { goals: "hockey-goals", shots: "hockey-shots-on-goal", assists: "hockey-assists", total: "hockey-total", spread: "hockey-spread" },
+});
+
+function inferSpecialCanonical(league, id) {
+  if (id.includes("three-way")) return "soccer-three-way-moneyline";
+  if (id.includes("shots")) return "soccer-player-shots";
+  if (id.includes("method")) return `${league === "boxing" ? "boxing" : "mma"}-method-of-victory`;
+  if (id.includes("round-total")) return `${league === "boxing" ? "boxing" : "mma"}-round-total`;
+  if (id.includes("distance")) return `${league === "boxing" ? "boxing" : "mma"}-fight-goes-distance`;
+  if (id.includes("moneyline") && ["ufc", "pfl"].includes(league)) return "mma-fight-winner";
+  if (id.includes("moneyline") && league === "boxing") return "boxing-fight-winner";
+  if (id.includes("winner") && league === "f1") return "motorsport-race-winner";
+  if (id.includes("podium")) return "motorsport-podium";
+  if (id.includes("top10")) return "motorsport-top-10";
+  if (id.includes("h2h")) return "motorsport-driver-head-to-head";
+  if (id.includes("moneyline") && ["fiba"].includes(league)) return "basketball-moneyline";
+  if (id.includes("regulation") && league === "iihf") return "hockey-moneyline";
+  if (id.includes("moneyline") && league === "atp") return "tennis-moneyline";
+  return "";
+}
+
 const SOCCER_LEAGUES = new Set(["mls", "nwsl", "liga-mx", "epl", "ucl", "la-liga", "bundesliga", "serie-a", "ligue-1"]);
 
 const event = (id, leagueId, away, home, spread, total, edge, featured = true, options = {}) => ({
@@ -125,11 +150,22 @@ const offer = ({
   propType,
   confirmed = true,
   available = true,
+  canonicalId = "",
 }) => ({
   offer_id: id,
   league_key: league,
   event_id: eventId,
   market_type: type,
+  canonical_market_id: canonicalId || CANONICAL_BY_PROP[league]?.[propType] || "",
+  provider_market_id: `sample:${league}:${propType || type}`,
+  period: "full-event",
+  settlement_scope: "provider-rules",
+  is_live: false,
+  is_alternate: false,
+  sgp_eligible: group === "props",
+  source: "Sample Sportsbook",
+  opened_at: SAMPLE_UPDATED_AT,
+  last_updated_at: SAMPLE_UPDATED_AT,
   ui_group: group,
   status: available ? "open" : "suspended",
   selections: [
@@ -157,11 +193,21 @@ const offer = ({
   ],
 });
 
-const specialOffer = (id, league, eventId, type, group, selections, status = "open") => ({
+const specialOffer = (id, league, eventId, type, group, selections, status = "open", canonicalId = "") => ({
   offer_id: id,
   league_key: league,
   event_id: eventId,
   market_type: type,
+  canonical_market_id: canonicalId || inferSpecialCanonical(league, id),
+  provider_market_id: `sample:${league}:${id}`,
+  period: "full-event",
+  settlement_scope: "provider-rules",
+  is_live: false,
+  is_alternate: false,
+  sgp_eligible: group === "props",
+  source: "Sample Sportsbook",
+  opened_at: SAMPLE_UPDATED_AT,
+  last_updated_at: SAMPLE_UPDATED_AT,
   ui_group: group,
   status,
   selections: selections.map((selection, index) => ({
@@ -349,22 +395,28 @@ const offers = [
   offer({ id: "wolves-total", league: "nba", eventId: "MIN-DEN", group: "totals", type: "total", name: "MIN at DEN", line: "Under 219.5", odds: -105, confidence: 64, hitRate: "5 straight unders", matchup: "late window", trend: "Slowest combined pace", note: "Both teams project to rank top eight in half-court frequency.", team: "MIN", opponent: "DEN", propType: "total", available: false }),
   offer({ id: "edwards-points", league: "nba", eventId: "MIN-DEN", name: "Anthony Edwards", line: "Over 26.5 points", odds: -104, confidence: 62, hitRate: "6 of last 10", matchup: "at DEN", trend: "+2.0 projected edge", note: "Minnesota leans on his creation when half-court possessions tighten.", team: "MIN", opponent: "DEN", propType: "points" }),
   offer({ id: "jokic-points", league: "nba", eventId: "MIN-DEN", name: "Nikola Jokic", line: "Over 25.5 points", odds: -111, confidence: 66, hitRate: "68% home hit", matchup: "vs MIN", trend: "+2.9 projected edge", note: "Paint-touch efficiency is strong even against elite rim protection.", team: "DEN", opponent: "MIN", propType: "points" }),
+  offer({ id: "maxey-threes", league: "nba", eventId: "PHI-CHI", name: "Tyrese Maxey", line: "Over 2.5 threes", odds: 105, confidence: 49, hitRate: "5 of last 10", matchup: "vs CHI", trend: "Developing sample signal", note: "Included to demonstrate below-50 confidence filtering.", team: "PHI", opponent: "CHI", propType: "threes" }),
   offer({ id: "cmc-rush", league: "nfl", eventId: "SF-SEA", name: "Christian McCaffrey", line: "Over 82.5 rush+rec yds", odds: -118, confidence: 66, hitRate: "69% role hit", matchup: "vs SEA", trend: "Elite usage floor", note: "Route share and red-zone work keep multiple paths alive.", team: "SF", opponent: "SEA", propType: "yards" }),
+  offer({ id: "sample-qb-pass-yards", league: "nfl", eventId: "SF-SEA", name: "Sample Quarterback", line: "Over 244.5 passing yards", odds: -110, confidence: 47, hitRate: "5 of last 10", matchup: "vs SEA", trend: "+4.1 projected edge", note: "Sample passing-yards market.", team: "SF", opponent: "SEA", propType: "passing-yards", canonicalId: "football-passing-yards" }),
   offer({ id: "deebo-td", league: "nfl", eventId: "SF-SEA", name: "Deebo Samuel", line: "Anytime touchdown", odds: 145, confidence: 63, hitRate: "Red-zone touch in 6 of last 8", matchup: "vs SEA", trend: "Designed-touch spike", note: "Motion usage creates goal-line looks against aggressive linebackers.", team: "SF", opponent: "SEA", propType: "touchdowns" }),
   offer({ id: "walker-td", league: "nfl", eventId: "SF-SEA", name: "Kenneth Walker III", line: "Anytime touchdown", odds: 128, confidence: 61, hitRate: "5 TDs in last 7 active games", matchup: "at SF", trend: "Short-yardage role", note: "Seattle keeps him involved near the goal line even as an underdog.", team: "SEA", opponent: "SF", propType: "touchdowns" }),
   offer({ id: "ravens-spread", league: "nfl", eventId: "BAL-CIN", group: "spreads", type: "spread", name: "Baltimore Ravens", line: "-2.5 spread", odds: -110, confidence: 60, hitRate: "10-5 ATS favorites", matchup: "vs CIN", trend: "Trench mismatch", note: "Pressure rate gap supports short-field chances.", team: "BAL", opponent: "CIN", propType: "spread" }),
   offer({ id: "lamar-td", league: "nfl", eventId: "BAL-CIN", name: "Lamar Jackson", line: "Anytime touchdown", odds: 172, confidence: 62, hitRate: "Rush TD in 4 of last 6 divisional games", matchup: "vs CIN", trend: "QB run package", note: "Designed keepers project better inside the 10-yard line.", team: "BAL", opponent: "CIN", propType: "touchdowns" }),
   offer({ id: "chase-td", league: "nfl", eventId: "BAL-CIN", name: "Ja'Marr Chase", line: "Anytime touchdown", odds: 118, confidence: 60, hitRate: "End-zone target in 5 of last 8", matchup: "at BAL", trend: "Volume ceiling", note: "Cincinnati's condensed-formation looks isolate him near the pylon.", team: "CIN", opponent: "BAL", propType: "touchdowns" }),
+  offer({ id: "lamar-pass-td", league: "nfl", eventId: "BAL-CIN", name: "Lamar Jackson", line: "Over 1.5 passing touchdowns", odds: -105, confidence: 54, hitRate: "5 of last 9", matchup: "vs CIN", trend: "+0.2 projected edge", note: "Sample passing-touchdown market.", team: "BAL", opponent: "CIN", propType: "passing-touchdowns" }),
   offer({ id: "judge-bases", league: "mlb", eventId: "NYY-TOR", name: "Aaron Judge", line: "Over 1.5 total bases", odds: 122, confidence: 63, hitRate: "Top 12% barrel spot", matchup: "vs RHP", trend: "Wind out to left", note: "Pitch mix leans into his pull-side damage zone.", team: "NYY", opponent: "TOR", propType: "bases" }),
   offer({ id: "judge-hr", league: "mlb", eventId: "NYY-TOR", name: "Aaron Judge", line: "To hit a home run", odds: 310, confidence: 64, hitRate: "Top 12% barrel spot", matchup: "vs TOR", trend: "Pull-side weather boost", note: "Pitch mix leans into his elevated fastball damage zone.", team: "NYY", opponent: "TOR", propType: "homeruns" }),
   offer({ id: "vlad-hr", league: "mlb", eventId: "NYY-TOR", name: "Vladimir Guerrero Jr.", line: "To hit a home run", odds: 390, confidence: 60, hitRate: "Hard-hit edge", matchup: "at NYY", trend: "Mistake-pitch profile", note: "Projected starter allows above-average pull-side lift to righties.", team: "TOR", opponent: "NYY", propType: "homeruns" }),
   offer({ id: "ohtani-hr", league: "mlb", eventId: "LAD-ATL", name: "Shohei Ohtani", line: "To hit a home run", odds: 295, confidence: 66, hitRate: "Elite launch-angle form", matchup: "vs ATL", trend: "Park factor edge", note: "His power profile plays up against lower-slot right-handed pitching.", team: "LAD", opponent: "ATL", propType: "homeruns" }),
   offer({ id: "olson-hr", league: "mlb", eventId: "LAD-ATL", name: "Matt Olson", line: "To hit a home run", odds: 360, confidence: 61, hitRate: "Barrel rate trending up", matchup: "at LAD", trend: "Platoon lift", note: "Fastball-heavy sequences give him a clean power path.", team: "ATL", opponent: "LAD", propType: "homeruns" }),
+  offer({ id: "sample-pitcher-k", league: "mlb", eventId: "NYY-TOR", name: "Sample Starting Pitcher", line: "Over 6.5 strikeouts", odds: -108, confidence: 55, hitRate: "6 of last 11", matchup: "vs TOR", trend: "+0.4 projected edge", note: "Sample pitcher strikeout market.", team: "NYY", opponent: "TOR", propType: "pitcher-strikeouts" }),
   offer({ id: "oilers-total", league: "nhl", eventId: "EDM-VAN", group: "totals", type: "total", name: "EDM at VAN", line: "Over 6.0 goals", odds: -102, confidence: 61, hitRate: "High-event profile", matchup: "west slate", trend: "Goalie rest concern", note: "Both power plays rate above average in shot quality.", team: "EDM", opponent: "VAN", propType: "total" }),
   offer({ id: "mcdavid-goal", league: "nhl", eventId: "EDM-VAN", name: "Connor McDavid", line: "Anytime goal scorer", odds: 135, confidence: 66, hitRate: "Goal in 5 of last 8", matchup: "at VAN", trend: "Shot quality edge", note: "Rush chances and power-play touches both project above baseline.", team: "EDM", opponent: "VAN", propType: "goals" }),
   offer({ id: "pettersson-goal", league: "nhl", eventId: "EDM-VAN", name: "Elias Pettersson", line: "Anytime goal scorer", odds: 175, confidence: 60, hitRate: "Top-line minutes stable", matchup: "vs EDM", trend: "Power-play leverage", note: "Edmonton's penalty profile creates a viable scorer angle.", team: "VAN", opponent: "EDM", propType: "goals" }),
   offer({ id: "panarin-goal", league: "nhl", eventId: "NYR-CAR", name: "Artemi Panarin", line: "Anytime goal scorer", odds: 168, confidence: 63, hitRate: "High-danger share up", matchup: "vs CAR", trend: "Top unit volume", note: "Shot attempts rise when New York faces aggressive forechecks.", team: "NYR", opponent: "CAR", propType: "goals" }),
   offer({ id: "aho-goal", league: "nhl", eventId: "NYR-CAR", name: "Sebastian Aho", line: "Anytime goal scorer", odds: 154, confidence: 62, hitRate: "Goal in 4 of last 7", matchup: "at NYR", trend: "Slot-touch edge", note: "Carolina's cycle offense creates repeatable slot chances.", team: "CAR", opponent: "NYR", propType: "goals" }),
+  offer({ id: "mcdavid-shots", league: "nhl", eventId: "EDM-VAN", name: "Connor McDavid", line: "Over 3.5 shots on goal", odds: -115, confidence: 70, hitRate: "7 of last 10", matchup: "at VAN", trend: "+0.7 projected edge", note: "Sample shots-on-goal market.", team: "EDM", opponent: "VAN", propType: "shots" }),
+  offer({ id: "panarin-assists", league: "nhl", eventId: "NYR-CAR", name: "Artemi Panarin", line: "Over 0.5 assists", odds: -102, confidence: 58, hitRate: "6 of last 10", matchup: "vs CAR", trend: "+0.1 projected edge", note: "Sample assist market.", team: "NYR", opponent: "CAR", propType: "assists" }),
   specialOffer("mls-three-way", "mls", "MIA-ORL", "moneyline", "moneylines", [
     { name: "MIA", line: "Home win", odds: -115, matchup: "MIA vs ORL", projection: "Three-way result model", edge: "Sample home edge", team: "MIA", opponent: "ORL" },
     { name: "Draw", line: "Draw", odds: 255, matchup: "MIA vs ORL", projection: "Three-way result model", edge: "Sample draw price", propType: "draw" },
@@ -373,6 +425,15 @@ const offers = [
   specialOffer("mls-shots", "mls", "MIA-ORL", "player-prop", "props", [
     { name: "Sample Forward", line: "Over 2.5 shots", odds: -105, matchup: "MIA vs ORL", projection: "Projection unavailable", edge: "Edge unavailable", propType: "shots", warning: "Shots-on-target and scorer data unavailable in this sample" },
   ]),
+  specialOffer("mls-shots-on-target", "mls", "MIA-ORL", "player-prop", "props", [
+    { name: "Sample Forward", line: "Over 1.5 shots on target", odds: 120, matchup: "MIA vs ORL", projection: "Projection unavailable", edge: "Edge unavailable", propType: "shots-on-target" },
+  ], "open", "soccer-shots-on-target"),
+  specialOffer("mls-corners", "mls", "MIA-ORL", "team-prop", "props", [
+    { name: "MIA vs ORL", line: "Over 9.5 total corners", odds: -110, matchup: "MIA vs ORL", projection: "Projection unavailable", edge: "Edge unavailable", propType: "corners" },
+  ], "open", "soccer-corners-total"),
+  specialOffer("mls-cards", "mls", "MIA-ORL", "team-prop", "props", [
+    { name: "MIA vs ORL", line: "Over 3.5 total cards", odds: 105, matchup: "MIA vs ORL", projection: "Projection unavailable", edge: "Edge unavailable", propType: "cards" },
+  ], "open", "soccer-cards-total"),
   specialOffer("ucl-three-way", "ucl", "RMA-PSG", "moneyline", "moneylines", [
     { name: "RMA", line: "Home win", odds: -105, matchup: "RMA vs PSG", projection: "Three-way result model", edge: "Sample home price", team: "RMA", opponent: "PSG" },
     { name: "Draw", line: "Draw", odds: 275, matchup: "RMA vs PSG", projection: "Three-way result model", edge: "Sample draw price", propType: "draw" },
@@ -385,6 +446,12 @@ const offers = [
   specialOffer("ufc-method", "ufc", "UFC-330", "method-of-victory", "props", [
     { name: "Sample Fighter A", line: "Win by KO/TKO", odds: 210, matchup: "Main event", projection: "Method model unavailable", edge: "Edge unavailable", propType: "method-of-victory" },
   ]),
+  specialOffer("ufc-knockout", "ufc", "UFC-330", "fight-prop", "props", [
+    { name: "Sample Fighter A", line: "Win by KO/TKO", odds: 210, matchup: "Main event", projection: "Method model unavailable", edge: "Edge unavailable", propType: "ko" },
+  ], "open", "mma-win-by-ko-tko"),
+  specialOffer("ufc-submission", "ufc", "UFC-330", "fight-prop", "props", [
+    { name: "Sample Fighter B", line: "Win by submission", odds: 450, matchup: "Main event", projection: "Method model unavailable", edge: "Edge unavailable", propType: "submission" },
+  ], "open", "mma-win-by-submission"),
   specialOffer("ufc-round-total", "ufc", "UFC-330", "round", "totals", [
     { name: "Main event", line: "Over 2.5 rounds", odds: -110, matchup: "Five-round fight", projection: "Round model unavailable", edge: "Edge unavailable", propType: "round-total" },
   ]),
@@ -395,6 +462,15 @@ const offers = [
   specialOffer("boxing-distance", "boxing", "BOXING-AUG-02", "fight-prop", "props", [
     { name: "Main event", line: "Fight goes the distance", odds: 120, matchup: "Championship Boxing", projection: "Distance model unavailable", edge: "Edge unavailable", propType: "distance" },
   ]),
+  specialOffer("boxing-ko", "boxing", "BOXING-AUG-02", "fight-prop", "props", [
+    { name: "Sample Boxer A", line: "Win by KO/TKO", odds: 185, matchup: "Main event", projection: "Method model unavailable", edge: "Edge unavailable", propType: "ko" },
+  ], "open", "boxing-win-by-ko-tko"),
+  specialOffer("boxing-decision", "boxing", "BOXING-AUG-02", "fight-prop", "props", [
+    { name: "Sample Boxer B", line: "Win by decision", odds: 275, matchup: "Main event", projection: "Method model unavailable", edge: "Edge unavailable", propType: "decision" },
+  ], "open", "boxing-win-by-decision"),
+  specialOffer("boxing-exact-round", "boxing", "BOXING-AUG-02", "round", "props", [
+    { name: "Sample Boxer A", line: "Win in round 7", odds: 1200, matchup: "Main event", projection: "Round model unavailable", edge: "Edge unavailable", propType: "exact-round" },
+  ], "open", "boxing-exact-round"),
   specialOffer("pfl-moneyline", "pfl", "PFL-AUG-07", "moneyline", "moneylines", [
     { name: "Sample PFL Fighter A", line: "Fight winner", odds: -120, matchup: "Main event", projection: "Fight model unavailable", edge: "Edge unavailable", propType: "fight-winner" },
     { name: "Sample PFL Fighter B", line: "Fight winner", odds: 105, matchup: "Main event", projection: "Fight model unavailable", edge: "Edge unavailable", propType: "fight-winner" },
@@ -406,6 +482,9 @@ const offers = [
   specialOffer("f1-podium", "f1", "F1-HUNGARY", "race-prop", "props", [
     { name: "Sample Driver A", line: "Podium finish", odds: -120, matchup: "Hungarian Grand Prix", projection: "Finishing projection unavailable", edge: "Edge unavailable", propType: "podium" },
     { name: "Sample Driver B", line: "Podium finish", odds: 145, matchup: "Hungarian Grand Prix", projection: "Finishing projection unavailable", edge: "Edge unavailable", propType: "podium" },
+  ]),
+  specialOffer("f1-h2h", "f1", "F1-HUNGARY", "race-prop", "props", [
+    { name: "Sample Driver A", line: "Finish ahead of Sample Driver B", odds: -105, matchup: "Hungarian Grand Prix", projection: "Head-to-head projection unavailable", edge: "Edge unavailable", propType: "driver-h2h" },
   ]),
   specialOffer("nascar-top10", "nascar-cup", "NASCAR-IOWA", "race-prop", "props", [
     { name: "Sample Driver C", line: "Top 10 finish", odds: -105, matchup: "Iowa Speedway", projection: "Finishing projection unavailable", edge: "Edge unavailable", propType: "top-10" },

@@ -26,4 +26,16 @@ Open `http://127.0.0.1:9010/?provider=gateway` to load the gateway's mock normal
 python3 -m unittest discover -s tests -v
 ```
 
+The browser harness exercises canonical-market parsing, confidence thresholds, the market browser, slip metadata, themes, and a 390px viewport:
+
+```text
+http://127.0.0.1:9010/browser-tests/market-depth.html
+```
+
+## Market taxonomy
+
+`src/config/market-catalog.js` is the provider-neutral source of truth for canonical market definitions and confidence bands. The sports registry declares which definitions a sport can support; the repository maps provider offers to those definitions; and the UI only promotes categories and markets that have an open or explicitly suspended provider instance.
+
+Confidence is model-signal strength, not win probability. The filter spans 0–100 in one-point steps; 0 disables it. The default is 58, and the value persists in local storage and the `confidence` URL parameter.
+
 See [Provider integration](docs/provider-integration.md) for contracts, adapters, environment variables, freshness rules, and the live-provider checklist.

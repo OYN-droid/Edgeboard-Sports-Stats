@@ -42,6 +42,10 @@ def valid_bundle() -> dict:
             "league_key": "nba",
             "event_id": "EVENT-1",
             "market_type": "moneyline",
+            "canonical_market_id": "basketball-moneyline",
+            "provider_market_id": "vendor:moneyline:1",
+            "period": "full-event",
+            "settlement_scope": "including-overtime",
             "ui_group": "moneylines",
             "status": "open",
             "selections": [{
@@ -98,6 +102,28 @@ class ProviderArchitectureTests(unittest.TestCase):
         self.assertFalse(result.partial)
         self.assertEqual(result.data["events"][0]["status"], "scheduled")
         self.assertEqual(result.data["offers"][0]["selections"][0]["american_odds"], -110)
+        self.assertEqual(result.data["offers"][0]["canonical_market_id"], "basketball-moneyline")
+
+    def test_adapter_preserves_provider_agnostic_market_metadata(self):
+        raw = {
+            "odds": {"items": [{
+                "id": "raw-offer",
+                "league_id": "nba",
+                "event_id": "EVENT-1",
+                "market_type": "player-prop",
+                "canonical_market_id": "basketball-assists",
+                "provider_market_id": "vendor:ast",
+                "period": "full-game",
+                "settlement_scope": "including-overtime",
+                "sgp_eligible": True,
+                "selections": [{"id": "sel", "name": "Player", "line": 6.5, "side": "over", "odds": -110}],
+            }]},
+        }
+        offer = CompositeProviderAdapter().odds.adapt(raw["odds"])[0]
+        self.assertEqual(offer["canonical_market_id"], "basketball-assists")
+        self.assertEqual(offer["provider_market_id"], "vendor:ast")
+        self.assertEqual(offer["settlement_scope"], "including-overtime")
+        self.assertEqual(offer["selections"][0]["side"], "over")
 
     def test_missing_fields(self):
         result = validate_normalized_bundle({"provider": "test"}, NOW)

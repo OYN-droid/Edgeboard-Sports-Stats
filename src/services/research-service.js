@@ -1,4 +1,5 @@
 import { MARKET_FILTERS } from "../config/sports-registry.js";
+import { getCatalogForLeague, getMarketDefinition, resolveCanonicalMarketId } from "../config/market-catalog.js";
 
 const QUERY_STOP_WORDS = new Set(["the", "for", "are", "with", "tonight", "show", "find", "which"]);
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -34,6 +35,15 @@ function flattenMarkets(repository, leagueId) {
       ...selection,
       marketId: market.id,
       marketType: market.marketType,
+      canonicalMarketId: market.canonicalMarketId,
+      marketDisplayName: market.displayName,
+      marketCategory: market.category,
+      period: market.period,
+      settlementScope: market.settlementScope,
+      source: market.source,
+      isLive: market.isLive,
+      isAlternate: market.isAlternate,
+      isSgpEligible: market.isSgpEligible,
       market: market.filterGroup,
       leagueId: market.leagueId,
       sport: repository.getLeague(market.leagueId)?.leagueDisplayName || market.leagueId.toUpperCase(),
@@ -114,15 +124,42 @@ export function parseResearchQuery(query, repository, currentLeagueId, currentMa
     "takedown", "podium", "top 5", "top 10", "fastest lap", "driver matchup", "corners", "cards",
   ];
   let market = currentMarket;
+  const canonicalMarketId = resolveCanonicalMarketId(lower, {
+    sportId: league?.sportId,
+    leagueId: league?.leagueId,
+  });
+  const definition = getMarketDefinition(canonicalMarketId);
+  const normalizedQuery = lower.replaceAll(/[^a-z0-9]+/g, " ").trim();
+  const mentionedCanonicalMarketIds = getCatalogForLeague({ sportId: league?.sportId, leagueId: league?.leagueId })
+    .filter((item) => [item.displayName, item.id, ...item.providerAliases, ...item.searchTerms]
+      .some((term) => {
+        const normalizedTerm = String(term).toLowerCase().replaceAll(/[^a-z0-9]+/g, " ").trim();
+        return normalizedTerm.length > 3 && normalizedQuery.includes(normalizedTerm);
+      }))
+    .map((item) => item.id)
+    .filter((id, index, list) => list.indexOf(id) === index);
 
-  if (lower.includes("spread") || lower.includes("cover") || lower.includes("ats")) market = "spreads";
+  if (definition) market = definition.filterGroup;
+  else if (lower.includes("spread") || lower.includes("cover") || lower.includes("ats")) market = "spreads";
   else if (propTerms.some((term) => includesTerm(lower, term))) market = "props";
   else if (lower.includes("total") || lower.includes("under") || lower.includes("over/under")) market = "totals";
   else if (["moneyline", "winner", "win outright", "three-way", "draw"].some((term) => lower.includes(term))) market = "moneylines";
 
+  const availability = league ? repository.getMarketAvailability(league.leagueId) : [];
+  const canonicalAvailability = availability.find((item) => item.canonicalMarketId === canonicalMarketId);
   return {
     leagueId: league?.leagueId || currentLeagueId,
     market,
+    canonicalMarketId,
+    recognizedMarket: definition?.displayName || "",
+    unsupportedMarket: Boolean(definition && !canonicalAvailability?.available),
+    unsupportedReason: definition && !canonicalAvailability?.available
+      ? `${definition.displayName} is recognized but no current ${league?.leagueDisplayName || "league"} sample market is available.`
+      : "",
+    alternativeCanonicalMarketIds: mentionedCanonicalMarketIds.filter((id) => id !== canonicalMarketId),
+    interpretationNote: mentionedCanonicalMarketIds.length > 1
+      ? `Multiple markets were recognized. Showing ${definition?.displayName || "the primary interpretation"}; use the market browser to refine the scope.`
+      : "",
     gameId: findMentionedGame(lower, repository),
     constraints: parseResearchConstraints(lower),
   };
@@ -138,10 +175,11 @@ export function getAvailableMarketFilters(repository, leagueId) {
   }));
 }
 
-export function getFilteredPicks(repository, { leagueId, market, minConfidence, availableOnly, query, queryGame }) {
+export function getFilteredPicks(repository, { leagueId, market, canonicalMarketId = "", minConfidence, availableOnly, query, queryGame }) {
   const allPicks = flattenMarkets(repository, leagueId);
   const constraints = parseResearchConstraints(query);
   let list = allPicks.filter((pick) => pick.market === market);
+  if (canonicalMarketId) list = list.filter((pick) => pick.canonicalMarketId === canonicalMarketId);
   if (availableOnly) list = list.filter((pick) => pick.available);
   list = list.filter((pick) => pick.confidence >= Math.max(minConfidence, constraints.minimumConfidence || 0));
   if (constraints.plusMoneyOnly) list = list.filter((pick) => Number.isFinite(pick.odds) && pick.odds > 0);
@@ -158,7 +196,7 @@ export function getFilteredPicks(repository, { leagueId, market, minConfidence, 
 
   const tokens = query.toLowerCase().split(/\W+/).filter((token) => token.length > 2 && !QUERY_STOP_WORDS.has(token));
   const scored = list.map((pick) => {
-    const searchable = [pick.name, pick.line, pick.hitRate, pick.matchup, pick.trend, pick.note, pick.game, pick.team, pick.opponent, pick.propType].join(" ").toLowerCase();
+    const searchable = [pick.name, pick.line, pick.hitRate, pick.matchup, pick.trend, pick.note, pick.game, pick.team, pick.opponent, pick.propType, pick.canonicalMarketId, pick.marketDisplayName].join(" ").toLowerCase();
     return { pick, score: tokens.reduce((total, token) => total + (searchable.includes(token) ? 1 : 0), 0) };
   }).sort((a, b) => b.score - a.score || b.pick.confidence - a.pick.confidence);
   const directMatches = scored.filter((item) => item.score > 0).map((item) => item.pick);

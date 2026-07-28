@@ -109,12 +109,19 @@
               <span id="sportLabel">League</span>
             </div>
             <div class="segmented" id="marketFilters" role="group" aria-label="Bet type"></div>
+            <details class="market-browser" open>
+              <summary>Browse sport markets</summary>
+              <label class="visually-hidden" for="marketSearch">Search markets</label>
+              <input id="marketSearch" type="search" placeholder="Search this sport’s markets" autocomplete="off" />
+              <div class="market-category-nav" id="marketCategoryNav" role="tablist" aria-label="Market categories"></div>
+              <div class="market-catalog-list" id="marketCatalogList" aria-live="polite"></div>
+            </details>
             <label class="control-label" for="confidenceRange">
               Minimum confidence
               <button class="info-button" type="button" aria-label="About confidence" title="Model confidence describes signal strength and data agreement. It is not a guaranteed win probability.">i</button>
             </label>
-            <input id="confidenceRange" type="range" min="50" max="82" value="58" />
-            <div class="range-readout"><span id="confidenceValue">58%</span><span>model signal</span></div>
+            <input id="confidenceRange" type="range" min="0" max="100" step="1" value="58" />
+            <div class="range-readout"><span id="confidenceValue">58% · Moderate</span><span id="confidenceFilterStatus">minimum signal</span></div>
             <label class="toggle-row">
               <input id="showOnlyAvailable" type="checkbox" checked />
               <span>Show available lines only</span>

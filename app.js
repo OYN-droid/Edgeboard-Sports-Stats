@@ -13,6 +13,7 @@ import {
 } from "./src/services/navigation-service.js";
 import { createEventPresentation } from "./src/services/presentation-service.js";
 import { runAnalystWorkflow } from "./src/services/analyst-service.js";
+import { getConfidenceBand, getMarketDefinition } from "./src/config/market-catalog.js";
 
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
@@ -20,10 +21,29 @@ const leagues = sportsRepository.getLeagues();
 const navigationModel = createNavigationModel(leagues);
 const defaultLeague = navigationModel.primaryLeagues[0] || navigationModel.allLeagues[0] || null;
 
+function loadMinimumConfidence() {
+  const queryValue = new URLSearchParams(window.location.search).get("confidence");
+  let savedValue = "";
+  try {
+    savedValue = localStorage.getItem("edgeboard-min-confidence") || "";
+  } catch {
+    savedValue = "";
+  }
+  const candidate = queryValue === null ? savedValue : queryValue;
+  const numeric = Number(candidate);
+  return candidate !== "" && Number.isFinite(numeric) ? Math.min(100, Math.max(0, Math.round(numeric))) : 58;
+}
+
 const state = {
   leagueId: defaultLeague?.leagueId || "",
   market: "props",
-  minConfidence: 58,
+  minConfidence: loadMinimumConfidence(),
+  canonicalMarketId: "",
+  marketSearch: "",
+  marketCategoryBySport: {},
+  marketSelectionBySport: {},
+  unsupportedMarketReason: "",
+  interpretationNote: "",
   availableOnly: true,
   flagCorrelation: false,
   query: "",
@@ -40,12 +60,16 @@ const state = {
 const elements = {
   sportTabs: document.querySelector("#sportTabs"),
   marketFilters: document.querySelector("#marketFilters"),
+  marketSearch: document.querySelector("#marketSearch"),
+  marketCategoryNav: document.querySelector("#marketCategoryNav"),
+  marketCatalogList: document.querySelector("#marketCatalogList"),
   betGrid: document.querySelector("#betGrid"),
   matchupGrid: document.querySelector("#matchupGrid"),
   slipList: document.querySelector("#slipList"),
   sportLabel: document.querySelector("#sportLabel"),
   confidenceRange: document.querySelector("#confidenceRange"),
   confidenceValue: document.querySelector("#confidenceValue"),
+  confidenceFilterStatus: document.querySelector("#confidenceFilterStatus"),
   availableToggle: document.querySelector("#showOnlyAvailable"),
   correlationToggle: document.querySelector("#avoidSameGame"),
   queryInput: document.querySelector("#queryInput"),
@@ -337,6 +361,60 @@ function renderMarketFilters() {
   `).join("");
 }
 
+function renderMarketBrowser() {
+  const league = currentLeague();
+  const availability = sportsRepository.getMarketAvailability(state.leagueId)
+    .filter((item) => item.definition && (item.activeCount > 0 || item.suspended));
+  const availableCategories = [...new Set(availability.map((item) => item.definition.category))];
+  const categories = availability.some((item) => item.definition.popular)
+    ? ["Popular", ...availableCategories]
+    : availableCategories;
+  let selectedCategory = state.marketCategoryBySport[league?.sportId] || categories[0] || "";
+  if (!categories.includes(selectedCategory)) selectedCategory = categories[0] || "";
+  if (league) state.marketCategoryBySport[league.sportId] = selectedCategory;
+
+  elements.marketCategoryNav.innerHTML = categories.map((category) => `
+    <button type="button" role="tab" data-market-category="${escapeHtml(category)}"
+      class="${category === selectedCategory ? "active" : ""}"
+      aria-selected="${category === selectedCategory}">${escapeHtml(category)}</button>
+  `).join("");
+
+  const search = state.marketSearch.trim().toLowerCase();
+  const visible = availability.filter(({ definition }) => {
+    const matchesCategory = search || (selectedCategory === "Popular" ? definition.popular : definition.category === selectedCategory);
+    const haystack = [definition.displayName, definition.shortName, definition.browseGroup, ...definition.searchTerms, ...definition.providerAliases].join(" ").toLowerCase();
+    return matchesCategory && (!search || haystack.includes(search));
+  });
+  const groups = [...new Set(visible.map((item) => item.definition.browseGroup))];
+  elements.marketCatalogList.innerHTML = groups.length ? groups.map((group) => `
+    <details class="market-catalog-group" open>
+      <summary>${escapeHtml(group)} <span>${visible.filter((item) => item.definition.browseGroup === group).length}</span></summary>
+      <div>
+        ${visible.filter((item) => item.definition.browseGroup === group).map((item) => `
+          <button type="button" data-canonical-market="${escapeHtml(item.canonicalMarketId)}"
+            class="${state.canonicalMarketId === item.canonicalMarketId ? "active" : ""}"
+            aria-pressed="${state.canonicalMarketId === item.canonicalMarketId}"
+            ${item.available ? "" : "disabled"}>
+            <span>${escapeHtml(item.definition.displayName)}</span>
+            <small>${escapeHtml(item.definition.participantType)} · ${item.available ? `${item.activeCount} open` : item.suspended ? "Suspended" : "Unavailable"}</small>
+          </button>
+        `).join("")}
+      </div>
+    </details>
+  `).join("") : `<p class="market-browser-empty">${search ? "No available markets match this search." : "No markets are available in this category."}</p>`;
+}
+
+function persistMinimumConfidence() {
+  try {
+    localStorage.setItem("edgeboard-min-confidence", String(state.minConfidence));
+    const url = new URL(window.location.href);
+    url.searchParams.set("confidence", String(state.minConfidence));
+    history.replaceState(null, "", url);
+  } catch {
+    // Filtering still works when persistence is unavailable.
+  }
+}
+
 function updateSportParlayPrompt() {
   const prompt = currentLeague()?.parlayPrompt;
   if (!prompt) {
@@ -391,11 +469,11 @@ function renderAnswer(list) {
   const title = state.query ? `Analysis for "${state.query}"` : `${leagueName} ${state.market} matching your filters`;
   const hasPlusMoney = list.some((pick) => Number.isFinite(pick.odds) && pick.odds > 0);
   const topPick = list[0];
-  const parlayLead = state.parlayNote ? `${state.parlayNote} ` : "";
+  const parlayLead = [state.interpretationNote, state.parlayNote].filter(Boolean).join(" ");
   document.querySelector("#answerTitle").textContent = title;
   document.querySelector("#answerText").textContent = topPick
-    ? `${parlayLead}I found ${list.length} ${leagueName} ${state.market} angle${list.length === 1 ? "" : "s"}. Start with ${topPick.name} ${topPick.line} at ${formatOdds(topPick.odds)}; it has the strongest sample signal at ${topPick.confidence}%. ${hasPlusMoney ? "There is at least one plus-money leg in this result set." : "These are mostly price-efficient legs, so parlay risk matters more than payout size."}`
-    : `${parlayLead}I could not find a sample ${leagueName} ${state.market} pick above ${state.minConfidence}% confidence. Try lowering the confidence slider or switching markets.`;
+    ? `${parlayLead ? `${parlayLead} ` : ""}I found ${list.length} ${leagueName} ${state.market} angle${list.length === 1 ? "" : "s"}. Start with ${topPick.name} ${topPick.line} at ${formatOdds(topPick.odds)}; it has the strongest sample signal at ${topPick.confidence}%. ${hasPlusMoney ? "There is at least one plus-money leg in this result set." : "These are mostly price-efficient legs, so parlay risk matters more than payout size."}`
+    : `${parlayLead ? `${parlayLead} ` : ""}I could not find a sample ${leagueName} ${state.market} pick above ${state.minConfidence}% confidence. Try lowering the confidence slider or switching markets.`;
 }
 
 function renderAnalystWorkflow() {
@@ -433,6 +511,7 @@ function renderPicks() {
   const list = getFilteredPicks(sportsRepository, {
     leagueId: state.leagueId,
     market: state.market,
+    canonicalMarketId: state.canonicalMarketId,
     minConfidence: state.minConfidence,
     availableOnly: state.availableOnly,
     query: state.query,
@@ -441,7 +520,9 @@ function renderPicks() {
   renderedPicks = new Map(list.map((pick) => [pick.id, pick]));
 
   const league = currentLeague();
-  const emptyMessage = league?.availabilityStatus === "error"
+  const emptyMessage = state.unsupportedMarketReason
+    ? state.unsupportedMarketReason
+    : league?.availabilityStatus === "error"
     ? "Market data is temporarily unavailable for this league."
     : league?.availabilityStatus === "stale"
       ? "The latest odds are stale. Refresh the sample provider before researching this board."
@@ -454,12 +535,13 @@ function renderPicks() {
   elements.betGrid.innerHTML = list.length ? list.map((pick) => {
     const actionable = pick.available && !pick.stale;
     const cardState = pick.stale ? " stale" : !pick.available ? " unavailable" : "";
+    const confidenceBand = getConfidenceBand(pick.confidence);
     return `
     <article class="bet-card${cardState}">
       <div class="bet-top">
         <div>
           <p class="bet-title">${escapeHtml(pick.name)}</p>
-          <div class="bet-market">${escapeHtml(pick.matchup)} · ${escapeHtml(pick.competitorStatus)}</div>
+          <div class="bet-market">${escapeHtml(pick.marketDisplayName)} · ${escapeHtml(pick.matchup)} · ${escapeHtml(pick.competitorStatus)}</div>
         </div>
         <div class="odds">${formatOdds(pick.odds)}</div>
       </div>
@@ -482,7 +564,7 @@ function renderPicks() {
           <strong>${escapeHtml(pick.hitRate)}</strong>
         </div>
       </div>
-      <div class="stat-line"><span>Model confidence <button class="info-button" type="button" aria-label="About model confidence" title="Signal strength and data agreement, not a guaranteed win probability.">i</button></span><strong>${pick.confidence}%</strong></div>
+      <div class="stat-line"><span>Model confidence <button class="info-button" type="button" aria-label="About model confidence" title="Signal strength and data agreement, not a guaranteed win probability.">i</button></span><strong class="confidence-band ${confidenceBand.id}">${pick.confidence}% · ${escapeHtml(confidenceBand.label)}</strong></div>
       <div class="signal-bar" aria-hidden="true"><span style="width:${pick.confidence}%"></span></div>
       <div class="bet-event-row"><span>Event ${formatDateTime(pick.eventTime, "Time TBD")}</span><span>${escapeHtml(pick.game || "Event TBD")}</span></div>
       <p class="bet-market">${escapeHtml(pick.note)}</p>
@@ -513,8 +595,10 @@ function renderSlip() {
   } else {
     elements.slipList.innerHTML = state.slip.map((pick) => `
       <div class="slip-item${pick.id === state.selectedPickId ? " active" : ""}" data-pick-id="${escapeHtml(pick.id)}" tabindex="0" role="button">
-        <strong>${escapeHtml(pick.name)}</strong>
-        <span>${escapeHtml(pick.team || pick.game || "Event TBD")} - ${escapeHtml(pick.line)} - ${formatOdds(pick.odds)}</span>
+        <strong>${escapeHtml(pick.name)} · ${escapeHtml(pick.marketDisplayName)}</strong>
+        <span>${escapeHtml(pick.game || "Event TBD")} · ${pick.side ? `${escapeHtml(pick.side)} · ` : ""}${escapeHtml(pick.line)} · ${formatOdds(pick.odds)}</span>
+        <small>${escapeHtml(pick.sportsbook)} · ${formatDateTime(pick.eventTime, "Time TBD")} · updated ${formatDateTime(pick.lastUpdatedAt)}</small>
+        <small>${escapeHtml(pick.competitorStatus)} · ${pick.available ? "Open" : "Unavailable"} · ${escapeHtml(pick.period)} · ${escapeHtml(pick.settlementScope)}</small>
       </div>
     `).join("");
   }
@@ -527,6 +611,23 @@ function renderSlip() {
     if (pick.game && games.has(pick.game)) duplicateGames.add(pick.game);
     if (pick.game) games.add(pick.game);
   });
+  const correlationWarnings = [];
+  for (let first = 0; first < state.slip.length; first += 1) {
+    for (let second = first + 1; second < state.slip.length; second += 1) {
+      const left = state.slip[first];
+      const right = state.slip[second];
+      if (!left.game || left.game !== right.game) continue;
+      const leftGroup = getMarketDefinition(left.canonicalMarketId)?.correlationGroup || "";
+      const rightGroup = getMarketDefinition(right.canonicalMarketId)?.correlationGroup || "";
+      const related = leftGroup === rightGroup
+        || /passing|receiving/.test(`${leftGroup} ${rightGroup}`)
+        || /points|three-pointers|assists/.test(`${leftGroup} ${rightGroup}`)
+        || /shots|scorer|corners/.test(`${leftGroup} ${rightGroup}`)
+        || /fight-(finish|distance)/.test(`${leftGroup} ${rightGroup}`)
+        || /winner|podium|top-5|top-10/.test(`${left.canonicalMarketId} ${right.canonicalMarketId}`);
+      if (related) correlationWarnings.push(`${left.marketDisplayName} + ${right.marketDisplayName}`);
+    }
+  }
   const uniqueTeams = new Set(state.slip.map((pick) => pick.team).filter(Boolean));
   const broadUniqueParlay = state.slip.length >= 4 && uniqueTeams.size === state.slip.length && !duplicateGames.size;
   const risk = !state.slip.length ? "None" : duplicateGames.size ? "High" : broadUniqueParlay ? "Medium" : state.slip.length >= 4 ? "High" : state.slip.length >= 3 ? "Medium" : "Low";
@@ -535,8 +636,10 @@ function renderSlip() {
   elements.mobileLegCount.textContent = String(state.slip.length);
   document.querySelector("#combinedOdds").textContent = state.slip.length && combinedDecimal ? decimalToAmerican(combinedDecimal) : "+0";
   document.querySelector("#slipRisk").textContent = risk;
-  document.querySelector("#riskBox").textContent = duplicateGames.size
-    ? `Correlation warning: ${Array.from(duplicateGames).join(", ")} has multiple legs. Check whether one outcome depends on another.`
+  document.querySelector("#riskBox").textContent = correlationWarnings.length
+    ? `Correlation warning: ${correlationWarnings.join("; ")} share an event and related market drivers. Correlation can be positive or negative; verify the relationship.`
+    : duplicateGames.size
+    ? `Same-event warning: ${Array.from(duplicateGames).join(", ")} has multiple legs. No catalog relationship was confirmed, but check provider SGP rules.`
     : broadUniqueParlay
       ? "Multi-team parlay: legs come from different teams and games, reducing obvious correlation. Price and variance still matter."
       : "Combine independent edges first. Correlated legs can inflate payout while reducing true probability.";
@@ -708,9 +811,15 @@ function renderAll() {
   document.querySelector("#selectedLeagueContext").textContent = league
     ? `${league.sportDisplayName} · ${league.leagueDisplayName} · ${status.label}`
     : "League unavailable";
-  elements.confidenceValue.textContent = `${state.minConfidence}%`;
+  const confidenceBand = getConfidenceBand(state.minConfidence);
+  elements.confidenceRange.value = String(state.minConfidence);
+  elements.confidenceValue.textContent = state.minConfidence === 0
+    ? "0% · Filter off"
+    : `${state.minConfidence}% · ${confidenceBand.label}`;
+  elements.confidenceFilterStatus.textContent = state.minConfidence === 0 ? "all confidence levels" : "minimum signal";
   renderNavigation();
   renderMarketFilters();
+  renderMarketBrowser();
   updateSportParlayPrompt();
   renderPicks();
   renderSlip();
@@ -728,7 +837,14 @@ function setActiveLeague(leagueId) {
 }
 
 function activateLeague(leagueId) {
+  const previousSportId = currentLeague()?.sportId;
   setActiveLeague(leagueId);
+  const nextLeague = currentLeague();
+  const savedCanonical = state.marketSelectionBySport[nextLeague?.sportId] || "";
+  const canonicalSupported = nextLeague?.supportedCanonicalMarketIds.includes(savedCanonical);
+  if (previousSportId !== nextLeague?.sportId || !nextLeague?.supportedCanonicalMarketIds.includes(state.canonicalMarketId)) {
+    state.canonicalMarketId = canonicalSupported ? savedCanonical : "";
+  }
   const availableGroups = sportsRepository.getMarkets(state.leagueId)
     .filter((market) => market.available)
     .map((market) => market.filterGroup);
@@ -738,6 +854,8 @@ function activateLeague(leagueId) {
   state.query = "";
   state.queryGame = "";
   state.parlayNote = "";
+  state.unsupportedMarketReason = "";
+  state.interpretationNote = "";
   state.analystWorkflow = null;
   state.selectedPickId = "";
   state.slip = state.slip.filter((pick) => pick.leagueId === state.leagueId);
@@ -810,6 +928,9 @@ elements.marketFilters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-market]");
   if (!button || button.disabled) return;
   state.market = button.dataset.market;
+  state.canonicalMarketId = "";
+  state.unsupportedMarketReason = "";
+  state.interpretationNote = "";
   state.query = "";
   state.queryGame = "";
   state.parlayNote = "";
@@ -818,7 +939,38 @@ elements.marketFilters.addEventListener("click", (event) => {
 });
 
 elements.confidenceRange.addEventListener("input", (event) => {
-  state.minConfidence = Number(event.target.value);
+  state.minConfidence = Math.min(100, Math.max(0, Number(event.target.value) || 0));
+  persistMinimumConfidence();
+  renderAll();
+});
+
+elements.marketSearch.addEventListener("input", (event) => {
+  state.marketSearch = event.target.value;
+  renderMarketBrowser();
+});
+
+elements.marketCategoryNav.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-market-category]");
+  if (!button) return;
+  const sportId = currentLeague()?.sportId;
+  if (sportId) state.marketCategoryBySport[sportId] = button.dataset.marketCategory;
+  renderMarketBrowser();
+});
+
+elements.marketCatalogList.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-canonical-market]");
+  if (!button || button.disabled) return;
+  const definition = getMarketDefinition(button.dataset.canonicalMarket);
+  if (!definition) return;
+  state.canonicalMarketId = definition.id;
+  state.market = definition.filterGroup;
+  state.unsupportedMarketReason = "";
+  state.interpretationNote = "";
+  const sportId = currentLeague()?.sportId;
+  if (sportId) state.marketSelectionBySport[sportId] = definition.id;
+  state.query = "";
+  state.queryGame = "";
+  state.parlayNote = "";
   renderAll();
 });
 
@@ -889,14 +1041,29 @@ document.querySelector("#queryForm").addEventListener("submit", (event) => {
   event.preventDefault();
   const query = elements.queryInput.value.trim();
   const parsed = parseResearchQuery(query, sportsRepository, state.leagueId, state.market);
+  const priorSportId = currentLeague()?.sportId;
+  const priorCanonicalMarketId = state.canonicalMarketId;
   state.query = query;
   state.parlayNote = "";
   setActiveLeague(parsed.leagueId);
   state.market = parsed.market;
+  const nextLeague = currentLeague();
+  const mayPreserveCanonical = priorSportId === nextLeague?.sportId
+    && nextLeague?.supportedCanonicalMarketIds.includes(priorCanonicalMarketId);
+  state.canonicalMarketId = parsed.canonicalMarketId || (mayPreserveCanonical ? priorCanonicalMarketId : "");
+  state.unsupportedMarketReason = parsed.unsupportedReason;
+  state.interpretationNote = parsed.interpretationNote;
+  if (parsed.constraints.minimumConfidence !== null) {
+    state.minConfidence = parsed.constraints.minimumConfidence;
+    persistMinimumConfidence();
+  }
+  const parsedSportId = currentLeague()?.sportId;
+  if (parsedSportId && parsed.canonicalMarketId) state.marketSelectionBySport[parsedSportId] = parsed.canonicalMarketId;
   state.queryGame = parsed.gameId;
   state.analystWorkflow = runAnalystWorkflow(sportsRepository, query, {
     currentLeagueId: state.leagueId,
     currentMarket: state.market,
+    currentCanonicalMarketId: state.canonicalMarketId,
     minimumConfidence: state.minConfidence,
   });
   const parlay = buildParlay(sportsRepository, query, { leagueId: state.leagueId, minConfidence: state.minConfidence });
@@ -906,6 +1073,9 @@ document.querySelector("#queryForm").addEventListener("submit", (event) => {
     state.slip = parlay.legs;
     state.selectedPickId = parlay.legs[0].id;
     state.market = "props";
+    state.canonicalMarketId = "";
+    state.unsupportedMarketReason = "";
+    state.interpretationNote = "";
   }
   renderAll();
   elements.answerCard.classList.remove("analyzed");

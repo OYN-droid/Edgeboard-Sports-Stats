@@ -31,6 +31,7 @@ const RACE_MARKETS = [MARKET_TYPES.RACE_PROP, MARKET_TYPES.QUALIFYING, MARKET_TY
 const INDIVIDUAL_MARKETS = [MARKET_TYPES.MONEYLINE, MARKET_TYPES.PLAYER_PROP, MARKET_TYPES.WINNER, MARKET_TYPES.FUTURES];
 
 function league(sportId, sportDisplayName, leagueId, leagueDisplayName, category, priorityTier, options = {}) {
+  const supportedCanonicalMarketIds = getCatalogForLeague({ sportId, leagueId }).map((market) => market.id);
   return Object.freeze({
     sportId,
     sportDisplayName,
@@ -49,6 +50,7 @@ function league(sportId, sportDisplayName, leagueId, leagueDisplayName, category
     dataQualityStatus: "unknown",
     enabled: options.enabled !== false,
     supportedMarketTypes: options.supportedMarketTypes || TEAM_MARKETS,
+    supportedCanonicalMarketIds,
     queryTerms: options.queryTerms || [leagueDisplayName.toLowerCase()],
     parlayPrompt: options.parlayPrompt || null,
     region: options.region || "Global",
@@ -127,3 +129,4 @@ export const SPORTS_REGISTRY = Object.freeze([
 export function isAvailabilityState(value) {
   return AVAILABILITY_STATES.includes(value);
 }
+import { getCatalogForLeague } from "./market-catalog.js";

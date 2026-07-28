@@ -4,6 +4,7 @@ import {
   parseResearchConstraints,
   parseResearchQuery,
 } from "./research-service.js";
+import { getMarketDefinition } from "../config/market-catalog.js";
 
 const CATEGORY_LABELS = Object.freeze({
   "team-sport": "Team game",
@@ -23,7 +24,8 @@ function marketLabel(market) {
 }
 
 function describeConstraints(constraints, minimumConfidence) {
-  const values = [`confidence signal ≥ ${Math.max(minimumConfidence, constraints.minimumConfidence || 0)}%`];
+  const confidenceFloor = Math.max(minimumConfidence, constraints.minimumConfidence || 0);
+  const values = [confidenceFloor ? `confidence signal ≥ ${confidenceFloor}%` : "confidence filter off"];
   if (constraints.plusMoneyOnly) values.push("plus-money prices only");
   if (constraints.minimumHitRate !== null) values.push(`historical hit rate ≥ ${constraints.minimumHitRate}%`);
   if (constraints.confirmedOnly) values.push("confirmed competitors only");
@@ -52,20 +54,27 @@ function eventModelLabel(league) {
 export function runAnalystWorkflow(repository, query, options = {}) {
   const minimumConfidence = Number(options.minimumConfidence) || 0;
   const parsed = parseResearchQuery(query, repository, options.currentLeagueId, options.currentMarket);
+  if (!parsed.canonicalMarketId && options.currentCanonicalMarketId) {
+    parsed.canonicalMarketId = options.currentCanonicalMarketId;
+  }
   const constraints = parseResearchConstraints(query);
   const league = repository.getLeague(parsed.leagueId);
   const events = repository.getEvents(parsed.leagueId);
   const allPicks = getLeaguePicks(repository, parsed.leagueId);
-  const scopedPicks = allPicks.filter((pick) => pick.market === parsed.market);
+  const scopedPicks = allPicks.filter((pick) =>
+    pick.market === parsed.market
+    && (!parsed.canonicalMarketId || pick.canonicalMarketId === parsed.canonicalMarketId));
   const freshAvailable = getFilteredPicks(repository, {
     leagueId: parsed.leagueId,
     market: parsed.market,
+    canonicalMarketId: parsed.canonicalMarketId,
     minConfidence: minimumConfidence,
     availableOnly: true,
     query,
     queryGame: parsed.gameId,
   }).filter((pick) => !pick.stale);
   const warnings = dataRisks(league, events, scopedPicks);
+  if (parsed.unsupportedReason) warnings.push(parsed.unsupportedReason);
   const resolvedEvent = parsed.gameId ? events.find((event) => event.id === parsed.gameId) : null;
 
   const workflowStatus = !league || ["error", "unavailable"].includes(league.availabilityStatus)
@@ -76,7 +85,7 @@ export function runAnalystWorkflow(repository, query, options = {}) {
       id: "interpret",
       label: "Interpret question",
       status: "complete",
-      detail: `${marketLabel(parsed.market)} research${constraints.plusMoneyOnly ? " with price constraint" : ""}.`,
+      detail: `${getMarketDefinition(parsed.canonicalMarketId)?.displayName || marketLabel(parsed.market)} research${constraints.plusMoneyOnly ? " with price constraint" : ""}.`,
     },
     {
       id: "scope",
@@ -116,7 +125,7 @@ export function runAnalystWorkflow(repository, query, options = {}) {
     sportName: league?.sportDisplayName || "Unresolved sport",
     category: eventModelLabel(league),
     market: parsed.market,
-    marketLabel: marketLabel(parsed.market),
+    marketLabel: getMarketDefinition(parsed.canonicalMarketId)?.displayName || marketLabel(parsed.market),
     eventId: resolvedEvent?.id || "",
     constraints: describeConstraints(constraints, minimumConfidence),
     evidence: {

@@ -17,6 +17,12 @@ Vendor API
 
 UI components never import or inspect vendor response fields. A provider change is contained to a server provider implementation and its adapter.
 
+## Market identity and availability
+
+Provider adapters map vendor market names into `canonical_market_id`; UI code reads the matching definition from `src/config/market-catalog.js`. Adapters also preserve `provider_market_id`, period or segment, settlement scope, source, open/update timestamps, live/alternate/SGP flags, selection side and line, and participant/team/competitor IDs.
+
+The catalog describes theoretical EdgeBoard support only. An event or league market is promoted in the browser when a normalized provider offer confirms it as open; suspended instances remain explicitly disabled. Unknown aliases do not become a nearby market automatically. Add an alias to a catalog definition or a vendor-specific adapter mapping after its settlement rules have been verified.
+
 ## Local development
 
 Static sample mode:
