@@ -38,4 +38,8 @@ http://127.0.0.1:9010/browser-tests/market-depth.html
 
 Confidence is model-signal strength, not win probability. The filter spans 0–100 in one-point steps; 0 disables it. The default is 58, and the value persists in local storage and the `confidence` URL parameter.
 
+## Navigation scope
+
+The normalized top-navigation selection is the shared scope for active navigation styling, Today’s Markets, and the research-board league context. League, sport, category, Live, Today, All Sports, and More-menu destinations are serialized in the `scope` URL parameter and local storage. `getVisibleMarketSummaries` in `src/services/navigation-service.js` owns scope filtering and aggregate counts so UI components do not maintain separate league lists.
+
 See [Provider integration](docs/provider-integration.md) for contracts, adapters, environment variables, freshness rules, and the live-provider checklist.

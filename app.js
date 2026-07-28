@@ -10,6 +10,10 @@ import {
 import {
   createNavigationModel,
   getLeagueStatusMetadata,
+  getVisibleMarketSummaries,
+  normalizeNavigationSelection,
+  parseNavigationSelection,
+  serializeNavigationSelection,
 } from "./src/services/navigation-service.js";
 import { createEventPresentation } from "./src/services/presentation-service.js";
 import { runAnalystWorkflow } from "./src/services/analyst-service.js";
@@ -20,6 +24,8 @@ const sportsRepository = createSportsRepository(providerPayload);
 const leagues = sportsRepository.getLeagues();
 const navigationModel = createNavigationModel(leagues);
 const defaultLeague = navigationModel.primaryLeagues[0] || navigationModel.allLeagues[0] || null;
+const allEvents = navigationModel.allLeagues.flatMap((league) => sportsRepository.getEvents(league.leagueId));
+const allMarkets = navigationModel.allLeagues.flatMap((league) => sportsRepository.getMarkets(league.leagueId));
 
 function loadMinimumConfidence() {
   const queryValue = new URLSearchParams(window.location.search).get("confidence");
@@ -34,8 +40,42 @@ function loadMinimumConfidence() {
   return candidate !== "" && Number.isFinite(numeric) ? Math.min(100, Math.max(0, Math.round(numeric))) : 58;
 }
 
+function loadNavigationSelection() {
+  const urlSelection = parseNavigationSelection(new URLSearchParams(window.location.search).get("scope"));
+  let savedSelection = null;
+  try {
+    savedSelection = JSON.parse(localStorage.getItem("edgeboard-navigation-selection") || "null");
+  } catch {
+    savedSelection = null;
+  }
+  return normalizeNavigationSelection(urlSelection || savedSelection, navigationModel.allLeagues, defaultLeague?.leagueId);
+}
+
+function getSelectionSummary(selection) {
+  return getVisibleMarketSummaries({
+    selection,
+    leagues: navigationModel.allLeagues,
+    events: allEvents,
+    markets: allMarkets,
+    currentDate: new Date(),
+  });
+}
+
+function researchLeagueForSelection(selection, preferredLeagueId = "") {
+  if (selection.type === "league") return sportsRepository.getLeague(selection.id);
+  const summary = getSelectionSummary(selection);
+  return summary.visibleLeagues.find((league) => league.leagueId === preferredLeagueId)
+    || summary.visibleLeagues[0]
+    || sportsRepository.getLeague(preferredLeagueId)
+    || defaultLeague;
+}
+
+const initialNavigationSelection = loadNavigationSelection();
+const initialResearchLeague = researchLeagueForSelection(initialNavigationSelection);
+
 const state = {
-  leagueId: defaultLeague?.leagueId || "",
+  navigationSelection: initialNavigationSelection,
+  leagueId: initialResearchLeague?.leagueId || "",
   market: "props",
   minConfidence: loadMinimumConfidence(),
   canonicalMarketId: "",
@@ -83,6 +123,8 @@ const elements = {
   discoveryContent: document.querySelector("#discoveryContent"),
   discoveryTitle: document.querySelector("#discoveryTitle"),
   researchIntentNav: document.querySelector("#researchIntentNav"),
+  todayBoardTitle: document.querySelector("#todayBoardTitle"),
+  todayBoardEyebrow: document.querySelector("#todayBoardEyebrow"),
   todayMarketGrid: document.querySelector("#todayMarketGrid"),
   todayBoardSummary: document.querySelector("#todayBoardSummary"),
   mobileSlipToggle: document.querySelector("#mobileSlipToggle"),
@@ -99,6 +141,7 @@ const elements = {
 
 let renderedPicks = new Map();
 let marketBoardLoadTimer = 0;
+let discoveryReturnFocus = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -146,36 +189,53 @@ function renderNavigation() {
     { id: "live", label: "Live", status: `${navigationModel.liveLeagues.length} active` },
     { id: "today", label: "Today", status: `${navigationModel.todayLeagues.length} sports` },
   ];
-  const conceptButtons = concepts.map((concept) => `
-    <button class="tab has-status" type="button" data-nav-view="${concept.id}">
+  const conceptButtons = concepts.map((concept) => {
+    const active = state.navigationSelection.type === "system" && state.navigationSelection.id === concept.id;
+    return `
+    <button class="tab has-status${active ? " active" : ""}" type="button" data-nav-view="${concept.id}"
+      aria-pressed="${active}" ${active ? 'aria-current="page"' : ""}>
       <span>${concept.label}</span><span class="nav-status">${concept.status}</span>
     </button>
-  `).join("");
+  `;
+  }).join("");
   const leagueButtons = navigationModel.primaryLeagues.map((league) => {
     const status = getLeagueStatusMetadata(league);
+    const active = state.navigationSelection.type === "league" && league.leagueId === state.navigationSelection.id;
     return `
     <button
-      class="tab has-status${league.leagueId === state.leagueId ? " active" : ""}"
+      class="tab has-status${active ? " active" : ""}"
       type="button"
       data-league="${escapeHtml(league.leagueId)}"
-      aria-pressed="${league.leagueId === state.leagueId}"
+      aria-pressed="${active}"
+      ${active ? 'aria-current="page"' : ""}
     ><span>${escapeHtml(league.leagueDisplayName)}</span><span class="nav-status">${escapeHtml(status.label)}</span></button>
   `;
   }).join("");
   const soccerActive = navigationModel.soccerLeagues.filter((league) => league.liveEventCount || league.todayEventCount).length;
+  const soccerSelected = state.navigationSelection.type === "sport" && state.navigationSelection.id === "soccer";
+  const primaryLeagueIds = new Set(navigationModel.primaryLeagues.map((league) => league.leagueId));
+  const moreSelected = state.navigationSelection.type === "category"
+    || state.navigationSelection.type === "destination"
+    || (state.navigationSelection.type === "sport" && state.navigationSelection.id !== "soccer")
+    || (state.navigationSelection.type === "league" && !primaryLeagueIds.has(state.navigationSelection.id))
+    || (state.navigationSelection.type === "system" && state.navigationSelection.id === "all");
   elements.sportTabs.innerHTML = `${conceptButtons}${leagueButtons}
-    <button class="tab has-status" type="button" data-nav-view="soccer">
+    <button class="tab has-status${soccerSelected ? " active" : ""}" type="button" data-sport="soccer"
+      aria-pressed="${soccerSelected}" ${soccerSelected ? 'aria-current="page"' : ""}>
       <span>Soccer</span><span class="nav-status">${soccerActive} active</span>
     </button>
-    <button class="tab has-status" type="button" data-nav-view="more">
+    <button class="tab has-status${moreSelected ? " active" : ""}" type="button" data-nav-view="more"
+      aria-controls="discoveryDrawer" aria-expanded="${elements.discoveryDrawer.classList.contains("open")}" aria-pressed="${moreSelected}">
       <span>More</span><span class="nav-status">${leagues.length} leagues</span>
     </button>`;
 }
 
 function leagueDiscoveryCard(league) {
   const status = getLeagueStatusMetadata(league);
+  const active = state.navigationSelection.type === "league" && state.navigationSelection.id === league.leagueId;
   return `
-    <button class="league-discovery-card${league.leagueId === state.leagueId ? " active" : ""}" type="button" data-league="${escapeHtml(league.leagueId)}">
+    <button class="league-discovery-card${active ? " active" : ""}" type="button" data-league="${escapeHtml(league.leagueId)}"
+      aria-pressed="${active}">
       <strong>${escapeHtml(league.leagueDisplayName)}</strong>
       <span class="league-status">${escapeHtml(status.label)}</span>
       <span class="league-detail">${escapeHtml(league.sportDisplayName)} · ${escapeHtml(status.detail)}</span>
@@ -222,30 +282,64 @@ function renderDiscovery() {
     button.classList.toggle("active", button.dataset.discoveryView === state.discoveryView);
   });
   const groups = discoveryGroupsForView(state.discoveryView).filter((group) => group.leagues.length);
-  elements.discoveryContent.innerHTML = groups.length ? groups.map((group) => `
+  const scopeOptions = state.discoveryView === "all" ? `
+    <section class="discovery-group">
+      <h3>Browse by sport</h3>
+      <div class="league-discovery-list">
+        ${[
+          ["basketball", "Basketball"],
+          ["soccer", "Soccer"],
+          ["motorsport", "Motorsports"],
+        ].map(([id, label]) => {
+          const active = state.navigationSelection.type === "sport" && state.navigationSelection.id === id;
+          return `<button class="league-discovery-card${active ? " active" : ""}" type="button" data-sport="${id}" aria-pressed="${active}">
+            <strong>${label}</strong><span class="league-detail">Show configured ${label.toLowerCase()} leagues</span><span class="league-tier">Sport scope</span>
+          </button>`;
+        }).join("")}
+        <button class="league-discovery-card${state.navigationSelection.type === "category" && state.navigationSelection.id === "combat-sports" ? " active" : ""}"
+          type="button" data-category="combat-sports"
+          aria-pressed="${state.navigationSelection.type === "category" && state.navigationSelection.id === "combat-sports"}">
+          <strong>Combat Sports</strong><span class="league-detail">MMA, boxing, bare knuckle, and kickboxing</span><span class="league-tier">Category scope</span>
+        </button>
+      </div>
+    </section>
+  ` : "";
+  elements.discoveryContent.innerHTML = groups.length ? `${scopeOptions}${groups.map((group) => `
     <section class="discovery-group">
       <h3>${escapeHtml(group.name)}</h3>
       <div class="league-discovery-list">${group.leagues.map(leagueDiscoveryCard).join("")}</div>
     </section>
-  `).join("") : `<div class="discovery-empty">No sample leagues match this view.</div>`;
+  `).join("")}` : `<div class="discovery-empty">No sample leagues match this view.</div>`;
 }
 
 function openDiscovery(view = "all") {
+  discoveryReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.discoveryView = view;
   renderDiscovery();
   elements.discoveryBackdrop.hidden = false;
   elements.discoveryDrawer.classList.add("open");
   elements.discoveryDrawer.setAttribute("aria-hidden", "false");
+  renderNavigation();
+  document.querySelector("#closeDiscovery").focus({ preventScroll: true });
 }
 
-function closeDiscovery() {
+function closeDiscovery({ restoreFocus = false } = {}) {
+  const wasOpen = elements.discoveryDrawer.classList.contains("open");
+  const returnTarget = discoveryReturnFocus;
   elements.discoveryDrawer.classList.remove("open");
   elements.discoveryDrawer.setAttribute("aria-hidden", "true");
   elements.discoveryBackdrop.hidden = true;
+  renderNavigation();
+  discoveryReturnFocus = null;
+  if (!wasOpen || !restoreFocus) return;
+  const focusTarget = returnTarget?.isConnected
+    ? returnTarget
+    : elements.sportTabs.querySelector('[data-nav-view="more"]');
+  focusTarget?.focus({ preventScroll: true });
 }
 
-function leaguesForResearchIntent(intent) {
-  const active = navigationModel.allLeagues.filter((league) =>
+function leaguesForResearchIntent(intent, scopedLeagues) {
+  const active = scopedLeagues.filter((league) =>
     !["unavailable", "error"].includes(league.availabilityStatus)
     && (league.liveEventCount || league.todayEventCount || league.upcomingEventCount || league.availableMarketCount),
   );
@@ -271,10 +365,16 @@ function renderResearchIntentNavigation() {
 
 function renderTodayMarketBoard() {
   renderResearchIntentNavigation();
+  const summary = getSelectionSummary(state.navigationSelection);
+  elements.todayBoardTitle.textContent = summary.heading;
+  elements.todayBoardEyebrow.textContent = summary.selection.type === "system" && ["all", "for-you"].includes(summary.selection.id)
+    ? "Cross-sport discovery"
+    : `${summary.contextLabel} scope`;
+  const skeletonCount = summary.selection.type === "league" ? 1 : Math.min(6, Math.max(1, summary.visibleLeagues.length));
   if (state.marketBoardLoading) {
     elements.todayMarketGrid.setAttribute("aria-busy", "true");
-    elements.todayMarketGrid.innerHTML = Array.from({ length: 6 }, () => `<div class="skeleton-card" aria-hidden="true"></div>`).join("");
-    elements.todayBoardSummary.textContent = "Loading sample market availability…";
+    elements.todayMarketGrid.innerHTML = Array.from({ length: skeletonCount }, () => `<div class="skeleton-card" aria-hidden="true"></div>`).join("");
+    elements.todayBoardSummary.textContent = `Loading ${summary.contextLabel} sample market availability…`;
     return;
   }
 
@@ -289,9 +389,22 @@ function renderTodayMarketBoard() {
     "ai-research": "AI-assisted research",
     trending: "trending events",
   };
-  const leaguesForBoard = leaguesForResearchIntent(state.researchIntent);
-  elements.todayBoardSummary.textContent = `Sample data ranked for ${intentLabels[state.researchIntent] || "market research"} across sports.`;
+  const leaguesForBoard = leaguesForResearchIntent(state.researchIntent, summary.visibleLeagues);
+  const boardCounts = leaguesForBoard.reduce((counts, league) => ({
+    events: counts.events + league.todayEventCount,
+    live: counts.live + league.liveEventCount,
+    markets: counts.markets + league.availableMarketCount,
+    props: counts.props + league.playerPropCount,
+  }), { events: 0, live: 0, markets: 0, props: 0 });
+  const intentCopy = state.researchIntent === "markets"
+    ? ""
+    : ` Research intent: ${intentLabels[state.researchIntent] || "market research"}.`;
+  elements.todayBoardSummary.textContent = `${summary.supportingText}${intentCopy} ${boardCounts.events} today · ${boardCounts.live} live · ${boardCounts.markets} markets · ${boardCounts.props} player props.`;
   elements.todayMarketGrid.setAttribute("aria-busy", "false");
+  elements.todayMarketGrid.dataset.scope = serializeNavigationSelection(summary.selection);
+  elements.todayMarketGrid.dataset.leagueCount = String(leaguesForBoard.length);
+  elements.todayMarketGrid.dataset.eventCount = String(boardCounts.events);
+  elements.todayMarketGrid.dataset.marketCount = String(boardCounts.markets);
 
   if (!leaguesForBoard.length) {
     const emptyMessages = {
@@ -300,11 +413,14 @@ function renderTodayMarketBoard() {
       sgp: "No same-game parlay sample markets are currently available.",
       movement: "No active sample lines are available for movement monitoring.",
     };
-    elements.todayMarketGrid.innerHTML = `<div class="discovery-empty">${escapeHtml(emptyMessages[state.researchIntent] || "Data is temporarily unavailable for this research view.")}</div>`;
+    elements.todayMarketGrid.innerHTML = `<div class="discovery-empty">${escapeHtml(summary.emptyStateReason || emptyMessages[state.researchIntent] || "Data is temporarily unavailable for this research view.")}</div>`;
     return;
   }
 
-  elements.todayMarketGrid.innerHTML = leaguesForBoard.map((league) => {
+  const leagueScopeNotice = summary.selection.type === "league" && summary.emptyStateReason
+    ? `<div class="scope-empty-state"><strong>${escapeHtml(summary.emptyStateReason)}</strong><span>${escapeHtml(leaguesForBoard[0].statusLabel || getLeagueStatusMetadata(leaguesForBoard[0]).label)}</span></div>`
+    : "";
+  elements.todayMarketGrid.innerHTML = `${leagueScopeNotice}${leaguesForBoard.map((league) => {
     const status = getLeagueStatusMetadata(league);
     const nextEvent = sportsRepository.getEvents(league.leagueId)
       .filter((event) => event.startsAt)
@@ -331,7 +447,7 @@ function renderTodayMarketBoard() {
         <span class="market-card-footer"><span class="sample-inline">Sample data</span><span>${escapeHtml(league.dataQualityStatus)} quality</span></span>
       </button>
     `;
-  }).join("");
+  }).join("")}`;
 }
 
 function scheduleMarketBoardLoad() {
@@ -830,19 +946,46 @@ function renderAll() {
   if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
 }
 
-function setActiveLeague(leagueId) {
-  const league = sportsRepository.getLeague(leagueId);
-  if (!league?.enabled) return;
-  state.leagueId = leagueId;
+function persistNavigationSelection() {
+  try {
+    localStorage.setItem("edgeboard-navigation-selection", JSON.stringify(state.navigationSelection));
+    const url = new URL(window.location.href);
+    url.searchParams.set("scope", serializeNavigationSelection(state.navigationSelection));
+    history.replaceState(null, "", url);
+  } catch {
+    // Selection still works when storage or history is unavailable.
+  }
 }
 
-function activateLeague(leagueId) {
+function focusCurrentNavigationSelection() {
+  const selection = state.navigationSelection;
+  let target = null;
+  if (selection.type === "league") {
+    target = elements.sportTabs.querySelector(`[data-league="${selection.id}"]`);
+  } else if (selection.type === "sport" && selection.id === "soccer") {
+    target = elements.sportTabs.querySelector('[data-sport="soccer"]');
+  } else if (selection.type === "system" && ["for-you", "live", "today"].includes(selection.id)) {
+    target = elements.sportTabs.querySelector(`[data-nav-view="${selection.id}"]`);
+  }
+  (target || elements.sportTabs.querySelector('[data-nav-view="more"]'))?.focus({ preventScroll: true });
+}
+
+function activateNavigationSelection(selection, {
+  closeMenu = true,
+  restoreFocus = true,
+  resetResearch = true,
+} = {}) {
+  const normalized = normalizeNavigationSelection(selection, navigationModel.allLeagues, defaultLeague?.leagueId);
   const previousSportId = currentLeague()?.sportId;
-  setActiveLeague(leagueId);
+  const resolvedLeague = researchLeagueForSelection(normalized, state.leagueId);
+  if (!resolvedLeague?.enabled) return;
+  state.navigationSelection = normalized;
+  state.leagueId = resolvedLeague.leagueId;
+  persistNavigationSelection();
   const nextLeague = currentLeague();
-  const savedCanonical = state.marketSelectionBySport[nextLeague?.sportId] || "";
-  const canonicalSupported = nextLeague?.supportedCanonicalMarketIds.includes(savedCanonical);
-  if (previousSportId !== nextLeague?.sportId || !nextLeague?.supportedCanonicalMarketIds.includes(state.canonicalMarketId)) {
+  const savedCanonical = state.marketSelectionBySport[nextLeague.sportId] || "";
+  const canonicalSupported = nextLeague.supportedCanonicalMarketIds.includes(savedCanonical);
+  if (previousSportId !== nextLeague.sportId || !nextLeague.supportedCanonicalMarketIds.includes(state.canonicalMarketId)) {
     state.canonicalMarketId = canonicalSupported ? savedCanonical : "";
   }
   const availableGroups = sportsRepository.getMarkets(state.leagueId)
@@ -851,50 +994,68 @@ function activateLeague(leagueId) {
   if (!availableGroups.includes(state.market) && availableGroups.length) {
     state.market = availableGroups.includes("props") ? "props" : availableGroups[0];
   }
-  state.query = "";
-  state.queryGame = "";
-  state.parlayNote = "";
-  state.unsupportedMarketReason = "";
-  state.interpretationNote = "";
-  state.analystWorkflow = null;
+  if (resetResearch) {
+    state.query = "";
+    state.queryGame = "";
+    state.parlayNote = "";
+    state.unsupportedMarketReason = "";
+    state.interpretationNote = "";
+    state.analystWorkflow = null;
+  }
   state.selectedPickId = "";
   state.slip = state.slip.filter((pick) => pick.leagueId === state.leagueId);
-  closeDiscovery();
+  if (closeMenu) closeDiscovery();
   setMobileSlipOpen(false);
+  state.marketBoardLoading = false;
   renderAll();
+  if (restoreFocus) requestAnimationFrame(focusCurrentNavigationSelection);
 }
 
 elements.sportTabs.addEventListener("click", (event) => {
   const button = event.target.closest("[data-league]");
   if (button) {
-    activateLeague(button.dataset.league);
+    activateNavigationSelection({ type: "league", id: button.dataset.league });
+    return;
+  }
+  const sportButton = event.target.closest("[data-sport]");
+  if (sportButton) {
+    activateNavigationSelection({ type: "sport", id: sportButton.dataset.sport });
     return;
   }
   const viewButton = event.target.closest("[data-nav-view]");
   if (!viewButton) return;
   const view = viewButton.dataset.navView;
-  if (view === "for-you" && navigationModel.primaryLeagues[0]) activateLeague(navigationModel.primaryLeagues[0].leagueId);
-  else if (view === "live" && navigationModel.liveLeagues[0]) activateLeague(navigationModel.liveLeagues[0].leagueId);
-  else if (view === "today" && navigationModel.todayLeagues[0]) activateLeague(navigationModel.todayLeagues[0].leagueId);
-  else if (view === "soccer") openDiscovery("soccer");
-  else openDiscovery("all");
+  if (["for-you", "live", "today"].includes(view)) {
+    activateNavigationSelection({ type: "system", id: view });
+  } else {
+    openDiscovery("all");
+  }
 });
 
 elements.discoveryFilters.addEventListener("click", (event) => {
   const button = event.target.closest("[data-discovery-view]");
   if (!button) return;
   state.discoveryView = button.dataset.discoveryView;
+  const selection = state.discoveryView === "all"
+    ? { type: "system", id: "all" }
+    : { type: "destination", id: state.discoveryView };
+  activateNavigationSelection(selection, { closeMenu: false, restoreFocus: false });
   renderDiscovery();
 });
 
 elements.discoveryContent.addEventListener("click", (event) => {
-  const button = event.target.closest("[data-league]");
+  const button = event.target.closest("[data-league], [data-sport], [data-category]");
   if (!button) return;
-  activateLeague(button.dataset.league);
+  if (button.dataset.league) activateNavigationSelection({ type: "league", id: button.dataset.league });
+  else if (button.dataset.sport) activateNavigationSelection({ type: "sport", id: button.dataset.sport });
+  else activateNavigationSelection({ type: "category", id: button.dataset.category });
 });
 
 document.querySelectorAll("[data-open-discovery]").forEach((button) => {
-  button.addEventListener("click", () => openDiscovery(button.dataset.openDiscovery || "all"));
+  button.addEventListener("click", () => {
+    activateNavigationSelection({ type: "system", id: "all" }, { closeMenu: false, restoreFocus: false });
+    openDiscovery(button.dataset.openDiscovery || "all");
+  });
 });
 
 elements.researchIntentNav.addEventListener("click", (event) => {
@@ -911,15 +1072,15 @@ elements.researchIntentNav.addEventListener("click", (event) => {
 elements.todayMarketGrid.addEventListener("click", (event) => {
   const card = event.target.closest("[data-market-league]");
   if (!card) return;
-  activateLeague(card.dataset.marketLeague);
+  activateNavigationSelection({ type: "league", id: card.dataset.marketLeague }, { restoreFocus: false });
   document.querySelector(".workspace").scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-document.querySelector("#closeDiscovery").addEventListener("click", closeDiscovery);
-elements.discoveryBackdrop.addEventListener("click", closeDiscovery);
+document.querySelector("#closeDiscovery").addEventListener("click", () => closeDiscovery({ restoreFocus: true }));
+elements.discoveryBackdrop.addEventListener("click", () => closeDiscovery({ restoreFocus: true }));
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
-    closeDiscovery();
+    closeDiscovery({ restoreFocus: true });
     setMobileSlipOpen(false);
   }
 });
@@ -1045,7 +1206,16 @@ document.querySelector("#queryForm").addEventListener("submit", (event) => {
   const priorCanonicalMarketId = state.canonicalMarketId;
   state.query = query;
   state.parlayNote = "";
-  setActiveLeague(parsed.leagueId);
+  const parsedLeague = sportsRepository.getLeague(parsed.leagueId);
+  if (parsedLeague?.enabled) {
+    state.navigationSelection = normalizeNavigationSelection(
+      { type: "league", id: parsedLeague.leagueId },
+      navigationModel.allLeagues,
+      defaultLeague?.leagueId,
+    );
+    state.leagueId = parsedLeague.leagueId;
+    persistNavigationSelection();
+  }
   state.market = parsed.market;
   const nextLeague = currentLeague();
   const mayPreserveCanonical = priorSportId === nextLeague?.sportId
@@ -1115,5 +1285,6 @@ try {
   savedTheme = "dark";
 }
 setTheme(savedTheme);
+persistNavigationSelection();
 renderAll();
 scheduleMarketBoardLoad();
