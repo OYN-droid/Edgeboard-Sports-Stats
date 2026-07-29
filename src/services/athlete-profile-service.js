@@ -142,9 +142,10 @@ function trendViewModel(trend) {
 }
 
 export class AthleteProfileRepository {
-  constructor(statsProvider, sportsRepository) {
+  constructor(statsProvider, sportsRepository, insightService = null) {
     this.statsProvider = statsProvider;
     this.sportsRepository = sportsRepository;
+    this.insightService = insightService;
     this.cache = new Map();
   }
 
@@ -174,6 +175,7 @@ export class AthleteProfileRepository {
       options.trendStatId || "default",
       options.trendWindow || 10,
       options.insightStatId || "default",
+      options.includeBettingContext === true ? "both" : "stats",
     ].join(":");
     if (this.cache.has(cacheKey)) return this.cache.get(cacheKey);
     await new Promise((resolve) => globalThis.setTimeout(resolve, options.delay ?? 45));
@@ -202,10 +204,15 @@ export class AthleteProfileRepository {
     });
     const marketItems = this.statsProvider.getAthleteMarkets(athleteId, this.sportsRepository);
     const props = propsViewModel(marketItems);
-    const insights = this.statsProvider.getAthleteInsights(athleteId, {
-      statId: options.insightStatId || trends?.activeStatId,
-      ...logFilters,
-    });
+    const insights = this.insightService
+      ? this.insightService.getInsightsForProfile(athleteId, {
+        statId: options.insightStatId || trends?.activeStatId,
+        includeBettingContext: options.includeBettingContext === true,
+      })
+      : this.statsProvider.getAthleteInsights(athleteId, {
+        statId: options.insightStatId || trends?.activeStatId,
+        ...logFilters,
+      });
     const upcomingEvent = this.statsProvider.getAthleteUpcomingEvent(athleteId);
     const matchupContext = this.statsProvider.getAthleteMatchupContext(athleteId);
     const primaryStats = statCards(seasonSummary, config.primaryStats);
@@ -271,6 +278,6 @@ export class AthleteProfileRepository {
   }
 }
 
-export function createAthleteProfileRepository(statsProvider, sportsRepository) {
-  return new AthleteProfileRepository(statsProvider, sportsRepository);
+export function createAthleteProfileRepository(statsProvider, sportsRepository, insightService = null) {
+  return new AthleteProfileRepository(statsProvider, sportsRepository, insightService);
 }

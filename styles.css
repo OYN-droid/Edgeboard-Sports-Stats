@@ -3396,6 +3396,254 @@ input[type="range"] {
   }
 }
 
+.insight-discovery {
+  margin: 18px 0 26px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: var(--panel-bg);
+}
+
+.insight-discovery-grid,
+.profile-insights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 14px;
+}
+
+.insight-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.insight-card.feature {
+  border-color: var(--teal);
+  box-shadow: 0 14px 36px rgba(206, 17, 65, .1);
+}
+
+.insight-card.archived {
+  opacity: .72;
+}
+
+.insight-card h3,
+.share-stat-card h3 {
+  margin: 0;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  line-height: 1.25;
+}
+
+.insight-card p,
+.share-stat-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.insight-card-kickers,
+.insight-chips,
+.insight-card-footer,
+.insight-dialog-actions,
+.profile-insight-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.validation-label,
+.insight-chips span {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.validation-label::before {
+  content: "Status: ";
+}
+
+.insight-card-footer {
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.insight-card-footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.insight-rarity {
+  font-size: .8rem;
+}
+
+.related-insight-market {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-left: 3px solid var(--teal);
+  border-radius: 8px;
+  background: rgba(206, 17, 65, .08);
+}
+
+.related-insight-market small {
+  color: var(--muted);
+}
+
+.insight-action-status {
+  min-height: 1em;
+  color: var(--teal);
+  font-size: .75rem;
+}
+
+.profile-insight-filters {
+  margin-bottom: 14px;
+}
+
+.profile-insight-filters button,
+.insight-dialog-actions button {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.profile-insight-filters button[aria-pressed="true"] {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.insight-dialog {
+  width: min(880px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.insight-dialog::backdrop {
+  background: rgba(5, 6, 10, .72);
+  backdrop-filter: blur(4px);
+}
+
+.insight-dialog-toolbar {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.insight-dialog-toolbar h2 {
+  margin: 0;
+}
+
+#insightDialogContent {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.share-stat-card {
+  display: grid;
+  gap: 12px;
+  padding: clamp(20px, 5vw, 42px);
+  border: 1px solid var(--teal);
+  border-radius: 24px;
+  background: radial-gradient(circle at top right, rgba(206, 17, 65, .24), transparent 42%), var(--surface-2);
+}
+
+.share-stat-card .brand {
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.insight-support-metadata {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.insight-support-metadata div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.insight-support-metadata dt {
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.insight-support-metadata dd {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .insight-dialog,
+  .insight-dialog *,
+  .share-stat-card,
+  .share-stat-card * {
+    visibility: visible;
+  }
+
+  .insight-dialog {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-height: none;
+    border: 0;
+  }
+
+  .insight-dialog-toolbar,
+  .insight-dialog-actions,
+  .insight-support-metadata,
+  .insight-dialog .stats-table-wrap {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .insight-discovery {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .insight-card-footer {
+    align-items: flex-start;
+  }
+
+  .insight-card-footer > div {
+    width: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

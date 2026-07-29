@@ -351,9 +351,13 @@ await submit("Show Caitlin Clark points");
 const summaryTab = app.querySelector("[data-stats-tab='summary']");
 const logTab = app.querySelector("[data-stats-tab='game-log']");
 check(summaryTab?.getAttribute("aria-selected") === "true" && logTab?.getAttribute("role") === "tab", "stat result tabs expose accessible state");
-check(app.querySelector(".sample-insight summary")?.textContent.includes("View supporting data")
-  && app.querySelector(".sample-insight small")?.textContent.includes("row-"),
-"sample insight exposes its supporting source rows");
+const instantInsightSupport = app.querySelector("#statsResultContent [data-view-insight]");
+instantInsightSupport?.click();
+await wait(30);
+check(app.querySelector("#insightDialog")?.open
+  && app.querySelector("#insightDialogContent code")?.textContent.trim().startsWith("{"),
+"sample insight opens canonical structured supporting data");
+app.querySelector("#closeInsightDialog")?.click();
 logTab.click();
 check(app.querySelector("[data-stats-tab='game-log']").getAttribute("aria-selected") === "true" && app.querySelector(".stats-table"), "game-log result tab is interactive");
 check(new URL(view.location.href).searchParams.get("resultTab") === "game-log", "result tab persists in URL state");

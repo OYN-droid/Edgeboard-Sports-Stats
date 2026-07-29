@@ -1,6 +1,5 @@
 import { getStatDefinition } from "../config/stat-registry.js";
 import { createAthleteMediaViewModel } from "./athlete-media-service.js";
-import { createInsightCandidates } from "./insight-candidate-service.js";
 import { thresholdHitCount } from "./stat-calculations.js";
 import { validateStatisticalQuery } from "./stats-query-service.js";
 import {
@@ -51,7 +50,7 @@ function emptyResult(parsed, query, message) {
   };
 }
 
-function instantResult(provider, parsed, query) {
+function instantResult(provider, parsed, query, insightService = null) {
   const entityId = query.playerIds[0] || query.teamIds[0];
   const statId = query.statIds[0];
   const definition = getStatDefinition(statId);
@@ -88,7 +87,25 @@ function instantResult(provider, parsed, query) {
     rows: summary.rows,
     metadata: summary.metadata,
     lastUpdated: summary.metadata.lastUpdated,
-    insights: createInsightCandidates(summary.entity, summary.rows, statId, summary.metadata),
+    insights: insightService
+      ? (query.entityType === "team"
+        ? insightService.generateTeamInsightCandidates(entityId, {
+          statId,
+          dateRange: query.dateRange,
+          homeAway: query.homeAway,
+          gameResult: query.gameResult,
+          seasonType: query.seasonType,
+          limit: 1,
+        })
+        : insightService.generateAthleteInsightCandidates(entityId, {
+          statId,
+          dateRange: query.dateRange,
+          homeAway: query.homeAway,
+          gameResult: query.gameResult,
+          seasonType: query.seasonType,
+          limit: 1,
+        }))
+      : [],
   };
 }
 
@@ -259,7 +276,13 @@ function compatibleBettingContext(statsResult, sportsRepository) {
   };
 }
 
-export function buildStatsResult(provider, parsed, sportsRepository) {
+const INSIGHT_RESULT_INTENTS = new Set([
+  "fun_fact", "athlete_insight", "team_insight", "active_streak", "milestone_lookup",
+  "milestone_proximity", "rarity_search", "trend_explanation", "available_career_high",
+  "record_candidate", "mixed_insight_betting",
+]);
+
+export function buildStatsResult(provider, parsed, sportsRepository, insightService = null, queryText = "") {
   const query = parsed.structuredQuery;
   const validation = validateStatisticalQuery(query);
   if (!validation.valid) {
@@ -298,7 +321,8 @@ export function buildStatsResult(provider, parsed, sportsRepository) {
       suggestions: parsed.suggestedCorrections,
     };
   }
-  if (!query.statIds.length && !["betting_research", "event_search", "head_to_head_history"].includes(query.intent)) {
+  if (!query.statIds.length && !["betting_research", "event_search", "head_to_head_history"].includes(query.intent)
+    && !INSIGHT_RESULT_INTENTS.has(query.intent)) {
     return {
       ...baseResult("unsupported", parsed, query),
       title: "No supported statistic was recognized",
@@ -308,7 +332,20 @@ export function buildStatsResult(provider, parsed, sportsRepository) {
   }
 
   let result;
-  if (["athlete_comparison", "team_comparison", "multi_entity_comparison"].includes(query.intent)) {
+  if (INSIGHT_RESULT_INTENTS.has(query.intent)) {
+    const insights = insightService?.getInsightsForQuery(parsed, { query: queryText }) || [];
+    result = {
+      ...baseResult(insights.length ? "insight_result" : "empty", parsed, query),
+      title: insights.length ? "Deterministic statistical insights" : "No validated insight available",
+      message: insights.length
+        ? "Every displayed claim was calculated from completed provider rows before template-based phrasing."
+        : "The available sample does not contain enough validated evidence for this request. EdgeBoard did not generate a random fact.",
+      insights,
+      sample: true,
+      sources: [{ provider: provider.name, lastUpdated: provider.updatedAt, sample: true }],
+      lastUpdated: provider.updatedAt,
+    };
+  } else if (["athlete_comparison", "team_comparison", "multi_entity_comparison"].includes(query.intent)) {
     result = buildComparisonViewModel(provider, parsed, sportsRepository);
   } else if (["league_leaderboard", "team_leaderboard", "event_leaderboard", "performance_ranking",
     "streak_leaderboard", "threshold_leaderboard", "cohort_analysis"].includes(query.intent)) {
@@ -327,7 +364,7 @@ export function buildStatsResult(provider, parsed, sportsRepository) {
   else if (query.intent === "player_split"
     || (query.splitType && ["statistical_filter", "statistical_lookup"].includes(query.intent))) result = splitResult(provider, parsed, query);
   else if (query.includeGameLog) result = gameLogResult(provider, parsed, query);
-  else result = instantResult(provider, parsed, query);
+  else result = instantResult(provider, parsed, query, insightService);
 
   const freshness = provider.getDataFreshness?.() || {
     mode: "unknown",

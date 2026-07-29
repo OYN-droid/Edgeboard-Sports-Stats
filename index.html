@@ -135,6 +135,18 @@
           <div class="today-market-grid" id="todayMarketGrid" aria-live="polite" aria-busy="true"></div>
         </section>
 
+        <section class="insight-discovery" id="insightDiscovery" aria-labelledby="insightDiscoveryTitle">
+          <div class="today-board-heading">
+            <div>
+              <p class="eyebrow">Calculated before phrasing</p>
+              <h2 id="insightDiscoveryTitle">Sample statistical stories</h2>
+              <p id="insightDiscoverySummary">A small set of evidence-backed insights for the selected scope.</p>
+            </div>
+            <span class="sample-badge">Sample data</span>
+          </div>
+          <div class="insight-discovery-grid" id="insightDiscoveryGrid" aria-live="polite"></div>
+        </section>
+
         <section class="workspace" id="researchWorkspace" aria-label="Sports research workspace">
           <aside class="filters" id="bettingFilters" aria-label="Betting filters">
             <div class="panel-heading">
@@ -251,6 +263,14 @@
         Bet Slip <span id="mobileLegCount">0</span>
       </button>
     </div>
+
+    <dialog class="insight-dialog" id="insightDialog" aria-labelledby="insightDialogTitle">
+      <div class="insight-dialog-toolbar">
+        <h2 id="insightDialogTitle">Insight supporting data</h2>
+        <button class="text-button" id="closeInsightDialog" type="button">Close</button>
+      </div>
+      <div id="insightDialogContent"></div>
+    </dialog>
 
     <script type="module" src="app.js"></script>
   </body>

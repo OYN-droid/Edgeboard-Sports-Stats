@@ -285,6 +285,24 @@ export const mockStatsProviderPayload = Object.freeze({
   generated_at: UPDATED_AT,
   data_quality: "sample",
   disclaimer: "Demonstration-only historical statistics. Not live, complete, or production-verified.",
+  provider_asserted_insights: Object.freeze([
+    Object.freeze({
+      rule_id: "available-season-high",
+      entity_id: "nba-tyrese-maxey",
+      stat_id: "basketball-points",
+      validation_status: "provider_asserted",
+      source: "EdgeBoard Mock Provider assertion",
+      disclosure: "Illustrative provider assertion for validation-state testing; not an official NBA record.",
+    }),
+    Object.freeze({
+      rule_id: "available-data-milestone",
+      entity_id: "nba-tyrese-maxey",
+      stat_id: "basketball-points",
+      validation_status: "provider_asserted",
+      source: "EdgeBoard Mock Provider assertion",
+      disclosure: "Illustrative provider-asserted milestone for testing; the total is not an official NBA career total.",
+    }),
+  ]),
   entities: CANONICAL_ENTITIES,
   rows: Object.freeze([
     ...caitlinRows,

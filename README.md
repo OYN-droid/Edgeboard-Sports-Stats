@@ -66,4 +66,9 @@ See [Statistical research architecture](docs/statistical-research.md) for the hi
 
 See [Athlete profiles](docs/athlete-profiles.md) for profile routing, normalized view models, sport-aware configuration, provider methods, media fallbacks, and deterministic insight rules.
 
+See [Deterministic insights](docs/deterministic-insights.md) for the Phase 4 rule
+registry, evidence pipeline, scoring, streak handling, rarity pools, record
+validation, Both-mode market compatibility, saved-state behavior, and provider
+limitations.
+
 See [Advanced statistical research](docs/advanced-statistical-research.md) for comparison calculations, leaderboard qualification and tie handling, record validation, exports, and Phase 3 provider methods.

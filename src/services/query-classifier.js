@@ -4,6 +4,7 @@ const bettingTerms = /\b(prop|props|odds|sportsbook|parlay|moneyline|spread|line
 const marketLine = /\b(over|under|line)\s*[+-]?\d+(?:\.\d+)?/i;
 const statTerms = /\b(average|averaging|total|per game|games?|points?|assists?|rebounds?|yards?|touchdowns?|hits?|home runs?|strikeouts?|goals?|shots?|wins?|podiums?|minutes?|threes?|three-pointers?|leader|most|fewest|highest|lowest)\b/i;
 const unsupportedTerms = /\b(fantasy points?|qbr|wins above replacement|war)\b/i;
+const insightTerms = /\b(fun fact|insight|streak|milestone|unusual|rare|rarity|trend|changed|season high|career high|record candidate)\b/i;
 
 const comparisonTerms = /\b(compare|comparison|compared with|versus|vs\.?)\b/i;
 const leaderboardTerms = /\b(who leads|leaderboard|leaders?|top\s+\d+|rank|ranking|most|fewest|highest|lowest|best)\b/i;
@@ -32,6 +33,24 @@ export function classifyResearchQuery(query, selectedMode = "betting") {
   let intent = "unsupported";
   if (unsupportedTerms.test(text)) {
     intent = "unsupported";
+  } else if (hasBetting && insightTerms.test(text)) {
+    intent = "mixed_insight_betting";
+  } else if (/\b(fun fact|tell me something interesting|what is unusual)\b/i.test(text)) {
+    intent = "fun_fact";
+  } else if (/\bhow close\b.+\bmilestone\b|\baway from\b.+\bmilestone\b/i.test(text)) {
+    intent = "milestone_proximity";
+  } else if (/\bmilestone\b/i.test(text)) {
+    intent = "milestone_lookup";
+  } else if (/\b(rare|rarity|unusual combination|how unusual)\b/i.test(text)) {
+    intent = "rarity_search";
+  } else if (/\bwhat streak|active .+ streak|streak is\b/i.test(text)) {
+    intent = "active_streak";
+  } else if (/\bwhat changed|better at home|recent trend|trend explanation|last \d+ (?:games?|events?) versus\b/i.test(text)) {
+    intent = "trend_explanation";
+  } else if (/\bavailable (?:career )?high\b/i.test(text)) {
+    intent = "available_career_high";
+  } else if (/\brecord candidate\b/i.test(text)) {
+    intent = "record_candidate";
   } else if (hasBetting && hasStats && /\b(last|recent|hit|gone|made|recorded|average|rate|compare)\b/i.test(text)) {
     intent = "mixed_stats_betting";
   } else if (hasBetting) {
@@ -95,7 +114,7 @@ export function classifyResearchQuery(query, selectedMode = "betting") {
 
   const recommendedMode = intent === "betting_research"
     ? "betting"
-    : intent === "mixed_stats_betting" ? "both"
+    : ["mixed_stats_betting", "mixed_insight_betting"].includes(intent) ? "both"
     : ["unsupported", "ambiguous"].includes(intent) ? mode : "stats";
   return Object.freeze({
     intent,

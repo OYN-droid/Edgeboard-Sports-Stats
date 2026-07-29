@@ -13,7 +13,9 @@ const VALID_INTENTS = new Set([
   "single_game_high", "season_high", "career_high", "streak_leaderboard", "threshold_leaderboard",
   "historical_record", "record_progression", "statistical_filter", "multi_stat_filter",
   "cohort_analysis", "head_to_head_history", "event_search", "game_log_search",
-  "mixed_stats_betting", "betting_research", "unsupported", "ambiguous",
+  "mixed_stats_betting", "mixed_insight_betting", "betting_research", "unsupported", "ambiguous",
+  "fun_fact", "athlete_insight", "team_insight", "active_streak", "milestone_lookup",
+  "milestone_proximity", "rarity_search", "trend_explanation", "available_career_high", "record_candidate",
   // Backward-compatible aliases for persisted Phase 1 query state.
   "player_game_log", "player_split", "player_comparison", "leaderboard", "trend", "streak", "milestone",
 ]);
@@ -33,6 +35,11 @@ const DEFAULT_STATS_BY_SPORT = Object.freeze({
   boxing: ["combat-wins", "combat-knockout-wins", "combat-knockdowns"],
   motorsport: ["motorsport-points", "motorsport-podiums", "motorsport-average-finishing-position"],
 });
+const INSIGHT_INTENTS = new Set([
+  "fun_fact", "athlete_insight", "team_insight", "active_streak", "streak_leaderboard",
+  "milestone_lookup", "milestone_proximity", "rarity_search", "trend_explanation",
+  "season_high", "available_career_high", "record_candidate", "mixed_insight_betting",
+]);
 
 const normalizeText = (value) => String(value || "").toLowerCase().replaceAll(/[^a-z0-9%]+/g, " ").trim();
 const nullableNumber = (value) => value === null || value === undefined || value === ""
@@ -324,7 +331,8 @@ export function parseStatisticalQuery(query, {
   if ((explicitLeague || inferredEntityScope) && currentLeague && currentLeague.leagueId !== league.leagueId) {
     warnings.push(`Query overrides the selected ${currentLeague.leagueDisplayName} context with ${league.leagueDisplayName}.`);
   }
-  if (!stats.length && !["betting_research", "ambiguous", "unsupported"].includes(classification.intent)) warnings.push("No supported canonical stat was recognized.");
+  if (!stats.length && !["betting_research", "ambiguous", "unsupported"].includes(classification.intent)
+    && !INSIGHT_INTENTS.has(classification.intent)) warnings.push("No supported canonical stat was recognized.");
   let resolvedIntent = classification.intent;
   if (teamIds.length >= 2 && ["athlete_comparison", "multi_entity_comparison"].includes(resolvedIntent)) resolvedIntent = "team_comparison";
   if (playerIds.length > 2 && resolvedIntent === "athlete_comparison") resolvedIntent = "multi_entity_comparison";
@@ -336,7 +344,8 @@ export function parseStatisticalQuery(query, {
     && !["league_leaderboard", "team_leaderboard", "event_leaderboard", "performance_ranking", "cohort_analysis",
       "streak_leaderboard", "threshold_leaderboard", "single_game_high", "season_high", "career_high",
       "historical_record", "record_progression", "statistical_filter", "multi_stat_filter",
-      "team_comparison", "betting_research", "unsupported", "event_search"].includes(resolvedIntent)
+      "team_comparison", "betting_research", "unsupported", "event_search",
+      ...INSIGHT_INTENTS].includes(resolvedIntent)
     ? [text]
     : [];
   if (exactResolution.status === "ambiguous" && !selectedAmbiguousCandidate) warnings.push("Multiple canonical athletes match this name; select a candidate.");
@@ -384,7 +393,7 @@ export function parseStatisticalQuery(query, {
     includeComparison: ["athlete_comparison", "team_comparison", "multi_entity_comparison"].includes(resolvedIntent),
     includeHistoricalContext: /\bhistorical|career|record\b/i.test(text),
     includeRecordValidation: ["historical_record", "single_game_high", "season_high", "career_high"].includes(resolvedIntent),
-    includeBettingContext: mode === "both" || resolvedIntent === "mixed_stats_betting",
+    includeBettingContext: mode === "both" || ["mixed_stats_betting", "mixed_insight_betting"].includes(resolvedIntent),
     confidenceThreshold: text.match(/confidence\s*(?:over|at least)?\s*(\d{1,3})/i)?.[1],
     contextOverride: (explicitLeague || inferredEntityScope) && currentLeague?.leagueId !== league?.leagueId,
     scopeOverride: (explicitLeague || inferredEntityScope) && currentLeague?.leagueId !== league?.leagueId,

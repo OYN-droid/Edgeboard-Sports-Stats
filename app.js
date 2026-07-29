@@ -27,6 +27,7 @@ import {
   RESEARCH_MODES,
 } from "./src/services/research-mode-service.js";
 import { createAthleteProfileRepository } from "./src/services/athlete-profile-service.js";
+import { createInsightService } from "./src/services/insight-service.js";
 import {
   advancedResultToCsv,
   advancedResultSummaryToText,
@@ -36,7 +37,8 @@ import {
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
 const statsRepository = createStatsRepository();
-const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository);
+const insightService = createInsightService(statsRepository, sportsRepository);
+const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository, insightService);
 const leagues = sportsRepository.getLeagues();
 const navigationModel = createNavigationModel(leagues);
 const defaultLeague = navigationModel.primaryLeagues[0] || navigationModel.allLeagues[0] || null;
@@ -89,7 +91,22 @@ function loadResearchState() {
       ? params.get("display") : "table",
     advancedSort: String(params.get("sort") || ""),
     advancedSortDirection: params.get("direction") === "asc" ? "asc" : "desc",
+    insightId: String(params.get("insight") || ""),
   };
+}
+
+function loadInsightState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("edgeboard-insight-state") || "{}");
+    return {
+      savedInsights: Array.isArray(saved.savedInsights) ? saved.savedInsights : [],
+      dismissedInsightIds: Array.isArray(saved.dismissedInsightIds) ? saved.dismissedInsightIds : [],
+      followedEntityIds: Array.isArray(saved.followedEntityIds) ? saved.followedEntityIds : [],
+      followedInsightRefs: Array.isArray(saved.followedInsightRefs) ? saved.followedInsightRefs : [],
+    };
+  } catch {
+    return { savedInsights: [], dismissedInsightIds: [], followedEntityIds: [], followedInsightRefs: [] };
+  }
 }
 
 function getSelectionSummary(selection) {
@@ -114,6 +131,7 @@ function researchLeagueForSelection(selection, preferredLeagueId = "") {
 const initialNavigationSelection = loadNavigationSelection();
 const initialResearchLeague = researchLeagueForSelection(initialNavigationSelection);
 const initialResearchState = loadResearchState();
+const initialInsightState = loadInsightState();
 
 const state = {
   navigationSelection: initialNavigationSelection,
@@ -161,13 +179,22 @@ const state = {
   profileTrendThreshold: "",
   profilePropGroup: "all",
   profileSportsbook: "all",
+  profileInsightCategory: "recent",
   athleteSearchResults: [],
   athleteSearchIndex: -1,
   advancedDisplay: initialResearchState.advancedDisplay,
   advancedSort: initialResearchState.advancedSort,
   advancedSortDirection: initialResearchState.advancedSortDirection,
   restoringResearchFromUrl: Boolean(initialResearchState.queryText),
+  savedInsights: initialInsightState.savedInsights,
+  dismissedInsightIds: initialInsightState.dismissedInsightIds,
+  followedEntityIds: initialInsightState.followedEntityIds,
+  followedInsightRefs: initialInsightState.followedInsightRefs,
+  activeInsightId: "",
+  sharedInsightId: initialResearchState.insightId,
+  sharedInsightOpened: false,
 };
+let insightReturnFocus = null;
 
 const elements = {
   sportTabs: document.querySelector("#sportTabs"),
@@ -230,6 +257,12 @@ const elements = {
   profileSlipCount: document.querySelector("#profileSlipCount"),
   profileSlipPanel: document.querySelector("#profileSlipPanel"),
   profileSlipList: document.querySelector("#profileSlipList"),
+  insightDiscovery: document.querySelector("#insightDiscovery"),
+  insightDiscoverySummary: document.querySelector("#insightDiscoverySummary"),
+  insightDiscoveryGrid: document.querySelector("#insightDiscoveryGrid"),
+  insightDialog: document.querySelector("#insightDialog"),
+  insightDialogContent: document.querySelector("#insightDialogContent"),
+  closeInsightDialog: document.querySelector("#closeInsightDialog"),
 };
 
 let renderedPicks = new Map();
@@ -1104,6 +1137,159 @@ function athleteLink(entity, className = "athlete-link") {
   return `<a class="${escapeHtml(className)}" href="${escapeHtml(profileUrl(entity.id))}" data-open-athlete="${escapeHtml(entity.id)}">${escapeHtml(entity.name)}</a>`;
 }
 
+function persistInsightState() {
+  try {
+    localStorage.setItem("edgeboard-insight-state", JSON.stringify({
+      savedInsights: state.savedInsights,
+      dismissedInsightIds: state.dismissedInsightIds,
+      followedEntityIds: state.followedEntityIds,
+      followedInsightRefs: state.followedInsightRefs,
+    }));
+  } catch {
+    // Insight actions remain available for the current session when local storage is unavailable.
+  }
+}
+
+function insightCategory(insight) {
+  if (insight.type.startsWith("milestone")) return "milestones";
+  if (insight.type.includes("streak")) return "streaks";
+  if (insight.type.includes("home_away") || insight.type.includes("opponent") || insight.type.includes("competition")) return "splits";
+  if (["record_candidate", "career_high_available"].includes(insight.type)) return "career";
+  if (insight.type.includes("matchup")) return "matchup";
+  if (insight.type.includes("season") || insight.type.includes("rank") || insight.type.includes("rarity")) return "season";
+  return "recent";
+}
+
+function insightShareUrl(insight) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("mode", state.researchMode);
+  url.searchParams.set("insight", insight.id);
+  if (insight.entityType === "athlete") {
+    url.searchParams.set("player", insight.entity.id);
+    url.searchParams.set("tab", "insights");
+  }
+  return `${url.origin}${url.pathname}${url.search}`;
+}
+
+function savedInsightIndex(insight) {
+  return state.savedInsights.findIndex((saved) =>
+    saved.id === insight.id
+    || (saved.ruleId === insight.ruleId
+      && Array.isArray(saved.entityIds)
+      && saved.entityIds.join("|") === insight.entityIds.join("|")
+      && (!Array.isArray(saved.statIds)
+        || !saved.statIds.length
+        || saved.statIds.join("|") === insight.statIds.join("|"))));
+}
+
+function renderInsightCard(insight, { feature = false, context = "discovery" } = {}) {
+  const savedIndex = savedInsightIndex(insight);
+  const saved = savedIndex >= 0;
+  const savedStatus = saved ? insightService.reconcileSavedInsight(state.savedInsights[savedIndex]) : null;
+  const archived = ["stale", "invalid", "incomplete"].includes(insight.validationStatus);
+  return `
+    <article class="insight-card${feature ? " feature" : ""}${archived ? " archived" : ""}" data-insight-card="${escapeHtml(insight.id)}">
+      <div class="insight-card-kickers">
+        <span class="sample-badge">Sample insight</span>
+        <span class="validation-label">${escapeHtml(insight.validationStatus.replaceAll("_", " "))}</span>
+      </div>
+      <h3>${escapeHtml(insight.phrasing.headline)}</h3>
+      <p>${escapeHtml(insight.phrasing.shortSummary)}</p>
+      <div class="insight-chips">
+        <span>${escapeHtml(insight.leagueId.toUpperCase())}</span>
+        <span>${insight.sampleSize} event${insight.sampleSize === 1 ? "" : "s"}</span>
+        <span>${escapeHtml(insightCategory(insight))}</span>
+      </div>
+      ${insight.rarity?.comparisonPoolSize ? `<p class="insight-rarity">${escapeHtml(insight.rarity.label)} · ${insight.rarity.qualifyingEntityCount} of ${insight.rarity.comparisonPoolSize} qualified entities</p>` : ""}
+      ${insight.bettingContext ? `<aside class="related-insight-market"><strong>Related current market</strong><span>${escapeHtml(insight.bettingContext.line)} · ${formatOdds(insight.bettingContext.odds)} · ${escapeHtml(insight.bettingContext.sportsbook)}</span><small>Historical context remains separate from projection and model confidence.</small></aside>` : ""}
+      <div class="insight-card-footer">
+        <span>${escapeHtml(insight.source.attribution || insight.source.provider)} · ${formatDateTime(insight.freshness.lastUpdated)}</span>
+        <div>
+          <button type="button" class="text-button" data-view-insight="${escapeHtml(insight.id)}">View supporting data</button>
+          ${insight.entityType === "athlete" ? `<a class="text-button" href="${escapeHtml(profileUrl(insight.entity.id, "insights"))}" data-open-athlete="${escapeHtml(insight.entity.id)}">Profile</a>` : ""}
+          <button type="button" class="text-button" data-save-insight="${escapeHtml(insight.id)}" aria-pressed="${saved}">${savedStatus?.changed ? "Saved · changed" : saved ? "Saved" : "Save"}</button>
+          ${insight.entityType === "team" ? `<button type="button" class="text-button" data-follow-entity="${escapeHtml(insight.entity.id)}" aria-pressed="${state.followedEntityIds.includes(insight.entity.id)}">${state.followedEntityIds.includes(insight.entity.id) ? "Following team" : "Follow team"}</button>` : ""}
+          ${insight.type.includes("streak") || insight.type.startsWith("milestone") ? `<button type="button" class="text-button" data-follow-insight-rule="${escapeHtml(`${insight.entity.id}:${insight.ruleId}`)}" aria-pressed="${state.followedInsightRefs.includes(`${insight.entity.id}:${insight.ruleId}`)}">${state.followedInsightRefs.includes(`${insight.entity.id}:${insight.ruleId}`) ? "Following" : "Follow"}</button>` : ""}
+          <button type="button" class="text-button" data-share-insight="${escapeHtml(insight.id)}">Share</button>
+          <button type="button" class="text-button" data-dismiss-insight="${escapeHtml(insight.id)}" aria-label="Dismiss this ${escapeHtml(context)} insight">Dismiss</button>
+        </div>
+      </div>
+      <span class="insight-action-status" role="status" aria-live="polite"></span>
+    </article>
+  `;
+}
+
+function visibleInsightCandidates(candidates) {
+  const dismissed = new Set(state.dismissedInsightIds);
+  return candidates.filter((insight) =>
+    !dismissed.has(insight.id)
+    && insight.validationStatus !== "stale"
+    && insight.freshness?.state !== "stale");
+}
+
+function renderInsightDiscovery() {
+  const summary = getSelectionSummary(state.navigationSelection);
+  const leagueIds = summary.visibleLeagues.map((league) => league.leagueId);
+  const sportIds = [...new Set(summary.visibleLeagues.map((league) => league.sportId))];
+  const liveOnly = summary.selection.type === "system" && summary.selection.id === "live";
+  const todayOnly = summary.selection.type === "system" && summary.selection.id === "today";
+  const candidates = liveOnly ? [] : insightService.getFeaturedInsights({
+    leagueIds,
+    sportIds,
+    limit: 6,
+    includeBettingContext: state.researchMode === "both",
+    ...(todayOnly ? { dateRange: { type: "today" } } : {}),
+  });
+  const visible = visibleInsightCandidates(candidates).slice(0, 4);
+  elements.insightDiscovery.dataset.scope = serializeNavigationSelection(summary.selection);
+  elements.insightDiscoverySummary.textContent = liveOnly
+    ? "The sample historical provider cannot validate live-event insights, so none are shown."
+    : `${visible.length} prioritized sample insight${visible.length === 1 ? "" : "s"} for ${summary.contextLabel}. Today’s Markets remains the primary discovery board.`;
+  elements.insightDiscoveryGrid.innerHTML = visible.length
+    ? visible.map((insight, index) => renderInsightCard(insight, { feature: index === 0 })).join("")
+    : `<div class="discovery-empty" role="status">No fresh, validated sample insight is available for this scope.</div>`;
+}
+
+function renderInsightDialog(insight) {
+  const supporting = insightService.getInsightSupportingData(insight.id);
+  if (!supporting) return;
+  state.activeInsightId = insight.id;
+  elements.insightDialogContent.innerHTML = `
+    <article class="share-stat-card" aria-label="${escapeHtml(insight.phrasing.sharingCaption)}">
+      <span class="brand">EdgeBoard</span>
+      <p class="eyebrow">Deterministic sample insight</p>
+      <h3>${escapeHtml(insight.phrasing.headline)}</h3>
+      <p>${escapeHtml(insight.phrasing.shortSummary)}</p>
+      <div class="insight-chips"><span>${escapeHtml(insight.leagueId.toUpperCase())}</span><span>${insight.sampleSize} completed events</span><span>${escapeHtml(insight.validationStatus)}</span></div>
+      <small>${escapeHtml(insight.phrasing.validationDisclosure)} · Source: ${escapeHtml(insight.phrasing.sourceLabel)} · Generated ${formatDateTime(insight.generatedAt)} · Sample data</small>
+    </article>
+    <div class="insight-dialog-actions">
+      <button type="button" data-copy-insight="${escapeHtml(insight.id)}">Copy text</button>
+      <button type="button" data-copy-insight-link="${escapeHtml(insight.id)}">Copy link</button>
+      <button type="button" data-print-insight>Print card</button>
+      <span role="status" aria-live="polite" class="insight-dialog-status"></span>
+    </div>
+    <dl class="insight-support-metadata">
+      <div><dt>Structured claim</dt><dd><code>${escapeHtml(JSON.stringify(supporting.structuredClaim))}</code></dd></div>
+      <div><dt>Calculation rule</dt><dd>${escapeHtml(supporting.calculationRule)}</dd></div>
+      <div><dt>Date range</dt><dd>${escapeHtml(JSON.stringify(supporting.dateRange))}</dd></div>
+      <div><dt>Sample size</dt><dd>${supporting.sampleSize}</dd></div>
+      <div><dt>Comparison pool</dt><dd>${escapeHtml(JSON.stringify(supporting.comparisonPool || {}))}</dd></div>
+      <div><dt>Qualification</dt><dd>${escapeHtml(JSON.stringify(supporting.qualificationRules))}</dd></div>
+      <div><dt>Validation</dt><dd>${escapeHtml(supporting.validationStatus)}</dd></div>
+      <div><dt>Coverage</dt><dd>${escapeHtml(supporting.coverage.explanation)}</dd></div>
+      <div><dt>Source</dt><dd>${escapeHtml(supporting.source.attribution || supporting.source.provider)} · updated ${formatDateTime(supporting.lastUpdated)}</dd></div>
+      <div><dt>Why selected</dt><dd>${escapeHtml(supporting.whySelected)}</dd></div>
+    </dl>
+    <div class="stats-table-wrap"><table class="stats-table"><caption>Supporting completed provider rows</caption><thead><tr><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Result</th><th scope="col">Source row</th></tr></thead><tbody>
+      ${supporting.eventRows.map((row) => `<tr><th scope="row">${escapeHtml(row.event_name || row.event_id)}</th><td>${formatDateTime(row.event_date)}</td><td>${escapeHtml(row.result || row.method || "Observed")}</td><td>${escapeHtml(row.row_id)}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${supporting.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("")}
+  `;
+  elements.insightDialog.showModal();
+  elements.closeInsightDialog.focus();
+}
+
 function profileIdForPick(pick) {
   const matches = athleteProfileRepository.searchAthletes(pick?.name || "", {
     leagueId: state.leagueId,
@@ -1244,7 +1430,7 @@ function renderProfileOverview(viewModel) {
       ${insight ? `<section class="profile-card profile-insight-card" aria-labelledby="overviewInsightHeading">
         <div class="profile-card-heading"><div><p class="eyebrow">Deterministic sample insight</p><h2 id="overviewInsightHeading">${escapeHtml(insight.title)}</h2></div></div>
         <p>${escapeHtml(insight.label)}</p>
-        <button type="button" class="text-button" data-profile-tab-target="insights">View supporting data</button>
+        <button type="button" class="text-button" data-view-insight="${escapeHtml(insight.id)}">View supporting data</button>
       </section>` : ""}
     </div>
   `;
@@ -1364,16 +1550,23 @@ function renderProfileMatchup(viewModel) {
 }
 
 function renderProfileInsights(viewModel) {
+  const categories = [
+    ["recent", "Recent"], ["season", "Season"], ["career", "Career in available data"],
+    ["splits", "Splits"], ["streaks", "Streaks"], ["milestones", "Milestones"], ["matchup", "Matchup"],
+  ];
+  const overviewId = viewModel.overview.insights[0]?.id || "";
+  const matching = visibleInsightCandidates(viewModel.insights)
+    .filter((insight) => insight.id !== overviewId)
+    .filter((insight) => insightCategory(insight) === state.profileInsightCategory);
   return `
     <section aria-labelledby="profileInsightsHeading">
       <div class="profile-section-heading"><div><p class="eyebrow">Calculated before phrasing</p><h2 id="profileInsightsHeading">Deterministic insights</h2></div><span>${viewModel.insights.length} selected</span></div>
-      ${viewModel.insights.length ? `<div class="profile-insights">${viewModel.insights.map((insight) => `
-        <article class="profile-card">
-          <span class="sample-badge">Sample insight</span><h3>${escapeHtml(insight.title)}</h3><p>${escapeHtml(insight.label)}</p>
-          <dl class="insight-metadata"><div><dt>Rule</dt><dd>${escapeHtml(insight.ruleId)}</dd></div><div><dt>Sample</dt><dd>${insight.sampleSize}</dd></div><div><dt>Method</dt><dd>${escapeHtml(insight.calculationMethod)}</dd></div><div><dt>Selected because</dt><dd>${escapeHtml(insight.selectionReason)}</dd></div></dl>
-          <details><summary>View supporting data</summary><div class="supporting-event-links">${insight.supportingEventIds.map((eventId) => `<button type="button" data-support-event="${escapeHtml(eventId)}">${escapeHtml(eventId)}</button>`).join("")}</div></details>
-        </article>
-      `).join("")}</div>` : `<div class="profile-empty profile-card">No supported deterministic insight could be calculated.</div>`}
+      <div class="profile-insight-filters" role="group" aria-label="Insight category">
+        ${categories.map(([id, label]) => `<button type="button" data-insight-category="${id}" aria-pressed="${state.profileInsightCategory === id}">${label}</button>`).join("")}
+      </div>
+      ${matching.length ? `<div class="profile-insights">${matching.map((insight) =>
+        renderInsightCard(insight, { context: "profile" })).join("")}</div>`
+      : `<div class="profile-empty profile-card" role="status">No additional ${escapeHtml(state.profileInsightCategory)} insight is supported after excluding the Overview card.</div>`}
       <p class="data-warning">No claim is labeled a league or career record. The sample provider does not contain complete historical evidence.</p>
     </section>
   `;
@@ -1402,6 +1595,9 @@ function renderAthleteProfile() {
     return;
   }
   const viewModel = state.profileViewModel;
+  const followed = state.followedEntityIds.includes(viewModel.athlete.id);
+  elements.followAthlete.setAttribute("aria-pressed", String(followed));
+  elements.followAthlete.textContent = followed ? "Following locally" : "Follow";
   elements.athleteProfileContent.innerHTML = `
     ${renderProfileHeader(viewModel)}
     <nav class="profile-tabs" role="tablist" aria-label="${escapeHtml(viewModel.header.fullName)} profile sections">
@@ -1653,6 +1849,14 @@ function renderStatsAnswer(result) {
       </div>
     `;
   }
+  if (result.type === "insight_result") {
+    return `<section class="insight-query-result" aria-labelledby="statsResultTitle">
+      <div class="stats-answer-heading"><div><p class="eyebrow">Evidence-backed storytelling</p><h3 id="statsResultTitle">${escapeHtml(result.title)}</h3><span>${escapeHtml(result.message)}</span></div><span class="sample-badge">Sample data</span></div>
+      <div class="profile-insights">${visibleInsightCandidates(result.insights).map((insight) =>
+        renderInsightCard(insight, { context: "query" })).join("")}</div>
+      <p class="stats-source">${escapeHtml(result.sources[0]?.provider)} · updated ${formatDateTime(result.lastUpdated)} · no language model is used as the statistical source of truth</p>
+    </section>`;
+  }
   if (["athlete_comparison", "multi_athlete_comparison", "team_comparison"].includes(result.type)) return renderComparisonResult(result);
   if (result.type === "leaderboard" && result.rows) return renderAdvancedLeaderboard(result);
   if (result.type === "multi_stat_filtered_list") return renderFilteredList(result);
@@ -1720,9 +1924,7 @@ function renderStatsAnswer(result) {
           ${result.supportingStats.map((stat) => `<div><span>${escapeHtml(stat.label)}</span><strong>${escapeHtml(stat.value)}</strong></div>`).join("")}
           ${result.threshold ? `<div><span>Threshold hits</span><strong>${result.threshold.hitCount} of ${result.threshold.sampleSize}</strong></div>` : ""}
         </div>
-        ${result.insights?.length ? `<details class="sample-insight"><summary>Sample insight · View supporting data</summary>
-          <p>${escapeHtml(result.insights[0].label)}</p><small>Rows: ${escapeHtml(result.insights[0].supportingRowIds.join(", "))}</small>
-        </details>` : ""}
+        ${result.insights?.length ? renderInsightCard(result.insights[0], { context: "query" }) : ""}
       `}
       <p class="stats-source">Sample historical data · updated ${formatDateTime(result.lastUpdated)} · calculations use supplied rows only</p>
       <p class="data-warning">${escapeHtml(result.dataQualityWarning)}</p>
@@ -1790,6 +1992,7 @@ function renderAll() {
   renderTimestamp();
   renderDataStatus();
   renderTodayMarketBoard();
+  renderInsightDiscovery();
   renderResearchMode();
   renderAthleteProfile();
   if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
@@ -1803,6 +2006,7 @@ function setProfileUrl(athleteId, tab, { replace = false } = {}) {
   } else {
     url.searchParams.delete("player");
     url.searchParams.delete("tab");
+    url.searchParams.delete("insight");
   }
   const method = replace ? "replaceState" : "pushState";
   history[method]({ edgeboardProfile: Boolean(athleteId), athleteId, tab }, "", url);
@@ -1821,6 +2025,7 @@ function resetProfileControls() {
   state.profileTrendThreshold = "";
   state.profilePropGroup = "all";
   state.profileSportsbook = "all";
+  state.profileInsightCategory = "recent";
 }
 
 async function loadAthleteProfile({ focusHeading = false } = {}) {
@@ -1842,6 +2047,7 @@ async function loadAthleteProfile({ focusHeading = false } = {}) {
     splitDimension: state.profileSplitDimension,
     trendStatId: state.profileTrendStatId,
     trendWindow: state.profileTrendWindow,
+    includeBettingContext: state.researchMode === "both",
   });
   if (requestId !== profileRequestSequence || state.profileAthleteId !== (result.athlete?.id || result.athleteId)) return;
   state.profileLoading = false;
@@ -1854,6 +2060,13 @@ async function loadAthleteProfile({ focusHeading = false } = {}) {
     }
   }
   renderAthleteProfile();
+  if (state.sharedInsightId && !state.sharedInsightOpened) {
+    const sharedInsight = insightService.getInsight(state.sharedInsightId);
+    if (sharedInsight) {
+      state.sharedInsightOpened = true;
+      renderInsightDialog(sharedInsight);
+    }
+  }
   if (focusHeading) {
     const heading = document.querySelector("#athleteProfileTitle");
     heading?.setAttribute("tabindex", "-1");
@@ -1864,6 +2077,8 @@ async function loadAthleteProfile({ focusHeading = false } = {}) {
 
 function openAthleteProfile(athleteId, tab = "overview", { replace = false, focusHeading = true } = {}) {
   if (!athleteId) return;
+  state.sharedInsightId = "";
+  state.sharedInsightOpened = false;
   state.profileAthleteId = athleteId;
   state.profileTab = tab || "overview";
   resetProfileControls();
@@ -2245,7 +2460,7 @@ async function runStatsResearch(query) {
   await new Promise((resolve) => window.setTimeout(resolve, 140));
   if (requestId !== statsRequestSequence) return null;
   const parsed = state.statsParsedQuery;
-  const result = buildStatsResult(statsRepository, parsed, sportsRepository);
+  const result = buildStatsResult(statsRepository, parsed, sportsRepository, insightService, query);
   if (requestId !== statsRequestSequence) return null;
   state.statsResult = result;
   state.statsLoading = false;
@@ -2576,6 +2791,74 @@ function handleAthleteMediaError(image) {
 }
 
 document.addEventListener("click", (event) => {
+  const viewInsight = event.target.closest("[data-view-insight]");
+  if (viewInsight) {
+    const insight = insightService.getInsight(viewInsight.dataset.viewInsight);
+    if (insight) {
+      insightReturnFocus = viewInsight;
+      renderInsightDialog(insight);
+    }
+    return;
+  }
+  const saveInsight = event.target.closest("[data-save-insight]");
+  if (saveInsight) {
+    const insight = insightService.getInsight(saveInsight.dataset.saveInsight);
+    if (!insight) return;
+    const existing = savedInsightIndex(insight);
+    if (existing >= 0) state.savedInsights.splice(existing, 1);
+    else state.savedInsights.push({
+      id: insight.id,
+      ruleId: insight.ruleId,
+      entityIds: [...insight.entityIds],
+      statIds: [...insight.statIds],
+      structuredClaim: insight.claimData,
+      validationStatus: insight.validationStatus,
+      savedAt: new Date().toISOString(),
+      localOnly: true,
+    });
+    persistInsightState();
+    renderAll();
+    return;
+  }
+  const dismissInsight = event.target.closest("[data-dismiss-insight]");
+  if (dismissInsight) {
+    state.dismissedInsightIds = [...new Set([...state.dismissedInsightIds, dismissInsight.dataset.dismissInsight])].slice(-100);
+    persistInsightState();
+    renderAll();
+    return;
+  }
+  const shareInsight = event.target.closest("[data-share-insight]");
+  if (shareInsight) {
+    const insight = insightService.getInsight(shareInsight.dataset.shareInsight);
+    const status = shareInsight.closest("[data-insight-card]")?.querySelector(".insight-action-status");
+    if (!insight) return;
+    navigator.clipboard.writeText(`${insight.phrasing.sharingCaption}\n${insightShareUrl(insight)}`).then(() => {
+      if (status) status.textContent = "Insight text and link copied";
+    }).catch((error) => {
+      if (status) status.textContent = `Share unavailable: ${error?.message || "permission denied"}`;
+    });
+    return;
+  }
+  const followEntity = event.target.closest("[data-follow-entity]");
+  if (followEntity) {
+    const id = followEntity.dataset.followEntity;
+    state.followedEntityIds = state.followedEntityIds.includes(id)
+      ? state.followedEntityIds.filter((item) => item !== id)
+      : [...new Set([...state.followedEntityIds, id])];
+    persistInsightState();
+    renderAll();
+    return;
+  }
+  const followInsightRule = event.target.closest("[data-follow-insight-rule]");
+  if (followInsightRule) {
+    const ref = followInsightRule.dataset.followInsightRule;
+    state.followedInsightRefs = state.followedInsightRefs.includes(ref)
+      ? state.followedInsightRefs.filter((item) => item !== ref)
+      : [...new Set([...state.followedInsightRefs, ref])];
+    persistInsightState();
+    renderAll();
+    return;
+  }
   const athleteLinkTarget = event.target.closest("[data-open-athlete]");
   if (!athleteLinkTarget) return;
   event.preventDefault();
@@ -2603,6 +2886,13 @@ elements.athleteProfileView.addEventListener("error", (event) => {
 }, true);
 
 elements.athleteProfileContent.addEventListener("click", (event) => {
+  const category = event.target.closest("[data-insight-category]");
+  if (category) {
+    state.profileInsightCategory = category.dataset.insightCategory;
+    renderAthleteProfile();
+    elements.athleteProfileContent.querySelector(`[data-insight-category="${state.profileInsightCategory}"]`)?.focus();
+    return;
+  }
   const tab = event.target.closest("[data-profile-tab], [data-profile-tab-target]");
   if (tab) {
     event.preventDefault();
@@ -2718,9 +3008,48 @@ elements.athleteProfileContent.addEventListener("keydown", (event) => {
 });
 
 elements.followAthlete.addEventListener("click", () => {
-  const followed = elements.followAthlete.getAttribute("aria-pressed") !== "true";
+  const athleteId = state.profileAthleteId;
+  const followed = !state.followedEntityIds.includes(athleteId);
+  state.followedEntityIds = followed
+    ? [...new Set([...state.followedEntityIds, athleteId])]
+    : state.followedEntityIds.filter((id) => id !== athleteId);
+  persistInsightState();
   elements.followAthlete.setAttribute("aria-pressed", String(followed));
-  elements.followAthlete.textContent = followed ? "Following (sample)" : "Follow";
+  elements.followAthlete.textContent = followed ? "Following locally" : "Follow";
+});
+
+elements.closeInsightDialog.addEventListener("click", () => {
+  const fallback = document.querySelector(`[data-view-insight="${CSS.escape(state.activeInsightId)}"]`);
+  const returnTarget = insightReturnFocus?.isConnected ? insightReturnFocus : fallback;
+  elements.insightDialog.close();
+  returnTarget?.focus({ preventScroll: true });
+});
+elements.insightDialog.addEventListener("close", () => {
+  const fallback = document.querySelector(`[data-view-insight="${CSS.escape(state.activeInsightId)}"]`);
+  const returnTarget = insightReturnFocus?.isConnected ? insightReturnFocus : fallback;
+  insightReturnFocus = null;
+  state.activeInsightId = "";
+  window.setTimeout(() => returnTarget?.focus({ preventScroll: true }), 0);
+});
+elements.insightDialog.addEventListener("click", (event) => {
+  const insight = insightService.getInsight(state.activeInsightId);
+  if (!insight) return;
+  const status = elements.insightDialogContent.querySelector(".insight-dialog-status");
+  if (event.target.closest("[data-copy-insight]")) {
+    navigator.clipboard.writeText(insight.phrasing.sharingCaption).then(() => {
+      if (status) status.textContent = "Insight text copied";
+    }).catch((error) => {
+      if (status) status.textContent = `Copy unavailable: ${error?.message || "permission denied"}`;
+    });
+  } else if (event.target.closest("[data-copy-insight-link]")) {
+    navigator.clipboard.writeText(insightShareUrl(insight)).then(() => {
+      if (status) status.textContent = "Insight link copied";
+    }).catch((error) => {
+      if (status) status.textContent = `Copy unavailable: ${error?.message || "permission denied"}`;
+    });
+  } else if (event.target.closest("[data-print-insight]")) {
+    window.print();
+  }
 });
 
 elements.shareAthleteProfile.addEventListener("click", async () => {
