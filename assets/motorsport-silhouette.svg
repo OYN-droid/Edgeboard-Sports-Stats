@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Abstract motorsport helmet</title>
+  <desc id="desc">An original geometric EdgeBoard sample placeholder, not a driver likeness.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#271829"/>
+      <stop offset="1" stop-color="#10151d"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="40" fill="url(#bg)"/>
+  <path d="M69 172c0-76 40-126 103-126 59 0 96 44 96 112v72H133c-39 0-64-21-64-58Z" fill="#e74386" opacity=".78"/>
+  <path d="M106 109h126c18 0 30 11 30 29v22H95c-12 0-20-8-20-20 0-18 12-31 31-31Z" fill="#151925"/>
+  <path d="M116 132h106" stroke="#f4aac7" stroke-width="8" stroke-linecap="round" opacity=".7"/>
+  <circle cx="249" cy="216" r="18" fill="#f4aac7" opacity=".72"/>
+</svg>

@@ -10,6 +10,16 @@ function normalizeOdds(value) {
   return Number.isFinite(odds) && odds !== 0 && Math.abs(odds) >= 100 ? Math.round(odds) : null;
 }
 
+function normalizeNumericLine(value, displayValue = "") {
+  const direct = Number(value);
+  if (value !== null && value !== undefined && value !== "" && Number.isFinite(direct)) return direct;
+  const display = String(displayValue || "").trim();
+  const directional = display.match(/^(?:over|under|total|spread|handicap)\s*([+-]?\d+(?:\.\d+)?)/i);
+  const trailingLabel = display.match(/^([+-]?\d+(?:\.\d+)?)\s+(?:spread|total|handicap)\b/i);
+  const parsed = Number(directional?.[1] || trailingLabel?.[1]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeTimestamp(value) {
   if (value === null || value === undefined || value === "") return null;
   const date = new Date(value);
@@ -125,7 +135,7 @@ function normalizeMarket(raw, eventMap, leagueMap) {
       competitorId: fallbackText(selection?.competitor_id, fallbackText(selection?.participant?.id, "")),
       name: participantName,
       line: fallbackText(selection?.line_display, "Line unavailable"),
-      numericLine: Number.isFinite(Number(selection?.line)) ? Number(selection.line) : null,
+      numericLine: normalizeNumericLine(selection?.line, selection?.line_display),
       side: fallbackText(selection?.side,
         /^over\b/i.test(selection?.line_display || "") ? "over"
           : /^under\b/i.test(selection?.line_display || "") ? "under" : ""),

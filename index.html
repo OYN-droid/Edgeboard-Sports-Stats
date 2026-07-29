@@ -60,34 +60,67 @@
       </aside>
 
       <main>
-        <section class="hero" aria-label="Sports betting research">
+        <section class="hero" aria-label="Sports research">
           <img src="assets/analytics-desk.png" alt="" class="hero-image" />
           <div class="hero-shade"></div>
           <div class="hero-content">
             <div class="hero-copy">
               <p class="eyebrow">Sports stats for sharper bet research</p>
-              <h1>Ask a betting question. Build the slip with context.</h1>
+              <h1>Ask a sports question. Research stats, markets, or both.</h1>
             </div>
             <form class="ask-panel" id="queryForm">
               <label for="queryInput">Research query</label>
+              <div class="research-mode-control" id="researchModeControl" role="radiogroup" aria-label="Research mode">
+                <button type="button" role="radio" aria-checked="false" data-research-mode="stats">Stats</button>
+                <button type="button" role="radio" aria-checked="true" data-research-mode="betting">Betting</button>
+                <button type="button" role="radio" aria-checked="false" data-research-mode="both">Both</button>
+              </div>
               <div class="query-row">
-                <input
-                  id="queryInput"
-                  type="search"
-                  autocomplete="off"
-                  value="Which available markets have the strongest sample signal today?"
-                />
+                <div class="athlete-search-shell">
+                  <input
+                    id="queryInput"
+                    type="search"
+                    autocomplete="off"
+                    aria-describedby="queryFeedback"
+                    aria-autocomplete="list"
+                    aria-controls="athleteSearchResults"
+                    aria-expanded="false"
+                    value="Which available markets have the strongest sample signal today?"
+                  />
+                  <div class="athlete-search-results" id="athleteSearchResults" role="listbox" aria-label="Athlete suggestions" hidden></div>
+                </div>
                 <button class="primary-button" type="submit">Analyze</button>
               </div>
-              <div class="quick-prompts" aria-label="Example queries">
-                <button type="button" data-query="Find NBA plus-money player props with hit rate over 60%">Plus-money props</button>
-                <button type="button" id="sportParlayPrompt" data-query="Best 4 leg parlay for points">4-leg points parlay</button>
-                <button type="button" data-query="UFC method of victory props for confirmed fighters">Fight research</button>
-                <button type="button" data-query="Formula 1 podium props at plus money">Race research</button>
-                <button type="button" data-query="MLS three-way moneyline">Soccer research</button>
-              </div>
+              <p class="query-feedback" id="queryFeedback" role="status" aria-live="polite">Betting mode uses available sample markets and model context.</p>
+              <div class="quick-prompts" aria-label="Example queries"></div>
             </form>
           </div>
+        </section>
+
+        <section class="athlete-profile-view" id="athleteProfileView" aria-label="Athlete profile" aria-live="polite" hidden>
+          <div class="profile-view-toolbar">
+            <button class="text-button profile-back" id="closeAthleteProfile" type="button">← Back to research</button>
+            <div class="profile-toolbar-actions">
+              <button class="text-button" id="profileSlipToggle" type="button" aria-controls="profileSlipPanel" aria-expanded="false">Bet slip <span id="profileSlipCount">0</span></button>
+              <button class="text-button" id="followAthlete" type="button" aria-pressed="false">Follow</button>
+              <button class="text-button" id="shareAthleteProfile" type="button">Copy link</button>
+            </div>
+          </div>
+          <div class="profile-loading" id="athleteProfileLoading" role="status" hidden>
+            <span class="stats-skeleton wide" aria-hidden="true"></span>
+            <span class="stats-skeleton" aria-hidden="true"></span>
+            <span>Loading sample athlete profile…</span>
+          </div>
+          <div class="profile-not-found" id="athleteProfileNotFound" hidden>
+            <p class="eyebrow">Athlete unavailable</p>
+            <h1 id="athleteProfileNotFoundTitle">Profile not found</h1>
+            <p>The saved athlete ID is unknown or no longer available from the sample provider.</p>
+          </div>
+          <div id="athleteProfileContent"></div>
+          <aside class="profile-slip-panel" id="profileSlipPanel" aria-label="Profile bet slip" hidden>
+            <div class="panel-heading"><h2>Bet Slip</h2><button class="text-button" id="closeProfileSlip" type="button">Close</button></div>
+            <div id="profileSlipList" class="slip-list empty">Add legs from a provider-confirmed profile market.</div>
+          </aside>
         </section>
 
         <section class="today-board" aria-labelledby="todayBoardTitle">
@@ -102,8 +135,8 @@
           <div class="today-market-grid" id="todayMarketGrid" aria-live="polite" aria-busy="true"></div>
         </section>
 
-        <section class="workspace" aria-label="Betting research workspace">
-          <aside class="filters" aria-label="Filters">
+        <section class="workspace" id="researchWorkspace" aria-label="Sports research workspace">
+          <aside class="filters" id="bettingFilters" aria-label="Betting filters">
             <div class="panel-heading">
               <h2>Markets</h2>
               <span id="sportLabel">League</span>
@@ -132,7 +165,7 @@
             </label>
           </aside>
 
-          <section class="results-panel" aria-live="polite">
+          <section class="results-panel" id="researchResults" aria-live="polite">
             <div class="section-title">
               <div>
                 <p class="eyebrow">Answer</p>
@@ -143,6 +176,15 @@
                 <span class="timestamp">Sample source - updated locally</span>
               </div>
             </div>
+            <section class="stats-results" id="statsResults" aria-label="Statistical research result" aria-live="polite" aria-busy="false" hidden>
+              <div class="stats-loading" id="statsLoading" hidden>
+                <span class="stats-skeleton wide" aria-hidden="true"></span>
+                <span class="stats-skeleton" aria-hidden="true"></span>
+                <span class="visually-hidden">Loading statistical research result…</span>
+              </div>
+              <div class="stats-interpretation" id="statsInterpretation"></div>
+              <div id="statsResultContent"></div>
+            </section>
             <div class="answer-card">
               <p id="answerText">
                 The strongest profile is high-usage players facing bottom-third defensive matchups, with recent minutes stability and a line within one point of projection.
@@ -195,7 +237,7 @@
           </aside>
         </section>
 
-        <section class="market-board" aria-label="Matchup board">
+        <section class="market-board" id="bettingEventBoard" aria-label="Matchup board">
           <div class="section-title">
             <div>
               <p class="eyebrow">Board</p>

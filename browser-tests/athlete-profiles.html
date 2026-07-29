@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>EdgeBoard athlete profile browser tests</title>
+  <link rel="icon" href="data:," />
+  <body>
+    <h1>EdgeBoard athlete profile browser tests</h1>
+    <pre id="results">Running…</pre>
+    <script>
+      window.testErrors = [];
+      window.addEventListener("error", (event) => window.testErrors.push(`${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`));
+      window.addEventListener("unhandledrejection", (event) => window.testErrors.push(String(event.reason)));
+      window.setTimeout(() => {
+        if (window.testErrors.length && document.querySelector("#results")?.textContent === "Running…") {
+          document.querySelector("#results").textContent = `ERROR\n${window.testErrors.join("\n")}`;
+        }
+      }, 3000);
+    </script>
+    <iframe
+      id="app"
+      src="/?mode=stats&amp;scope=league:wnba&amp;player=wnba-caitlin-clark&amp;tab=overview"
+      title="EdgeBoard athlete profile app under test"
+      style="width:390px;height:850px;border:0"
+    ></iframe>
+    <script type="module" src="./athlete-profiles.js"></script>
+  </body>
+</html>

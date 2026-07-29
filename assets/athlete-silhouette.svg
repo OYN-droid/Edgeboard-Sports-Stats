@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" role="img" aria-labelledby="title desc">
+  <title id="title">Abstract athlete silhouette</title>
+  <desc id="desc">An original geometric EdgeBoard sample placeholder, not an athlete likeness.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#261b2c"/>
+      <stop offset="1" stop-color="#11141d"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="320" rx="40" fill="url(#bg)"/>
+  <circle cx="160" cy="112" r="54" fill="#e74386" opacity=".82"/>
+  <path d="M62 292c8-78 45-121 98-121s90 43 98 121" fill="#e74386" opacity=".62"/>
+  <path d="M40 48h78M202 272h78" stroke="#f0a5c4" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+</svg>

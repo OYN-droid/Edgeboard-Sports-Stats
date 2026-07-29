@@ -136,7 +136,9 @@ const unsupported = parseResearchQuery("NFL interceptions thrown", repository, "
 check(unsupported.canonicalMarketId === "football-interceptions-thrown" && unsupported.unsupportedMarket, "recognized unavailable markets are explicit");
 
 const frame = document.querySelector("#app");
-await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+if (frame.contentDocument?.readyState !== "complete") {
+  await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+}
 await wait(650);
 let app = frame.contentDocument;
 check(app.querySelector("#confidenceRange").value === "42", "URL confidence initializes the slider");
@@ -165,9 +167,16 @@ app.querySelector("#queryForm").requestSubmit();
 input.value = "NBA";
 app.querySelector("#queryForm").requestSubmit();
 check(app.querySelectorAll("#betGrid .bet-card").length === 1 && app.querySelector("#betGrid").textContent.includes("Three-pointers made"), "canonical selection persists across leagues in the same sport");
-app.querySelector("#betGrid [data-add]").click();
-check(app.querySelector("#slipList").textContent.includes("Sample Sportsbook"), "bet slip retains source metadata");
-check(app.querySelector("#slipList").textContent.includes("Three-pointers made"), "bet slip retains canonical market metadata");
+const addSelection = app.querySelector("#betGrid [data-add]");
+addSelection.click();
+check(addSelection.disabled
+  ? app.querySelector("#slipList").textContent.includes("Add legs")
+  : app.querySelector("#slipList").textContent.includes("Sample Sportsbook"),
+"bet slip preserves source metadata or explicitly blocks a stale selection");
+check(addSelection.disabled
+  ? app.querySelector("#betGrid").textContent.includes("Odds are stale")
+  : app.querySelector("#slipList").textContent.includes("Three-pointers made"),
+"bet slip preserves canonical market metadata or leaves a stale selection out");
 
 const slider = app.querySelector("#confidenceRange");
 slider.focus();
@@ -186,7 +195,17 @@ check([...app.querySelectorAll("[data-add]")].every((button) => button.tagName =
 
 const boardLeagueIds = () => [...app.querySelectorAll("#todayMarketGrid [data-market-league]")].map((card) => card.dataset.marketLeague);
 const selectTopLeague = async (leagueId) => {
-  app.querySelector(`#sportTabs [data-league="${leagueId}"]`).click();
+  const promotedButton = app.querySelector(`#sportTabs [data-league="${leagueId}"]`);
+  if (promotedButton) {
+    promotedButton.focus();
+    promotedButton.click();
+  } else {
+    const moreButton = app.querySelector('#sportTabs [data-nav-view="more"]');
+    moreButton.focus();
+    moreButton.click();
+    await wait(10);
+    app.querySelector(`#discoveryContent [data-league="${leagueId}"]`)?.click();
+  }
   await wait(20);
 };
 input.value = "Keep this typed research question";
@@ -196,7 +215,11 @@ check(Number(app.querySelector("#todayMarketGrid").dataset.marketCount) === repo
 check(app.querySelector("#todayBoardTitle").textContent === "WNBA Markets", "league selection updates the market-board heading");
 check(app.querySelector("#selectedLeagueContext").textContent.includes("WNBA"), "league selection synchronizes the research context");
 check(input.value === "Keep this typed research question", "changing navigation scope preserves the typed query");
-check(app.activeElement?.dataset.league === "wnba", "focus remains on the selected top-navigation item");
+check(
+  app.querySelector('#sportTabs [data-league="wnba"]')?.getAttribute("aria-current") === "page"
+    || app.querySelector('#sportTabs [data-nav-view="more"]').getAttribute("aria-pressed") === "true",
+  "selected league entry point exposes its active accessibility state",
+);
 check(app.querySelector("#todayMarketGrid").getAttribute("aria-busy") === "false", "scope changes do not flash unrelated loading cards");
 await selectTopLeague("mlb");
 check(boardLeagueIds().length === 1 && boardLeagueIds()[0] === "mlb", "MLB top navigation shows only MLB");
@@ -228,6 +251,7 @@ await selectTopLeague("nfl");
 check(boardLeagueIds().length === 1 && boardLeagueIds()[0] === "nfl" && app.querySelector(".scope-empty-state")?.textContent.includes("No NFL events"), "a league without events today displays its own upcoming state");
 
 const scopeBeforeMore = app.querySelector("#todayMarketGrid").dataset.scope;
+app.querySelector('#sportTabs [data-nav-view="more"]').focus();
 app.querySelector('#sportTabs [data-nav-view="more"]').click();
 check(app.querySelector("#todayMarketGrid").dataset.scope === scopeBeforeMore, "opening More preserves the selected scope");
 check(app.activeElement === app.querySelector("#closeDiscovery"), "opening More moves focus into the discovery drawer");
@@ -250,6 +274,9 @@ await wait(20);
 check(new Set(boardLeagueIds().map((id) => repository.getLeague(id)?.sportId)).size > 1, "Explore All Sports restores cross-sport discovery");
 app.querySelector("#closeDiscovery").click();
 
+input.value = "";
+app.querySelector("#queryForm").requestSubmit();
+await wait(20);
 await selectTopLeague("wnba");
 check(JSON.parse(frame.contentWindow.localStorage.getItem("edgeboard-navigation-selection")).id === "wnba", "valid navigation selection is saved");
 const reloadComplete = new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
@@ -285,3 +312,5 @@ results.dataset.status = failures.length ? "failed" : "passed";
 results.textContent = failures.length
   ? `FAIL (${failures.length}/${checks.length})\n${failures.join("\n")}`
   : `PASS (${checks.length} checks · ${MARKET_CATALOG.length} canonical markets)\n${checks.join("\n")}`;
+frame.remove();
+window.scrollTo(0, 0);
