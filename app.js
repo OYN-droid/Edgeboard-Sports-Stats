@@ -69,6 +69,43 @@ function loadVisualizationModules() {
   }
   return visualizationModulesPromise;
 }
+let workspaceModulesPromise = null;
+let workspaceRepository = null;
+let workspaceServiceModule = null;
+let workspaceRenderer = null;
+let workspaceExternalUnsubscribe = null;
+function loadWorkspaceModules() {
+  if (!workspaceModulesPromise) {
+    workspaceModulesPromise = Promise.all([
+      import("./src/services/workspace-service.js"),
+      import("./src/components/workspace-renderer.js"),
+    ]).then(async ([service, renderer]) => {
+      workspaceRepository ||= service.createWorkspaceRepository({
+        seedSample: providerPayload?.provider_status?.mode === "sample",
+      });
+      workspaceServiceModule = service;
+      workspaceRenderer = renderer;
+      await workspaceRepository.initialize();
+      return { service, renderer, repository: workspaceRepository };
+    });
+  }
+  return workspaceModulesPromise;
+}
+function recordWorkspaceActivity(action, targetType, targetId, label, queryText = "") {
+  loadWorkspaceModules().then(({ repository }) => {
+    const workspace = repository.listWorkspaces()[0];
+    if (!workspace) return null;
+    return repository.appendActivity({
+      workspaceId: workspace.id,
+      action,
+      targetType,
+      targetId,
+      label,
+      queryText,
+      route: `${window.location.pathname}${window.location.search}`,
+    });
+  }).catch(() => {});
+}
 const leagues = sportsRepository.getLeagues();
 const navigationModel = createNavigationModel(leagues);
 const defaultLeague = navigationModel.primaryLeagues[0] || navigationModel.allLeagues[0] || null;
@@ -171,6 +208,17 @@ const initialNavigationSelection = loadNavigationSelection();
 const initialResearchLeague = researchLeagueForSelection(initialNavigationSelection);
 const initialResearchState = loadResearchState();
 const initialInsightState = loadInsightState();
+const initialWorkspaceParams = new URLSearchParams(window.location.search);
+const initialWorkspaceRoute = initialWorkspaceParams.has("workspace") ? {
+  workspaceId: initialWorkspaceParams.get("workspace") || "workspace-local-default",
+  view: initialWorkspaceParams.get("saved") ? "item"
+    : initialWorkspaceParams.get("board") ? "board"
+      : initialWorkspaceParams.get("workspaceView") || "home",
+  boardId: initialWorkspaceParams.get("board") || "",
+  itemId: initialWorkspaceParams.get("saved") || "",
+  watchlistId: initialWorkspaceParams.get("watchlist") || "",
+  query: "",
+} : null;
 
 const state = {
   navigationSelection: initialNavigationSelection,
@@ -254,6 +302,15 @@ const state = {
   activeInsightId: "",
   sharedInsightId: initialResearchState.insightId,
   sharedInsightOpened: false,
+  workspaceActive: Boolean(initialWorkspaceRoute),
+  workspaceRoute: initialWorkspaceRoute,
+  workspaceViewModel: null,
+  workspaceLoading: Boolean(initialWorkspaceRoute),
+  workspaceCandidate: null,
+  workspaceDuplicate: null,
+  workspaceStatus: "",
+  workspacePendingImport: "",
+  workspaceShareSnapshot: null,
 };
 let insightReturnFocus = null;
 
@@ -346,6 +403,28 @@ const elements = {
   insightDialog: document.querySelector("#insightDialog"),
   insightDialogContent: document.querySelector("#insightDialogContent"),
   closeInsightDialog: document.querySelector("#closeInsightDialog"),
+  openWorkspace: document.querySelector("#openWorkspace"),
+  workspaceSavedCount: document.querySelector("#workspaceSavedCount"),
+  workspaceAlertCount: document.querySelector("#workspaceAlertCount"),
+  saveCurrentResearch: document.querySelector("#saveCurrentResearch"),
+  saveVisualAnalytics: document.querySelector("#saveVisualAnalytics"),
+  saveEntityProfile: document.querySelector("#saveEntityProfile"),
+  saveAthleteProfile: document.querySelector("#saveAthleteProfile"),
+  trackResearchSlip: document.querySelector("#trackResearchSlip"),
+  personalWorkspaceView: document.querySelector("#personalWorkspaceView"),
+  workspaceLoading: document.querySelector("#workspaceLoading"),
+  workspaceContent: document.querySelector("#workspaceContent"),
+  workspaceStatus: document.querySelector("#workspaceActionStatus"),
+  workspaceSaveDialog: document.querySelector("#workspaceSaveDialog"),
+  workspaceSaveDialogContent: document.querySelector("#workspaceSaveDialogContent"),
+  workspaceEditDialog: document.querySelector("#workspaceEditDialog"),
+  workspaceEditForm: document.querySelector("#workspaceEditForm"),
+  workspaceConfirmDialog: document.querySelector("#workspaceConfirmDialog"),
+  workspaceConfirmForm: document.querySelector("#workspaceConfirmForm"),
+  workspaceConfirmMessage: document.querySelector("#workspaceConfirmMessage"),
+  workspaceConfirmTextLabel: document.querySelector("#workspaceConfirmTextLabel"),
+  workspaceShareDialog: document.querySelector("#workspaceShareDialog"),
+  workspaceSharePreview: document.querySelector("#workspaceSharePreview"),
 };
 
 let renderedPicks = new Map();
@@ -1358,6 +1437,7 @@ function renderInsightCard(insight, { feature = false, context = "discovery" } =
           <button type="button" class="text-button" data-view-insight="${escapeHtml(insight.id)}">View supporting data</button>
           ${insight.entityType === "athlete" ? `<a class="text-button" href="${escapeHtml(profileUrl(insight.entity.id, "insights"))}" data-open-athlete="${escapeHtml(insight.entity.id)}">Profile</a>` : ""}
           <button type="button" class="text-button" data-save-insight="${escapeHtml(insight.id)}" aria-pressed="${saved}">${savedStatus?.changed ? "Saved · changed" : saved ? "Saved" : "Save"}</button>
+          <button type="button" class="text-button" data-workspace-save-insight="${escapeHtml(insight.id)}">Save to workspace</button>
           ${insight.entityType === "team" ? `<button type="button" class="text-button" data-follow-entity="${escapeHtml(insight.entity.id)}" aria-pressed="${state.followedEntityIds.includes(insight.entity.id)}">${state.followedEntityIds.includes(insight.entity.id) ? "Following team" : "Follow team"}</button>` : ""}
           ${insight.type.includes("streak") || insight.type.startsWith("milestone") ? `<button type="button" class="text-button" data-follow-insight-rule="${escapeHtml(`${insight.entity.id}:${insight.ruleId}`)}" aria-pressed="${state.followedInsightRefs.includes(`${insight.entity.id}:${insight.ruleId}`)}">${state.followedInsightRefs.includes(`${insight.entity.id}:${insight.ruleId}`) ? "Following" : "Follow"}</button>` : ""}
           <button type="button" class="text-button" data-share-insight="${escapeHtml(insight.id)}">Share</button>
@@ -1941,6 +2021,7 @@ function openVisualAnalytics(input, { replace = false, focusHeading = true, retu
   renderVisualAnalytics();
   setVisualAnalyticsUrl(state.visualRequest, { replace });
   loadVisualAnalytics({ focusHeading });
+  recordWorkspaceActivity("viewed_visualization", "visualization", state.visualRequest.visualizationType, "Viewed visual analytics");
 }
 
 function closeVisualAnalytics({ useHistory = true } = {}) {
@@ -2010,6 +2091,7 @@ function renderAdvancedActions(result, views = ["table"]) {
       <button type="button" data-copy-advanced="table">Copy table</button>
       <button type="button" data-export-advanced="csv">Download CSV</button>
       <button type="button" data-copy-advanced="link">Copy link</button>
+      <button type="button" data-workspace-save-result>Save to workspace</button>
       <span class="advanced-copy-status" role="status" aria-live="polite"></span>
     </div>
   `;
@@ -2444,6 +2526,218 @@ function renderResearchMode() {
   }
 }
 
+function parseWorkspaceRoute(params = new URLSearchParams(window.location.search)) {
+  if (!params.has("workspace")) return null;
+  return {
+    workspaceId: params.get("workspace") || "workspace-local-default",
+    view: params.get("saved") ? "item" : params.get("board") ? "board" : params.get("workspaceView") || "home",
+    boardId: params.get("board") || "",
+    itemId: params.get("saved") || "",
+    watchlistId: params.get("watchlist") || "",
+    query: "",
+  };
+}
+
+function setWorkspaceUrl(route, { replace = false } = {}) {
+  const url = new URL(window.location.href);
+  ["workspace", "workspaceView", "board", "saved", "watchlist"].forEach((key) => url.searchParams.delete(key));
+  if (route) {
+    url.searchParams.set("workspace", route.workspaceId || "workspace-local-default");
+    url.searchParams.set("workspaceView", route.view || "home");
+    if (route.boardId) url.searchParams.set("board", route.boardId);
+    if (route.itemId) url.searchParams.set("saved", route.itemId);
+    if (route.watchlistId) url.searchParams.set("watchlist", route.watchlistId);
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardWorkspace: Boolean(route) }, "", url);
+}
+
+function updateWorkspaceCounts(viewModel = state.workspaceViewModel) {
+  const counts = viewModel?.counts || { saved: 0, alerts: 0 };
+  elements.workspaceSavedCount.textContent = String(counts.saved);
+  elements.workspaceSavedCount.setAttribute("aria-label", `${counts.saved} saved item${counts.saved === 1 ? "" : "s"}`);
+  elements.workspaceAlertCount.textContent = String(counts.alerts);
+  elements.workspaceAlertCount.setAttribute("aria-label", `${counts.alerts} unread alert${counts.alerts === 1 ? "" : "s"}`);
+}
+
+function applyWorkspaceVisibility() {
+  document.body.classList.toggle("workspace-active", state.workspaceActive);
+  elements.personalWorkspaceView.hidden = !state.workspaceActive;
+  elements.workspaceLoading.hidden = !state.workspaceActive || !state.workspaceLoading;
+  if (state.workspaceActive) {
+    elements.visualAnalyticsView.hidden = true;
+    elements.entityProfileView.hidden = true;
+    elements.athleteProfileView.hidden = true;
+  }
+}
+
+async function loadWorkspace({ focusHeading = false } = {}) {
+  state.workspaceLoading = true;
+  applyWorkspaceVisibility();
+  try {
+    const { service, renderer, repository } = await loadWorkspaceModules();
+    const route = state.workspaceRoute || { workspaceId: "workspace-local-default", view: "home" };
+    let viewModel = service.buildWorkspaceViewModel(repository.snapshot(), route.workspaceId, route);
+    if (viewModel.status === "not-found") {
+      const fallback = repository.listWorkspaces()[0];
+      if (fallback) {
+        state.workspaceRoute = { workspaceId: fallback.id, view: "home" };
+        setWorkspaceUrl(state.workspaceRoute, { replace: true });
+        viewModel = service.buildWorkspaceViewModel(repository.snapshot(), fallback.id, state.workspaceRoute);
+      } else if (repository.getDiagnostics().storageStatus === "ready") {
+        const created = await repository.createWorkspace({ title: "My EdgeBoard", description: "Local personal workspace" });
+        state.workspaceRoute = { workspaceId: created.id, view: "home" };
+        setWorkspaceUrl(state.workspaceRoute, { replace: true });
+        viewModel = service.buildWorkspaceViewModel(repository.snapshot(), created.id, state.workspaceRoute);
+      }
+    }
+    viewModel.storageDiagnostics = repository.getDiagnostics();
+    if (viewModel.status === "ready" && route.view === "saved" && (route.query || Object.keys(route.filters || {}).length)) {
+      const matches = service.searchWorkspace(repository.snapshot(), route.query, { workspaceId: route.workspaceId, ...(route.filters || {}) });
+      viewModel.savedObjects = matches.map((result) => result.item);
+    }
+    if (viewModel.status === "ready" && route.view === "settings") {
+      viewModel.storage = await repository.getStorageEstimate();
+    }
+    state.workspaceViewModel = viewModel;
+    elements.workspaceContent.innerHTML = renderer.renderWorkspace(viewModel);
+    updateWorkspaceCounts(viewModel);
+    if (!workspaceExternalUnsubscribe) {
+      workspaceExternalUnsubscribe = repository.subscribe((event) => {
+        if (event.type === "external_update") {
+          elements.workspaceStatus.innerHTML = 'A newer local update is available in another tab. <button type="button" data-load-external>Load newer</button>';
+        } else if (!state.workspaceActive) {
+          const vm = service.buildWorkspaceViewModel(repository.snapshot(), route.workspaceId, { view: "home" });
+          updateWorkspaceCounts(vm);
+        }
+      });
+    }
+    if (focusHeading) {
+      const heading = elements.workspaceContent.querySelector("h1, h2");
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus?.({ preventScroll: true });
+    }
+  } catch (error) {
+    elements.workspaceContent.innerHTML = `<div class="workspace-empty" role="alert"><h1>Local workspace unavailable</h1><p>${escapeHtml(error?.message || "The browser could not open local workspace storage.")}</p></div>`;
+    elements.workspaceStatus.textContent = "No EdgeBoard research data was changed.";
+  } finally {
+    state.workspaceLoading = false;
+    applyWorkspaceVisibility();
+  }
+}
+
+async function openWorkspace(route = null, { replace = false, focusHeading = true, updateUrl = true } = {}) {
+  state.workspaceActive = true;
+  state.workspaceRoute = route || state.workspaceRoute || { workspaceId: "workspace-local-default", view: "home" };
+  if (updateUrl) setWorkspaceUrl(state.workspaceRoute, { replace });
+  await loadWorkspace({ focusHeading });
+}
+
+function closeWorkspace({ updateUrl = true } = {}) {
+  state.workspaceActive = false;
+  state.workspaceRoute = null;
+  if (updateUrl) setWorkspaceUrl(null);
+  applyWorkspaceVisibility();
+  renderAthleteProfile();
+  renderEntityProfile();
+  renderVisualAnalytics();
+}
+
+function safeSnapshot(value, fallback = {}) {
+  try {
+    return JSON.parse(JSON.stringify(value ?? fallback));
+  } catch {
+    return fallback;
+  }
+}
+
+function currentWorkspaceCandidate() {
+  const league = currentLeague();
+  const queryText = elements.queryInput.value.trim();
+  const sourceState = {
+    mode: state.researchMode,
+    sportId: league?.sportId || "",
+    leagueId: league?.leagueId || "",
+    queryText,
+    structuredQuery: safeSnapshot(state.statsParsedQuery || state.researchPlan || {}),
+  };
+  const base = {
+    title: queryText || `${league?.leagueDisplayName || "EdgeBoard"} research`,
+    description: "Saved structured EdgeBoard research",
+    type: "saved_research",
+    boardId: "board-saved-research",
+    sourceState,
+    canonicalReferences: { entityIds: [], eventIds: [], marketIds: [], insightIds: [], queryId: null, visualizationId: null },
+    researchSnapshot: { summary: queryText || "Current EdgeBoard research context", source: "EdgeBoard sample providers", sample: true },
+    sample: true,
+  };
+  if (state.visualResult || state.visualRequest) {
+    const entityIds = state.visualRequest?.entityIds || [];
+    return { ...base, type: "saved_visualization", boardId: "board-visuals", title: state.visualResult?.title || "Saved visual analytics", canonicalReferences: { ...base.canonicalReferences, entityIds, visualizationId: state.visualRequest?.visualizationType || null }, researchSnapshot: safeSnapshot(state.visualResult || state.visualRequest) };
+  }
+  if (state.profileViewModel?.status === "ready") {
+    const profile = state.profileViewModel;
+    return { ...base, type: "saved_entity", boardId: "board-stats-trends", title: `${profile.athlete?.displayName || profile.athlete?.name || "Athlete"} profile`, canonicalReferences: { ...base.canonicalReferences, entityIds: [state.profileAthleteId] }, researchSnapshot: safeSnapshot({ athlete: profile.athlete, summary: profile.summary, source: profile.source }) };
+  }
+  if (state.entityProfileViewModel?.status === "ready") {
+    const profile = state.entityProfileViewModel;
+    return { ...base, type: "saved_entity", boardId: "board-stats-trends", title: `${profile.entity?.displayName || profile.entity?.name || "Entity"} profile`, canonicalReferences: { ...base.canonicalReferences, entityIds: [state.entityProfileId] }, researchSnapshot: safeSnapshot({ entity: profile.entity, summary: profile.summary, source: profile.source }) };
+  }
+  if (state.statsResult) {
+    const result = state.statsResult;
+    const kind = String(result.type || result.kind || state.statsParsedQuery?.intent || "");
+    const type = kind.includes("comparison") ? "saved_comparison" : kind.includes("leaderboard") ? "saved_leaderboard" : "saved_query";
+    return { ...base, type, boardId: "board-stats-trends", title: result.title || result.headline || queryText || "Saved statistical research", canonicalReferences: { ...base.canonicalReferences, entityIds: [result.entity?.id, ...(result.entities || []).map((item) => item.id)].filter(Boolean) }, researchSnapshot: safeSnapshot(result) };
+  }
+  if (state.researchAnswer) return { ...base, type: "saved_answer", boardId: "board-betting-research", title: state.researchAnswer.headline || queryText || "Saved research answer", researchSnapshot: safeSnapshot(state.researchAnswer) };
+  return base;
+}
+
+async function openWorkspaceSave(candidate = currentWorkspaceCandidate()) {
+  const { renderer, repository } = await loadWorkspaceModules();
+  const workspace = repository.listWorkspaces()[0];
+  const boards = repository.listBoards(workspace.id, { includeArchived: true });
+  const boardId = boards.some((board) => board.id === candidate.boardId)
+    ? candidate.boardId : boards.find((board) => !board.isArchived)?.id;
+  state.workspaceCandidate = { ...candidate, workspaceId: workspace.id, boardId };
+  state.workspaceDuplicate = null;
+  elements.workspaceSaveDialogContent.innerHTML = renderer.renderSaveDialogFields({ boards, candidate: state.workspaceCandidate });
+  elements.workspaceSaveDialog.showModal();
+  elements.workspaceSaveDialog.querySelector("input[name=title]")?.focus();
+}
+
+function openWorkspaceEdit(action, targetId = "", title = "", description = "") {
+  const form = elements.workspaceEditForm;
+  form.reset();
+  form.elements.action.value = action;
+  form.elements.targetId.value = targetId;
+  form.elements.title.value = title;
+  form.elements.description.value = description;
+  form.querySelector("[data-track-idea-only]").hidden = action !== "track-slip";
+  elements.workspaceEditDialog.showModal();
+  form.elements.title.focus();
+}
+
+function confirmWorkspaceAction(action, targetId, message, phrase = "") {
+  const form = elements.workspaceConfirmForm;
+  form.reset();
+  form.elements.action.value = action;
+  form.elements.targetId.value = targetId;
+  elements.workspaceConfirmMessage.textContent = message;
+  elements.workspaceConfirmTextLabel.hidden = !phrase;
+  form.elements.confirmationText.required = Boolean(phrase);
+  form.dataset.phrase = phrase;
+  elements.workspaceConfirmDialog.showModal();
+}
+
+function downloadWorkspaceJson(payload, filename = "edgeboard-workspace.json") {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderAll() {
   const league = currentLeague();
   const status = getLeagueStatusMetadata(league);
@@ -2471,6 +2765,7 @@ function renderAll() {
   renderResearchMode();
   renderAthleteProfile();
   renderEntityProfile();
+  applyWorkspaceVisibility();
   if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
 }
 
@@ -2572,6 +2867,7 @@ function openAthleteProfile(athleteId, tab = "overview", { replace = false, focu
     state.profileViewModel = { status: "not-found", athleteId, error: error?.message || "Profile unavailable" };
     renderAthleteProfile();
   });
+  recordWorkspaceActivity("opened_profile", "athlete", athleteId, entityRegistry.getEntity(athleteId)?.name || athleteId);
 }
 
 function closeAthleteProfile({ useHistory = true } = {}) {
@@ -2642,6 +2938,7 @@ function openEntityProfile(entityId, { replace = false, focusHeading = true } = 
   setEntityProfileUrl(entityId, { replace });
   renderAthleteProfile();
   loadEntityProfile({ focusHeading });
+  recordWorkspaceActivity("opened_profile", "entity", entityId, entityRegistry.getEntity(entityId)?.name || entityId);
 }
 
 function closeEntityProfile({ useHistory = true } = {}) {
@@ -3214,6 +3511,7 @@ async function submitResearchQuery() {
     || document.querySelector("#answerTitle");
   resultHeading?.setAttribute("tabindex", "-1");
   resultHeading?.focus?.({ preventScroll: true });
+  recordWorkspaceActivity("ran_query", state.statsResult?.type || "research", state.selectedEntityId || state.leagueId, "Ran research query", query);
 }
 
 document.querySelector("#queryForm").addEventListener("submit", (event) => {
@@ -3519,6 +3817,33 @@ function handleAthleteMediaError(image) {
 }
 
 document.addEventListener("click", (event) => {
+  const workspaceInsight = event.target.closest("[data-workspace-save-insight]");
+  if (workspaceInsight) {
+    const insight = insightService.getInsight(workspaceInsight.dataset.workspaceSaveInsight);
+    if (!insight) return;
+    openWorkspaceSave({
+      ...currentWorkspaceCandidate(),
+      type: "saved_insight",
+      boardId: "board-stats-trends",
+      title: insight.phrasing.headline,
+      description: insight.phrasing.shortSummary,
+      canonicalReferences: {
+        entityIds: [...insight.entityIds],
+        eventIds: insight.supportingEventIds || [],
+        marketIds: insight.bettingContext?.marketId ? [insight.bettingContext.marketId] : [],
+        insightIds: [insight.id],
+        queryId: null,
+        visualizationId: null,
+      },
+      researchSnapshot: safeSnapshot(insight),
+      sample: true,
+    }).catch(() => {});
+    return;
+  }
+  if (event.target.closest("[data-workspace-save-result]")) {
+    openWorkspaceSave(currentWorkspaceCandidate()).catch(() => {});
+    return;
+  }
   const viewInsight = event.target.closest("[data-view-insight]");
   if (viewInsight) {
     const insight = insightService.getInsight(viewInsight.dataset.viewInsight);
@@ -3574,6 +3899,7 @@ document.addEventListener("click", (event) => {
       ? state.followedEntityIds.filter((item) => item !== id)
       : [...new Set([...state.followedEntityIds, id])];
     persistInsightState();
+    syncWorkspaceFollow(id, state.followedEntityIds.includes(id)).catch(() => {});
     renderAll();
     return;
   }
@@ -3763,6 +4089,7 @@ elements.followEntity.addEventListener("click", () => {
     ? state.followedEntityIds.filter((item) => item !== id)
     : [...new Set([...state.followedEntityIds, id])];
   persistInsightState();
+  syncWorkspaceFollow(id, state.followedEntityIds.includes(id)).catch(() => {});
   renderEntityProfile();
 });
 elements.profileSlipToggle.addEventListener("click", () => {
@@ -3910,6 +4237,7 @@ elements.followAthlete.addEventListener("click", () => {
     ? [...new Set([...state.followedEntityIds, athleteId])]
     : state.followedEntityIds.filter((id) => id !== athleteId);
   persistInsightState();
+  syncWorkspaceFollow(athleteId, followed).catch(() => {});
   elements.followAthlete.setAttribute("aria-pressed", String(followed));
   elements.followAthlete.textContent = followed ? "Following locally" : "Follow";
 });
@@ -3968,8 +4296,584 @@ elements.shareEntityProfile.addEventListener("click", async () => {
   }
 });
 
+elements.openWorkspace.addEventListener("click", () => {
+  openWorkspace({ workspaceId: state.workspaceViewModel?.workspace?.id || "workspace-local-default", view: "home" }).catch(() => {});
+});
+[elements.saveCurrentResearch, elements.saveVisualAnalytics, elements.saveEntityProfile, elements.saveAthleteProfile]
+  .filter(Boolean)
+  .forEach((button) => button.addEventListener("click", () => {
+    openWorkspaceSave().catch((error) => {
+      elements.queryFeedback.textContent = error?.message || "Unable to open the local save dialog.";
+    });
+  }));
+
+function openTrackSlipDialog() {
+  if (!state.slip.length) {
+    elements.queryFeedback.textContent = "Add at least one available market to the research slip before tracking it.";
+    return;
+  }
+  openWorkspaceEdit("track-slip", "", `${currentLeague()?.leagueDisplayName || "EdgeBoard"} research idea`, "Record the research thesis and counterpoints here.");
+}
+elements.trackResearchSlip.addEventListener("click", openTrackSlipDialog);
+
+async function syncWorkspaceFollow(targetId, followed) {
+  const { repository } = await loadWorkspaceModules();
+  const workspace = repository.listWorkspaces()[0];
+  const entity = entityRegistry.getEntity(targetId);
+  const snapshot = repository.snapshot();
+  const matches = snapshot.watchlistItems.filter((item) => item.targetId === targetId);
+  if (!followed) {
+    await Promise.all(matches.map((item) => repository.removeWatchlistItem(item.id)));
+    return;
+  }
+  if (matches.length) return;
+  let watchlist = snapshot.watchlists.find((item) => item.workspaceId === workspace.id && item.title === "Following");
+  if (!watchlist) watchlist = await repository.createWatchlist({ workspaceId: workspace.id, title: "Following", description: "Entities followed from canonical EdgeBoard profiles and insights." });
+  await repository.addWatchlistItem({
+    watchlistId: watchlist.id,
+    targetType: entity?.type === "athlete" ? "athlete" : entity?.type || "entity",
+    targetId,
+    label: entity?.displayName || entity?.name || targetId,
+    sportId: entity?.sportId || "",
+    leagueId: entity?.leagueId || "",
+    sample: true,
+  });
+}
+
+elements.workspaceSaveDialog.addEventListener("click", (event) => {
+  if (event.target.closest("[data-close-save-dialog]")) elements.workspaceSaveDialog.close();
+});
+elements.workspaceSaveDialog.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  if (form.dataset.submitting === "true") return;
+  form.dataset.submitting = "true";
+  form.querySelectorAll("button[type=submit]").forEach((button) => { button.disabled = true; });
+  const strategy = event.submitter?.dataset.saveStrategy || "";
+  if (strategy === "open" && state.workspaceDuplicate) {
+    elements.workspaceSaveDialog.close();
+    await openWorkspace({ workspaceId: state.workspaceDuplicate.workspaceId, view: "item", itemId: state.workspaceDuplicate.id });
+    return;
+  }
+  try {
+    const data = new FormData(form);
+    const candidate = {
+      ...state.workspaceCandidate,
+      title: data.get("title"),
+      boardId: data.get("boardId"),
+      tags: String(data.get("tags") || "").split(","),
+      isPinned: data.has("isPinned"),
+      saveMode: data.get("saveMode"),
+    };
+    const result = await workspaceRepository.saveResearchObject(candidate, {
+      duplicateStrategy: strategy === "update" ? "update" : strategy === "copy" ? "copy" : undefined,
+    });
+    if (result.status === "duplicate") {
+      state.workspaceDuplicate = result.duplicate;
+      const boards = workspaceRepository.listBoards(candidate.workspaceId, { includeArchived: true });
+      elements.workspaceSaveDialogContent.innerHTML = workspaceRenderer.renderSaveDialogFields({ boards, candidate, duplicate: result.duplicate });
+      return;
+    }
+    const note = String(data.get("note") || "").trim();
+    if (note) await workspaceRepository.addNote({ workspaceId: candidate.workspaceId, attachmentType: "saved_research", attachmentId: result.item.id, text: note });
+    elements.workspaceSaveDialog.close();
+    state.workspaceStatus = `${result.status === "updated" ? "Updated" : "Saved"} “${result.item.title}” locally.`;
+    elements.queryFeedback.textContent = state.workspaceStatus;
+    if (state.workspaceActive) await loadWorkspace();
+  } catch (error) {
+    elements.workspaceSaveDialogContent.querySelector(".data-warning")?.remove();
+    form.insertAdjacentHTML("afterbegin", `<p class="data-warning" role="alert">${escapeHtml(error?.message || "Unable to save local research.")}</p>`);
+  } finally {
+    if (form.isConnected) {
+      form.dataset.submitting = "false";
+      form.querySelectorAll("button[type=submit]").forEach((button) => { button.disabled = false; });
+    }
+  }
+});
+
+document.querySelectorAll("[data-close-workspace-dialog]").forEach((button) => {
+  button.addEventListener("click", () => elements.workspaceEditDialog.close());
+});
+document.querySelectorAll("[data-close-confirm-dialog]").forEach((button) => {
+  button.addEventListener("click", () => elements.workspaceConfirmDialog.close());
+});
+
+elements.workspaceEditForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const data = new FormData(event.target);
+  const action = data.get("action");
+  const targetId = data.get("targetId");
+  const title = String(data.get("title") || "").trim();
+  const description = String(data.get("description") || "").trim();
+  const vm = state.workspaceViewModel;
+  try {
+    if (action === "create-board") await workspaceRepository.createBoard({ workspaceId: vm.workspace.id, title, description });
+    else if (action === "edit-board") await workspaceRepository.updateBoard(targetId, { title, description });
+    else if (action === "rename-workspace") await workspaceRepository.updateWorkspace(vm.workspace.id, { title, description });
+    else if (action === "create-watchlist") await workspaceRepository.createWatchlist({ workspaceId: vm.workspace.id, title, description });
+    else if (action === "add-note") await workspaceRepository.addNote({ workspaceId: vm.workspace.id, attachmentType: "saved_research", attachmentId: targetId, text: description || title });
+    else if (action === "create-alert") await workspaceRepository.createAlertRule({
+      workspaceId: vm.workspace.id,
+      name: title,
+      category: "stats",
+      target: { type: "workspace", id: vm.workspace.id },
+      condition: { metric: "sample_value", operator: "greater_than_or_equal", value: Number(description) || 1 },
+      source: "Local sample evaluation",
+    });
+    else if (action === "track-slip") await workspaceRepository.createTrackedIdea({
+      workspaceId: vm?.workspace?.id || workspaceRepository.listWorkspaces()[0].id,
+      title,
+      thesis: description,
+      counterpoints: String(data.get("counterpoints") || "")
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+      status: "researching",
+      legs: state.slip.map((pick) => ({
+        selectionId: pick.id,
+        canonicalMarketId: pick.canonicalMarketId || pick.marketId,
+        line: pick.line,
+        odds: pick.odds,
+        sportsbook: pick.sportsbook,
+        sourceUpdatedAt: pick.lastUpdatedAt,
+        settlementScope: pick.settlementScope,
+      })),
+      confidenceAtSave: state.slip.length ? Math.round(state.slip.reduce((sum, pick) => sum + (Number(pick.confidence) || 0), 0) / state.slip.length) : null,
+      eventStartAt: state.slip.map((pick) => pick.eventTime).filter(Boolean).sort()[0] || null,
+      sample: true,
+    });
+    elements.workspaceEditDialog.close();
+    elements.workspaceStatus.textContent = "Local workspace updated.";
+    if (state.workspaceActive) await loadWorkspace();
+  } catch (error) {
+    elements.workspaceStatus.textContent = error?.message || "The local workspace update failed.";
+  }
+});
+
+elements.workspaceConfirmForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.target;
+  const data = new FormData(form);
+  const action = data.get("action");
+  const targetId = data.get("targetId");
+  const phrase = form.dataset.phrase || "";
+  if (phrase && data.get("confirmationText") !== phrase) {
+    elements.workspaceConfirmMessage.textContent = `Type “${phrase}” exactly to continue.`;
+    return;
+  }
+  try {
+    if (action === "delete-board") {
+      const destination = state.workspaceViewModel.boards.find((board) => board.id !== targetId && board.title === "Saved Research")
+        || state.workspaceViewModel.boards.find((board) => board.id !== targetId && !board.isArchived);
+      await workspaceRepository.deleteBoard(targetId, { confirmed: true, moveToBoardId: destination?.id || null });
+      if (state.workspaceRoute?.boardId === targetId) {
+        state.workspaceRoute = { workspaceId: state.workspaceViewModel.workspace.id, view: "boards" };
+        setWorkspaceUrl(state.workspaceRoute, { replace: true });
+      }
+    } else if (action === "delete-saved") {
+      await workspaceRepository.deleteSavedResearchObject(targetId);
+      if (state.workspaceRoute?.itemId === targetId) {
+        state.workspaceRoute = { workspaceId: state.workspaceViewModel.workspace.id, view: "saved" };
+        setWorkspaceUrl(state.workspaceRoute, { replace: true });
+      }
+    }
+    else if (action === "delete-alert") await workspaceRepository.deleteAlertRule(targetId);
+    else if (action === "delete-note") await workspaceRepository.deleteNote(targetId);
+    else if (action === "clear-alerts") await workspaceRepository.clearAlertEvents(state.workspaceViewModel.workspace.id);
+    else if (action === "delete-workspace") {
+      await workspaceRepository.deleteWorkspace(targetId, { confirmed: true });
+      elements.workspaceConfirmDialog.close();
+      state.workspaceRoute = { workspaceId: targetId, view: "home" };
+      await loadWorkspace();
+      return;
+    }
+    else if (action === "delete-all") {
+      await workspaceRepository.clearAll({ confirmation: phrase });
+      elements.workspaceConfirmDialog.close();
+      closeWorkspace();
+      updateWorkspaceCounts(null);
+      return;
+    }
+    elements.workspaceConfirmDialog.close();
+    await loadWorkspace();
+  } catch (error) {
+    elements.workspaceConfirmMessage.textContent = error?.message || "The confirmed action failed.";
+  }
+});
+
+async function restoreSavedResearch(itemId) {
+  const item = workspaceRepository.listSavedResearchObjects().find((record) => record.id === itemId);
+  if (!item) return;
+  await workspaceRepository.updateSavedResearchObject(item.id, { lastOpenedAt: new Date().toISOString() });
+  closeWorkspace();
+  const entityId = item.canonicalReferences?.entityIds?.[0];
+  if (item.type === "saved_entity" && entityId) {
+    const entity = entityRegistry.getEntity(entityId);
+    if (["athlete", "fighter", "boxer", "driver"].includes(entity?.type)) openAthleteProfile(entityId);
+    else openEntityProfile(entityId);
+    return;
+  }
+  state.researchMode = normalizeResearchMode(item.sourceState.mode, "stats");
+  elements.queryInput.value = item.sourceState.queryText || "";
+  if (item.sourceState.queryText) document.querySelector("#queryForm").requestSubmit();
+}
+
+function reportWorkspaceError(error) {
+  elements.workspaceStatus.textContent = error?.message || "The local workspace action failed. No saved data was discarded.";
+}
+
+async function handleWorkspaceClick(event) {
+  const routeLink = event.target.closest("[data-workspace-route]");
+  const boardLink = event.target.closest("[data-workspace-board]");
+  const itemLink = event.target.closest("[data-workspace-item]");
+  if (routeLink || boardLink || itemLink) {
+    event.preventDefault();
+    const route = {
+      workspaceId: state.workspaceViewModel.workspace.id,
+      view: itemLink ? "item" : boardLink ? "board" : routeLink.dataset.workspaceRoute,
+      boardId: boardLink?.dataset.workspaceBoard || "",
+      itemId: itemLink?.dataset.workspaceItem || "",
+    };
+    await openWorkspace(route);
+    return;
+  }
+  if (event.target.closest("[data-close-workspace]")) return closeWorkspace();
+  if (event.target.closest("[data-clear-workspace-filters]")) {
+    state.workspaceRoute = { ...state.workspaceRoute, query: "", filters: {} };
+    return loadWorkspace();
+  }
+  const toggleNav = event.target.closest("[data-toggle-workspace-nav]");
+  if (toggleNav) {
+    const nav = elements.workspaceContent.querySelector(".workspace-nav");
+    const open = !nav.classList.contains("open");
+    nav.classList.toggle("open", open);
+    toggleNav.setAttribute("aria-expanded", String(open));
+    return;
+  }
+  if (event.target.closest("[data-load-external]")) {
+    await workspaceRepository.reloadFromStorage();
+    elements.workspaceStatus.textContent = "Loaded the newer local workspace state.";
+    await loadWorkspace();
+    return;
+  }
+  if (event.target.closest("[data-create-board]")) return openWorkspaceEdit("create-board");
+  if (event.target.closest("[data-rename-workspace]")) return openWorkspaceEdit("rename-workspace", "", state.workspaceViewModel.workspace.title, state.workspaceViewModel.workspace.description);
+  if (event.target.closest("[data-create-watchlist]")) return openWorkspaceEdit("create-watchlist");
+  if (event.target.closest("[data-create-alert]")) return openWorkspaceEdit("create-alert", "", "Local sample threshold alert", "1");
+  if (event.target.closest("[data-track-slip]")) return openTrackSlipDialog();
+  const editBoard = event.target.closest("[data-board-edit]");
+  if (editBoard) {
+    const board = state.workspaceViewModel.boards.find((item) => item.id === editBoard.dataset.boardEdit);
+    return openWorkspaceEdit("edit-board", board.id, board.title, board.description);
+  }
+  const deleteBoard = event.target.closest("[data-board-delete]");
+  if (deleteBoard) return confirmWorkspaceAction("delete-board", deleteBoard.dataset.boardDelete, "Delete this board? Contained items will move to Saved Research.");
+  const deleteSaved = event.target.closest("[data-delete-saved]");
+  if (deleteSaved) return confirmWorkspaceAction("delete-saved", deleteSaved.dataset.deleteSaved, "Delete this saved research and its private notes?");
+  const deleteNote = event.target.closest("[data-delete-note]");
+  if (deleteNote) return confirmWorkspaceAction("delete-note", deleteNote.dataset.deleteNote, "Delete this private note?");
+  const addNote = event.target.closest("[data-add-note]");
+  if (addNote) return openWorkspaceEdit("add-note", addNote.dataset.addNote, "Private note", "");
+  const openSaved = event.target.closest("[data-open-saved]");
+  if (openSaved) return restoreSavedResearch(openSaved.dataset.openSaved);
+  const archive = event.target.closest("[data-archive-saved]");
+  if (archive) {
+    const item = workspaceRepository.listSavedResearchObjects().find((record) => record.id === archive.dataset.archiveSaved);
+    await workspaceRepository.archiveSavedResearchObject(item.id, !item.isArchived);
+    return loadWorkspace();
+  }
+  const refresh = event.target.closest("[data-refresh-saved]");
+  if (refresh) {
+    const item = workspaceRepository.listSavedResearchObjects().find((record) => record.id === refresh.dataset.refreshSaved);
+    await workspaceRepository.refreshSavedResearchObject(item.id, { ...item.researchSnapshot, refreshedAt: new Date().toISOString(), sample: true });
+    elements.workspaceStatus.textContent = "Sample snapshot refreshed; the original remains in history.";
+    return loadWorkspace();
+  }
+  const share = event.target.closest("[data-share-saved]");
+  if (share) {
+    const snapshot = await workspaceRepository.createShareSnapshot({ itemId: share.dataset.shareSaved });
+    state.workspaceShareSnapshot = snapshot;
+    elements.workspaceSharePreview.textContent = JSON.stringify(snapshot, null, 2);
+    elements.workspaceShareDialog.showModal();
+    elements.workspaceShareDialog.querySelector("[data-copy-share-snapshot]")?.focus();
+    return;
+  }
+  const boardMove = event.target.closest("[data-board-move]");
+  if (boardMove) {
+    const ids = state.workspaceViewModel.boards.map((board) => board.id);
+    const index = ids.indexOf(boardMove.dataset.boardMove);
+    const next = Math.max(0, Math.min(ids.length - 1, index + Number(boardMove.dataset.direction)));
+    ids.splice(next, 0, ids.splice(index, 1)[0]);
+    await workspaceRepository.reorderBoards(state.workspaceViewModel.workspace.id, ids);
+    return loadWorkspace();
+  }
+  const pinBoard = event.target.closest("[data-board-pin]");
+  if (pinBoard) {
+    const board = state.workspaceViewModel.boards.find((item) => item.id === pinBoard.dataset.boardPin);
+    await workspaceRepository.updateBoard(board.id, { isPinned: !board.isPinned });
+    return loadWorkspace();
+  }
+  const duplicateBoard = event.target.closest("[data-board-duplicate]");
+  if (duplicateBoard) {
+    await workspaceRepository.duplicateBoard(duplicateBoard.dataset.boardDuplicate);
+    return loadWorkspace();
+  }
+  const archiveBoard = event.target.closest("[data-board-archive]");
+  if (archiveBoard) {
+    const board = state.workspaceViewModel.boards.find((item) => item.id === archiveBoard.dataset.boardArchive);
+    await workspaceRepository.updateBoard(board.id, { isArchived: !board.isArchived });
+    return loadWorkspace();
+  }
+  const exportBoard = event.target.closest("[data-board-export]");
+  if (exportBoard) return downloadWorkspaceJson(await workspaceRepository.exportWorkspace(state.workspaceViewModel.workspace.id, { boardId: exportBoard.dataset.boardExport }), "edgeboard-board.json");
+  const shareBoard = event.target.closest("[data-board-share]");
+  if (shareBoard) {
+    const board = state.workspaceViewModel.boards.find((item) => item.id === shareBoard.dataset.boardShare);
+    const items = state.workspaceViewModel.savedObjects.filter((item) => item.boardId === board.id);
+    state.workspaceShareSnapshot = {
+      visibility: "link_snapshot",
+      readOnly: true,
+      localDeviceOnly: true,
+      generatedAt: new Date().toISOString(),
+      title: board.title,
+      description: board.description,
+      itemCount: items.length,
+      items: items.map((item) => ({
+        type: item.type,
+        title: item.title,
+        canonicalReferences: item.canonicalReferences,
+        source: item.researchSnapshot?.source || "Unavailable",
+        freshness: item.dataSnapshotAt,
+        sample: item.sample,
+      })),
+      warnings: ["Read-only local board summary", ...(state.workspaceViewModel.sample ? ["Sample data"] : [])],
+      excludes: ["private notes", "activity history", "hidden metadata", "other boards"],
+    };
+    elements.workspaceSharePreview.textContent = JSON.stringify(state.workspaceShareSnapshot, null, 2);
+    elements.workspaceShareDialog.showModal();
+    elements.workspaceShareDialog.querySelector("[data-copy-share-snapshot]")?.focus();
+    return;
+  }
+  const pauseWatch = event.target.closest("[data-watch-pause]");
+  if (pauseWatch) {
+    const item = workspaceRepository.snapshot().watchlistItems.find((record) => record.id === pauseWatch.dataset.watchPause);
+    await workspaceRepository.updateWatchlistItem(item.id, { isPaused: !item.isPaused });
+    return loadWorkspace();
+  }
+  const removeWatch = event.target.closest("[data-watch-remove]");
+  if (removeWatch) {
+    await workspaceRepository.removeWatchlistItem(removeWatch.dataset.watchRemove);
+    return loadWorkspace();
+  }
+  const pauseAlert = event.target.closest("[data-alert-pause]");
+  if (pauseAlert) {
+    const rule = state.workspaceViewModel.alertRules.find((item) => item.id === pauseAlert.dataset.alertPause);
+    await workspaceRepository.updateAlertRule(rule.id, { isEnabled: !rule.isEnabled });
+    return loadWorkspace();
+  }
+  const deleteAlert = event.target.closest("[data-alert-delete]");
+  if (deleteAlert) return confirmWorkspaceAction("delete-alert", deleteAlert.dataset.alertDelete, "Delete this local alert rule?");
+  const snoozeAlert = event.target.closest("[data-alert-snooze]");
+  if (snoozeAlert) {
+    await workspaceRepository.updateAlertRule(snoozeAlert.dataset.alertSnooze, { snoozedUntil: new Date(Date.now() + 60 * 60_000).toISOString() });
+    return loadWorkspace();
+  }
+  if (event.target.closest("[data-evaluate-alerts]")) {
+    const readings = Object.fromEntries(state.workspaceViewModel.alertRules.map((rule) => [rule.id, { value: Number(rule.lastKnownValue || 0) + 1, status: "available", freshness: "fresh", source: "EdgeBoard sample provider", sample: true }]));
+    await workspaceRepository.evaluateAlerts(readings);
+    return loadWorkspace();
+  }
+  if (event.target.closest("[data-mark-alerts-read]")) {
+    await workspaceRepository.markAllAlertsRead(state.workspaceViewModel.workspace.id);
+    return loadWorkspace();
+  }
+  const alertRead = event.target.closest("[data-alert-read]");
+  if (alertRead) {
+    await workspaceRepository.updateAlertEvent(alertRead.dataset.alertRead, { isRead: true });
+    return loadWorkspace();
+  }
+  const alertDismiss = event.target.closest("[data-alert-dismiss]");
+  if (alertDismiss) {
+    await workspaceRepository.updateAlertEvent(alertDismiss.dataset.alertDismiss, { isDismissed: true });
+    return loadWorkspace();
+  }
+  const alertArchive = event.target.closest("[data-alert-archive]");
+  if (alertArchive) {
+    await workspaceRepository.updateAlertEvent(alertArchive.dataset.alertArchive, { isArchived: true, isRead: true });
+    return loadWorkspace();
+  }
+  const ideaStatus = event.target.closest("[data-idea-status]");
+  if (ideaStatus) {
+    const idea = state.workspaceViewModel.trackedIdeas.find((item) => item.id === ideaStatus.dataset.ideaStatus);
+    const statuses = ["researching", "shortlisted", "monitoring", "closed", "archived"];
+    await workspaceRepository.updateTrackedIdea(idea.id, { status: statuses[(statuses.indexOf(idea.status) + 1) % statuses.length] });
+    return loadWorkspace();
+  }
+  const ideaOutcome = event.target.closest("[data-idea-outcome]");
+  if (ideaOutcome) {
+    const idea = state.workspaceViewModel.trackedIdeas.find((item) => item.id === ideaOutcome.dataset.ideaOutcome);
+    const results = ["unresolved", "won", "lost", "push", "void", "partial", "unavailable", "not_tracked"];
+    await workspaceRepository.updateTrackedIdea(idea.id, { resultStatus: results[(results.indexOf(idea.resultStatus) + 1) % results.length] });
+    return loadWorkspace();
+  }
+  const hideModule = event.target.closest("[data-dashboard-hide]");
+  const moveModule = event.target.closest("[data-dashboard-move]");
+  if (hideModule || moveModule) {
+    const layout = state.workspaceViewModel.dashboard;
+    let moduleIds = [...layout.moduleIds];
+    let hiddenModuleIds = [...layout.hiddenModuleIds];
+    if (hideModule) hiddenModuleIds = [...new Set([...hiddenModuleIds, hideModule.dataset.dashboardHide])];
+    if (moveModule) {
+      const index = moduleIds.indexOf(moveModule.dataset.dashboardMove);
+      const next = Math.max(0, Math.min(moduleIds.length - 1, index + Number(moveModule.dataset.direction)));
+      moduleIds.splice(next, 0, moduleIds.splice(index, 1)[0]);
+    }
+    await workspaceRepository.updateDashboardLayout(state.workspaceViewModel.workspace.id, { preset: "custom", moduleIds, hiddenModuleIds });
+    return loadWorkspace();
+  }
+  if (event.target.closest("[data-reset-preferences]")) {
+    await workspaceRepository.resetPreferences(state.workspaceViewModel.workspace.id);
+    return loadWorkspace();
+  }
+  if (event.target.closest("[data-export-workspace]")) return downloadWorkspaceJson(await workspaceRepository.exportWorkspace(state.workspaceViewModel.workspace.id), "edgeboard-workspace.json");
+  const confirmImport = event.target.closest("[data-confirm-import]");
+  if (confirmImport && state.workspacePendingImport) {
+    const result = await workspaceRepository.importWorkspace(state.workspacePendingImport, confirmImport.dataset.confirmImport);
+    state.workspacePendingImport = "";
+    elements.workspaceStatus.textContent = `Import complete. Skipped ${result.skipped.length} existing record${result.skipped.length === 1 ? "" : "s"}.`;
+    return loadWorkspace();
+  }
+  if (event.target.closest("[data-clear-activity]")) {
+    await workspaceRepository.clearActivity(state.workspaceViewModel.workspace.id);
+    return loadWorkspace();
+  }
+  if (event.target.closest("[data-clear-alerts]")) return confirmWorkspaceAction("clear-alerts", "", "Clear all local alert events? Alert rules will remain.");
+  if (event.target.closest("[data-delete-workspace]")) return confirmWorkspaceAction("delete-workspace", state.workspaceViewModel.workspace.id, "Delete this workspace and all contained local research? Export first if you need a backup.");
+  if (event.target.closest("[data-delete-all]")) return confirmWorkspaceAction("delete-all", "", "This permanently deletes all local EdgeBoard workspace data in this browser.", "DELETE MY EDGEBOARD DATA");
+}
+
+elements.workspaceContent.addEventListener("click", (event) => {
+  handleWorkspaceClick(event).catch(reportWorkspaceError);
+});
+
+async function handleWorkspaceChange(event) {
+  if (event.target.matches("[data-workspace-filter]")) {
+    const key = event.target.dataset.workspaceFilter;
+    let value = event.target.type === "checkbox" ? event.target.checked : event.target.value;
+    if (key === "archived") value = value === "true" ? true : undefined;
+    if (key === "pinned" && !value) value = undefined;
+    const filters = { ...(state.workspaceRoute.filters || {}) };
+    if (value === "" || value === undefined) delete filters[key];
+    else filters[key] = value;
+    state.workspaceRoute = { ...state.workspaceRoute, filters };
+    await loadWorkspace();
+    return;
+  }
+  if (event.target.matches("[data-dashboard-preset]")) {
+    await workspaceRepository.updateDashboardLayout(state.workspaceViewModel.workspace.id, { preset: event.target.value });
+    await loadWorkspace();
+  }
+  if (event.target.matches("[data-import-workspace]")) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const preview = workspaceRepository.previewImport(text);
+    const output = elements.workspaceContent.querySelector("[data-import-preview]");
+    if (!preview.valid) output.textContent = `Import rejected: ${preview.errors.join(" ")}`;
+    else {
+      state.workspacePendingImport = text;
+      output.innerHTML = `Valid schema ${escapeHtml(preview.schemaVersion)}; ${escapeHtml(preview.counts.savedObjects)} saved items. Choose how to continue:
+        <button type="button" data-confirm-import="merge">Merge newer records</button>
+        <button type="button" data-confirm-import="duplicate">Import as copies</button>
+        <button type="button" data-confirm-import="replace">Replace matching workspace</button>`;
+    }
+  }
+}
+
+elements.workspaceContent.addEventListener("change", (event) => {
+  handleWorkspaceChange(event).catch(reportWorkspaceError);
+});
+
+async function handleWorkspaceSubmit(event) {
+  if (!event.target.matches("[data-preferences-form]")) return;
+  event.preventDefault();
+  const data = new FormData(event.target);
+  await workspaceRepository.updatePreferences(state.workspaceViewModel.workspace.id, {
+    favoriteSportIds: String(data.get("favoriteSportIds") || "").split(",").map((item) => item.trim()).filter(Boolean),
+    favoriteLeagueIds: String(data.get("favoriteLeagueIds") || "").split(",").map((item) => item.trim()).filter(Boolean),
+    favoriteEntityIds: String(data.get("favoriteEntityIds") || "").split(",").map((item) => item.trim()).filter(Boolean),
+    hiddenSportIds: String(data.get("hiddenSportIds") || "").split(",").map((item) => item.trim()).filter(Boolean),
+    preferredResearchMode: data.get("preferredResearchMode"),
+    preferredOddsFormat: data.get("preferredOddsFormat"),
+    preferredConfidenceThreshold: Number(data.get("preferredConfidenceThreshold")),
+    preferredDateWindow: Math.max(1, Number(data.get("preferredDateWindow")) || 10),
+    preferredChartType: data.get("preferredChartType"),
+    emphasis: data.get("emphasis"),
+    density: data.get("density"),
+    reduceMotion: data.has("reduceMotion"),
+    privacyMode: data.has("privacyMode"),
+    activityPaused: data.has("activityPaused"),
+    financialSimulationVisible: data.has("financialSimulationVisible"),
+  });
+  elements.workspaceStatus.textContent = "Personalization saved locally.";
+  await loadWorkspace();
+}
+
+elements.workspaceContent.addEventListener("submit", (event) => {
+  handleWorkspaceSubmit(event).catch(reportWorkspaceError);
+});
+
+let workspaceSearchTimer = 0;
+elements.workspaceContent.addEventListener("input", (event) => {
+  if (!event.target.matches("[data-workspace-search]")) return;
+  window.clearTimeout(workspaceSearchTimer);
+  const query = event.target.value;
+  workspaceSearchTimer = window.setTimeout(() => {
+    state.workspaceRoute = { ...state.workspaceRoute, query };
+    loadWorkspace().then(() => {
+      const input = elements.workspaceContent.querySelector("[data-workspace-search]");
+      input?.focus();
+      if (input) input.setSelectionRange(query.length, query.length);
+    }).catch(reportWorkspaceError);
+  }, 180);
+});
+
+elements.workspaceShareDialog.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-close-share-dialog]")) {
+    elements.workspaceShareDialog.close();
+    return;
+  }
+  if (!state.workspaceShareSnapshot) return;
+  if (event.target.closest("[data-copy-share-snapshot]")) {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(state.workspaceShareSnapshot, null, 2));
+      elements.workspaceStatus.textContent = "Read-only local snapshot copied. Private notes and activity were excluded.";
+      elements.workspaceShareDialog.close();
+    } catch (error) {
+      elements.workspaceSharePreview.insertAdjacentHTML("beforebegin", `<p class="data-warning" role="alert">${escapeHtml(error?.message || "Clipboard access is unavailable.")}</p>`);
+    }
+  }
+  if (event.target.closest("[data-download-share-snapshot]")) {
+    downloadWorkspaceJson(state.workspaceShareSnapshot, "edgeboard-read-only-snapshot.json");
+    elements.workspaceStatus.textContent = "Read-only local snapshot downloaded.";
+    elements.workspaceShareDialog.close();
+  }
+});
+
 window.addEventListener("popstate", () => {
   const params = new URLSearchParams(window.location.search);
+  const workspaceRoute = parseWorkspaceRoute(params);
+  if (workspaceRoute) {
+    state.workspaceActive = true;
+    state.workspaceRoute = workspaceRoute;
+    loadWorkspace({ focusHeading: true });
+    return;
+  }
+  if (state.workspaceActive) {
+    state.workspaceActive = false;
+    state.workspaceRoute = null;
+    applyWorkspaceVisibility();
+  }
   const visualType = params.get("visual") || "";
   const entityId = params.get("entityProfile") || "";
   const athleteId = params.get("player") || "";
@@ -4118,7 +5022,8 @@ document.querySelectorAll("[data-theme-option]").forEach((button) => {
 
 document.querySelector(".brand").addEventListener("click", (event) => {
   event.preventDefault();
-  if (state.visualRequest) closeVisualAnalytics();
+  if (state.workspaceActive) closeWorkspace();
+  else if (state.visualRequest) closeVisualAnalytics();
   else if (state.profileAthleteId) closeAthleteProfile();
   else if (state.entityProfileId) closeEntityProfile();
   else window.scrollTo({ top: 0, behavior: "smooth" });
@@ -4135,7 +5040,10 @@ setTheme(savedTheme);
 persistNavigationSelection();
 renderAll();
 scheduleMarketBoardLoad();
-if (initialResearchState.profileAthleteId) {
+if (initialWorkspaceRoute) {
+  loadWorkspace({ focusHeading: false });
+}
+if (!initialWorkspaceRoute && initialResearchState.profileAthleteId) {
   loadAthleteProfile({ focusHeading: false }).catch((error) => {
     state.profileLoading = false;
     state.profileViewModel = {
@@ -4146,13 +5054,13 @@ if (initialResearchState.profileAthleteId) {
     renderAthleteProfile();
   });
 }
-if (initialResearchState.entityProfileId) {
+if (!initialWorkspaceRoute && initialResearchState.entityProfileId) {
   loadEntityProfile({ focusHeading: false });
 }
-if (state.visualRequest) {
+if (!initialWorkspaceRoute && state.visualRequest) {
   loadVisualAnalytics({ focusHeading: false });
 }
-if (initialResearchState.queryText
+if (!initialWorkspaceRoute && initialResearchState.queryText
   && !initialResearchState.visualType
   && !initialResearchState.profileAthleteId
   && !initialResearchState.entityProfileId) {

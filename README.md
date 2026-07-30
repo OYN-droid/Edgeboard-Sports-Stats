@@ -78,6 +78,14 @@ responsive overflow:
 http://127.0.0.1:9010/browser-tests/visualizations.html
 ```
 
+The Phase 8 workspace harness covers local-only persistence, boards, saved
+research, watchlists, in-app alerts, tracked ideas, privacy, search, refresh
+history, import/export validation, and cross-tab update detection:
+
+```text
+http://127.0.0.1:9010/browser-tests/workspace.html
+```
+
 ## Market taxonomy
 
 `src/config/market-catalog.js` is the provider-neutral source of truth for canonical market definitions and confidence bands. The sports registry declares which definitions a sport can support; the repository maps provider offers to those definitions; and the UI only promotes categories and markets that have an open or explicitly suspended provider instance.
@@ -112,3 +120,7 @@ registry, provider contract, request and validation flow, native SVG renderer,
 accessibility behavior, shareable state, and explicit provider gaps.
 
 See [Advanced statistical research](docs/advanced-statistical-research.md) for comparison calculations, leaderboard qualification and tie handling, record validation, exports, and Phase 3 provider methods.
+
+See [Personal workspaces](docs/personal-workspaces.md) for the Phase 8 normalized
+domain, IndexedDB persistence, snapshot semantics, privacy boundaries, local
+alert evaluation, tracked-research distinction, and Phase 9 backend needs.

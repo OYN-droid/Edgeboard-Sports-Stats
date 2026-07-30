@@ -20,6 +20,10 @@
           <span class="data-status-dot" aria-hidden="true"></span>
           <span><strong>Sample data</strong><small>EdgeBoard Mock</small></span>
         </div>
+        <button class="workspace-entry" id="openWorkspace" type="button" aria-label="Open My EdgeBoard local workspace">
+          My EdgeBoard <span id="workspaceSavedCount" aria-label="0 saved items">0</span>
+          <span id="workspaceAlertCount" aria-label="0 unread alerts">0</span>
+        </button>
         <div class="theme-switch" role="group" aria-label="Color theme">
           <button class="theme-option active" type="button" data-theme-option="dark">Dark</button>
           <button class="theme-option" type="button" data-theme-option="light">Light</button>
@@ -92,9 +96,19 @@
                 <button class="primary-button" type="submit">Analyze</button>
               </div>
               <p class="query-feedback" id="queryFeedback" role="status" aria-live="polite">Betting mode uses available sample markets and model context.</p>
-              <div class="quick-prompts" aria-label="Example queries"></div>
+              <div class="query-support-actions"><div class="quick-prompts" aria-label="Example queries"></div><button class="text-button" id="saveCurrentResearch" type="button">Save current research</button></div>
             </form>
           </div>
+        </section>
+
+        <section class="personal-workspace-view" id="personalWorkspaceView" aria-label="My EdgeBoard personal workspace" aria-live="polite" hidden>
+          <div class="profile-loading" id="workspaceLoading" role="status" hidden>
+            <span class="stats-skeleton wide" aria-hidden="true"></span>
+            <span class="stats-skeleton" aria-hidden="true"></span>
+            <span>Loading local workspace…</span>
+          </div>
+          <div id="workspaceContent"></div>
+          <p class="workspace-action-status" id="workspaceActionStatus" role="status" aria-live="polite"></p>
         </section>
 
         <section class="visual-analytics-view" id="visualAnalyticsView" aria-label="Visual analytics workspace" aria-live="polite" hidden>
@@ -102,6 +116,7 @@
             <button class="text-button profile-back" id="closeVisualAnalytics" type="button">← Back to research</button>
             <div class="profile-toolbar-actions">
               <button class="text-button" id="visualSlipToggle" type="button" aria-controls="visualSlipPanel" aria-expanded="false">Bet slip <span id="visualSlipCount">0</span></button>
+              <button class="text-button" id="saveVisualAnalytics" type="button">Save</button>
               <button class="text-button" id="shareVisualAnalytics" type="button">Copy link</button>
             </div>
           </div>
@@ -122,6 +137,7 @@
             <button class="text-button profile-back" id="closeEntityProfile" type="button">← Back to research</button>
             <div class="profile-toolbar-actions">
               <button class="text-button" id="entityProfileSlipToggle" type="button" aria-controls="entityProfileSlipPanel" aria-expanded="false">Bet slip <span id="entityProfileSlipCount">0</span></button>
+              <button class="text-button" id="saveEntityProfile" type="button">Save</button>
               <button class="text-button" id="followEntity" type="button" aria-pressed="false">Follow</button>
               <button class="text-button" id="shareEntityProfile" type="button">Copy link</button>
             </div>
@@ -148,6 +164,7 @@
             <button class="text-button profile-back" id="closeAthleteProfile" type="button">← Back to research</button>
             <div class="profile-toolbar-actions">
               <button class="text-button" id="profileSlipToggle" type="button" aria-controls="profileSlipPanel" aria-expanded="false">Bet slip <span id="profileSlipCount">0</span></button>
+              <button class="text-button" id="saveAthleteProfile" type="button">Save</button>
               <button class="text-button" id="followAthlete" type="button" aria-pressed="false">Follow</button>
               <button class="text-button" id="shareAthleteProfile" type="button">Copy link</button>
             </div>
@@ -290,6 +307,7 @@
               <div><span>Risk</span><strong id="slipRisk">None</strong></div>
             </div>
             <div class="risk-box" id="riskBox">Combine independent edges first. Correlated legs can inflate payout while reducing true probability.</div>
+            <button class="text-button track-slip-button" id="trackResearchSlip" type="button">Save as tracked research idea</button>
             <div class="player-fact" id="playerFact" aria-live="polite">
               <p class="eyebrow">Edge note</p>
               <h3>Select a player</h3>
@@ -319,6 +337,42 @@
         <button class="text-button" id="closeInsightDialog" type="button">Close</button>
       </div>
       <div id="insightDialogContent"></div>
+    </dialog>
+
+    <dialog class="workspace-dialog" id="workspaceSaveDialog" aria-labelledby="workspaceSaveDialogTitle">
+      <div id="workspaceSaveDialogContent"></div>
+    </dialog>
+
+    <dialog class="workspace-dialog" id="workspaceEditDialog" aria-labelledby="workspaceEditDialogTitle">
+      <form method="dialog" id="workspaceEditForm">
+        <div class="dialog-heading"><h2 id="workspaceEditDialogTitle">Edit workspace object</h2><button type="button" data-close-workspace-dialog>Close</button></div>
+        <input type="hidden" name="action" />
+        <input type="hidden" name="targetId" />
+        <label>Title<input name="title" required maxlength="240" /></label>
+        <label>Description or note<textarea name="description" rows="4" maxlength="10000"></textarea></label>
+        <label data-track-idea-only hidden>Counterpoints, one per line<textarea name="counterpoints" rows="3" maxlength="5000"></textarea></label>
+        <div class="dialog-actions"><button type="submit">Save</button><button type="button" data-close-workspace-dialog>Cancel</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="workspace-dialog destructive-dialog" id="workspaceConfirmDialog" aria-labelledby="workspaceConfirmDialogTitle">
+      <form method="dialog" id="workspaceConfirmForm">
+        <div class="dialog-heading"><h2 id="workspaceConfirmDialogTitle">Confirm local data action</h2><button type="button" data-close-confirm-dialog>Close</button></div>
+        <p id="workspaceConfirmMessage"></p>
+        <input type="hidden" name="action" />
+        <input type="hidden" name="targetId" />
+        <label id="workspaceConfirmTextLabel" hidden>Type the confirmation phrase<input name="confirmationText" autocomplete="off" /></label>
+        <div class="dialog-actions"><button class="danger-button" type="submit">Confirm</button><button type="button" data-close-confirm-dialog>Cancel</button></div>
+      </form>
+    </dialog>
+
+    <dialog class="workspace-dialog" id="workspaceShareDialog" aria-labelledby="workspaceShareDialogTitle">
+      <div class="workspace-share-preview">
+        <div class="dialog-heading"><div><p class="eyebrow">Read-only local snapshot</p><h2 id="workspaceShareDialogTitle">Preview shared content</h2></div><button type="button" data-close-share-dialog>Close</button></div>
+        <p>Private notes, activity history, hidden metadata, and the rest of the workspace are excluded.</p>
+        <pre id="workspaceSharePreview"></pre>
+        <div class="dialog-actions"><button type="button" data-copy-share-snapshot>Copy snapshot</button><button type="button" data-download-share-snapshot>Download JSON</button><button type="button" data-close-share-dialog>Cancel</button></div>
+      </div>
     </dialog>
 
     <script type="module" src="app.js"></script>
