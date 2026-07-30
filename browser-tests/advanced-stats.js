@@ -31,6 +31,14 @@ const check = (condition, label) => {
   if (!condition) failures.push(label);
 };
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const waitFor = async (predicate, timeout = 3000) => {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await wait(25);
+  }
+  return false;
+};
 const provider = createStatsRepository();
 const sportsRepository = createSportsRepository(mockProviderPayload);
 const parsed = (query) => Object.freeze({
@@ -500,7 +508,7 @@ check(app.querySelectorAll(".advanced-comparison-table tbody tr, .advanced-compa
 check(new URL(view.location.href).searchParams.get("q")?.includes("A%27ja") === false, "share URL stores readable decoded query state");
 await submit("Who leads the WNBA in assists this season?");
 check(app.querySelector(".qualification-summary"), "leaderboard visibly exposes qualifications");
-check(app.querySelector(".stats-table tbody tr td:nth-child(4)")?.textContent.includes("qualified"),
+check(app.querySelector("#statsResultContent .stats-table tbody tr td:nth-child(4)")?.textContent.includes("qualified"),
   "live leaderboard displays percentile pool size");
 check(app.querySelector("th[aria-sort] [data-advanced-sort]"), "leaderboard sort controls expose aria-sort");
 app.querySelector("[data-advanced-sort='sample']")?.click();
@@ -528,10 +536,10 @@ const firstTitle = app.querySelector("#statsResultTitle")?.textContent || "";
 await submit("Compare Caitlin Clark and Sabrina Ionescu over their last 5 games.");
 const secondTitle = app.querySelector("#statsResultTitle")?.textContent || "";
 view.history.back();
-await wait(350);
+await waitFor(() => app.querySelector("#statsResultTitle")?.textContent === firstTitle);
 check(app.querySelector("#statsResultTitle")?.textContent === firstTitle, "browser back restores prior leaderboard result");
 view.history.forward();
-await wait(350);
+await waitFor(() => app.querySelector("#statsResultTitle")?.textContent === secondTitle);
 check(app.querySelector("#statsResultTitle")?.textContent === secondTitle, "browser forward restores comparison result");
 check(app.activeElement?.id === "statsResultTitle"
   && app.querySelector("#statsResultTitle")?.getAttribute("tabindex") === "-1",

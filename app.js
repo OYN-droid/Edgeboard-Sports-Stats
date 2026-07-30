@@ -28,6 +28,10 @@ import {
 } from "./src/services/research-mode-service.js";
 import { createAthleteProfileRepository } from "./src/services/athlete-profile-service.js";
 import { createInsightService } from "./src/services/insight-service.js";
+import { createResearchPlan } from "./src/services/research-planner-service.js";
+import { buildResearchAnswer } from "./src/services/research-answer-service.js";
+import { createEntityRegistry } from "./src/services/entity-registry-service.js";
+import { createEntityProfileRepository } from "./src/services/entity-profile-service.js";
 import {
   advancedResultToCsv,
   advancedResultSummaryToText,
@@ -39,6 +43,32 @@ const sportsRepository = createSportsRepository(providerPayload);
 const statsRepository = createStatsRepository();
 const insightService = createInsightService(statsRepository, sportsRepository);
 const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository, insightService);
+const entityRegistry = createEntityRegistry();
+const entityProfileRepository = createEntityProfileRepository(
+  entityRegistry,
+  sportsRepository,
+  statsRepository,
+  insightService,
+);
+let visualizationModulesPromise = null;
+let visualizationRepository = null;
+let visualizationServiceModule = null;
+let visualizationRenderer = null;
+function loadVisualizationModules() {
+  if (!visualizationModulesPromise) {
+    visualizationModulesPromise = Promise.all([
+      import("./src/services/visualization-service.js"),
+      import("./src/services/visual-query-service.js"),
+      import("./src/components/visualization-renderer.js"),
+    ]).then(([service, query, renderer]) => {
+      visualizationRepository ||= service.createVisualizationRepository();
+      visualizationServiceModule = service;
+      visualizationRenderer = renderer;
+      return { service, query, renderer };
+    });
+  }
+  return visualizationModulesPromise;
+}
 const leagues = sportsRepository.getLeagues();
 const navigationModel = createNavigationModel(leagues);
 const defaultLeague = navigationModel.primaryLeagues[0] || navigationModel.allLeagues[0] || null;
@@ -86,6 +116,15 @@ function loadResearchState() {
       ? params.get("resultTab") || saved.resultTab
       : "summary",
     profileAthleteId: String(params.get("player") || ""),
+    entityProfileId: String(params.get("entityProfile") || ""),
+    visualType: String(params.get("visual") || ""),
+    visualEntityId: String(params.get("visualEntity") || ""),
+    visualSportId: String(params.get("visualSport") || ""),
+    visualLeagueId: String(params.get("visualLeague") || ""),
+    visualWindow: params.get("visualWindow") === "season" ? "season"
+      : Math.max(1, Number(params.get("visualWindow")) || 10),
+    visualThreshold: params.get("visualThreshold") === null ? null : Number(params.get("visualThreshold")),
+    visualSeries: String(params.get("visualSeries") || "").split(",").filter(Boolean),
     profileTab: String(params.get("tab") || "overview"),
     advancedDisplay: ["cards", "table", "trend", "overlay"].includes(params.get("display"))
       ? params.get("display") : "table",
@@ -155,6 +194,8 @@ const state = {
   researchIntent: "markets",
   marketBoardLoading: true,
   analystWorkflow: null,
+  researchPlan: null,
+  researchAnswer: null,
   researchMode: initialResearchState.mode,
   statsResult: null,
   statsParsedQuery: null,
@@ -167,6 +208,26 @@ const state = {
   profileTab: initialResearchState.profileTab,
   profileViewModel: null,
   profileLoading: false,
+  entityProfileId: initialResearchState.entityProfileId,
+  entityProfileViewModel: null,
+  entityProfileLoading: false,
+  visualRequest: initialResearchState.visualType ? {
+    visualizationType: initialResearchState.visualType,
+    sportId: initialResearchState.visualSportId,
+    leagueId: initialResearchState.visualLeagueId,
+    entityType: entityRegistry.getEntity(initialResearchState.visualEntityId)?.type || "athlete",
+    entityIds: initialResearchState.visualEntityId ? [initialResearchState.visualEntityId] : [],
+    eventIds: [],
+    statIds: [],
+    dateRange: { type: initialResearchState.visualWindow === "season" ? "season" : "last_n_games", value: initialResearchState.visualWindow },
+    filters: {
+      threshold: Number.isFinite(initialResearchState.visualThreshold) ? initialResearchState.visualThreshold : null,
+      seriesIds: initialResearchState.visualSeries,
+    },
+  } : null,
+  visualResult: null,
+  visualAvailable: [],
+  visualLoading: false,
   profileLogWindow: 10,
   profileLogSort: "newest",
   profileHomeAway: "all",
@@ -236,6 +297,8 @@ const elements = {
   analystScope: document.querySelector("#analystScope"),
   analystWorkflowSteps: document.querySelector("#analystWorkflowSteps"),
   analystWarnings: document.querySelector("#analystWarnings"),
+  researchAnswer: document.querySelector("#researchAnswer"),
+  researchAnswerContent: document.querySelector("#researchAnswerContent"),
   dataStatus: document.querySelector("#dataStatus"),
   modeBadge: document.querySelector("#modeBadge"),
   statsResults: document.querySelector("#statsResults"),
@@ -246,6 +309,26 @@ const elements = {
   researchResults: document.querySelector("#researchResults"),
   bettingEventBoard: document.querySelector("#bettingEventBoard"),
   athleteSearchResults: document.querySelector("#athleteSearchResults"),
+  visualAnalyticsView: document.querySelector("#visualAnalyticsView"),
+  visualAnalyticsLoading: document.querySelector("#visualAnalyticsLoading"),
+  visualAnalyticsContent: document.querySelector("#visualAnalyticsContent"),
+  closeVisualAnalytics: document.querySelector("#closeVisualAnalytics"),
+  shareVisualAnalytics: document.querySelector("#shareVisualAnalytics"),
+  visualSlipToggle: document.querySelector("#visualSlipToggle"),
+  visualSlipCount: document.querySelector("#visualSlipCount"),
+  visualSlipPanel: document.querySelector("#visualSlipPanel"),
+  visualSlipList: document.querySelector("#visualSlipList"),
+  entityProfileView: document.querySelector("#entityProfileView"),
+  entityProfileLoading: document.querySelector("#entityProfileLoading"),
+  entityProfileNotFound: document.querySelector("#entityProfileNotFound"),
+  entityProfileContent: document.querySelector("#entityProfileContent"),
+  closeEntityProfile: document.querySelector("#closeEntityProfile"),
+  shareEntityProfile: document.querySelector("#shareEntityProfile"),
+  followEntity: document.querySelector("#followEntity"),
+  entityProfileSlipToggle: document.querySelector("#entityProfileSlipToggle"),
+  entityProfileSlipCount: document.querySelector("#entityProfileSlipCount"),
+  entityProfileSlipPanel: document.querySelector("#entityProfileSlipPanel"),
+  entityProfileSlipList: document.querySelector("#entityProfileSlipList"),
   athleteProfileView: document.querySelector("#athleteProfileView"),
   athleteProfileLoading: document.querySelector("#athleteProfileLoading"),
   athleteProfileNotFound: document.querySelector("#athleteProfileNotFound"),
@@ -270,6 +353,11 @@ let marketBoardLoadTimer = 0;
 let discoveryReturnFocus = null;
 let statsRequestSequence = 0;
 let profileRequestSequence = 0;
+let entityProfileRequestSequence = 0;
+let entityProfileAbortController = null;
+let visualRequestSequence = 0;
+let visualAbortController = null;
+let visualReturnFocus = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -882,6 +970,8 @@ function renderSlip() {
   document.querySelector("#legCount").textContent = String(state.slip.length);
   elements.mobileLegCount.textContent = String(state.slip.length);
   elements.profileSlipCount.textContent = String(state.slip.length);
+  elements.entityProfileSlipCount.textContent = String(state.slip.length);
+  elements.visualSlipCount.textContent = String(state.slip.length);
   elements.profileSlipList.classList.toggle("empty", state.slip.length === 0);
   elements.profileSlipList.innerHTML = state.slip.length ? state.slip.map((pick) => `
     <div class="slip-item">
@@ -890,6 +980,22 @@ function renderSlip() {
       <small>${escapeHtml(pick.sportsbook)} · ${escapeHtml(pick.period)} · ${escapeHtml(pick.settlementScope)}</small>
     </div>
   `).join("") : "Add legs from a provider-confirmed profile market.";
+  elements.entityProfileSlipList.classList.toggle("empty", state.slip.length === 0);
+  elements.entityProfileSlipList.innerHTML = state.slip.length ? state.slip.map((pick) => `
+    <div class="slip-item">
+      <strong>${escapeHtml(pick.name)} · ${escapeHtml(pick.marketDisplayName)}</strong>
+      <span>${escapeHtml(pick.line)} · ${formatOdds(pick.odds)}</span>
+      <small>${escapeHtml(pick.sportsbook)} · ${escapeHtml(pick.period)} · ${escapeHtml(pick.settlementScope)}</small>
+    </div>
+  `).join("") : "Add legs from a provider-confirmed entity market.";
+  elements.visualSlipList.classList.toggle("empty", state.slip.length === 0);
+  elements.visualSlipList.innerHTML = state.slip.length ? state.slip.map((pick) => `
+    <div class="slip-item">
+      <strong>${escapeHtml(pick.name)} · ${escapeHtml(pick.marketDisplayName)}</strong>
+      <span>${escapeHtml(pick.line)} · ${formatOdds(pick.odds)}</span>
+      <small>${escapeHtml(pick.sportsbook)} · ${escapeHtml(pick.period)} · ${escapeHtml(pick.settlementScope)}</small>
+    </div>
+  `).join("") : "Add legs from provider-confirmed markets.";
   document.querySelector("#combinedOdds").textContent = state.slip.length && combinedDecimal ? decimalToAmerican(combinedDecimal) : "+0";
   document.querySelector("#slipRisk").textContent = risk;
   document.querySelector("#riskBox").textContent = correlationWarnings.length
@@ -1108,6 +1214,50 @@ function profileUrl(athleteId, tab = "overview") {
   const url = new URL(window.location.href);
   url.searchParams.set("player", athleteId);
   url.searchParams.set("tab", tab);
+  url.searchParams.delete("entityProfile");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function entityProfileUrl(entityId) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("entityProfile", entityId);
+  url.searchParams.delete("player");
+  url.searchParams.delete("tab");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function defaultVisualizationType(entity) {
+  if (!entity) return "line_chart";
+  if (entity.type === "fighter" || entity.type === "boxer") return "strike_map";
+  if (entity.type === "driver" || entity.type === "constructor") return "race_position_chart";
+  if (entity.type === "golfer") return "golf_scoring_chart";
+  if (entity.type === "tennis-player") return "serve_placement_map";
+  if (entity.sportId === "baseball") return entity.entityType === "team" ? "stacked_bar_chart" : "spray_chart";
+  if (entity.sportId === "ice-hockey") return "shot_map";
+  if (entity.sportId === "soccer") return "shot_map";
+  if (entity.sportId === "basketball") return entity.entityType === "team" ? "zone_map" : "line_chart";
+  return "line_chart";
+}
+
+function visualAnalyticsUrl(request) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("player");
+  url.searchParams.delete("tab");
+  url.searchParams.delete("entityProfile");
+  url.searchParams.set("visual", request.visualizationType);
+  const entityId = request.entityIds?.[0] || "";
+  if (entityId) url.searchParams.set("visualEntity", entityId);
+  else url.searchParams.delete("visualEntity");
+  if (request.sportId) url.searchParams.set("visualSport", request.sportId);
+  else url.searchParams.delete("visualSport");
+  if (request.leagueId) url.searchParams.set("visualLeague", request.leagueId);
+  else url.searchParams.delete("visualLeague");
+  const windowValue = request.dateRange?.type === "season" ? "season" : request.dateRange?.value || 10;
+  url.searchParams.set("visualWindow", windowValue);
+  if (Number.isFinite(request.filters?.threshold)) url.searchParams.set("visualThreshold", request.filters.threshold);
+  else url.searchParams.delete("visualThreshold");
+  if (request.filters?.seriesIds?.length) url.searchParams.set("visualSeries", request.filters.seriesIds.join(","));
+  else url.searchParams.delete("visualSeries");
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -1600,6 +1750,7 @@ function renderAthleteProfile() {
   elements.followAthlete.textContent = followed ? "Following locally" : "Follow";
   elements.athleteProfileContent.innerHTML = `
     ${renderProfileHeader(viewModel)}
+    <div class="profile-visual-entry"><div><p class="eyebrow">Evidence-backed charts</p><strong>Visual analytics</strong><span>Open provider-gated trends and sport-specific visuals.</span></div><button type="button" class="text-button" data-open-visual="${escapeHtml(defaultVisualizationType(viewModel.athlete))}" data-visual-entity="${escapeHtml(viewModel.athlete.id)}">Open visuals</button></div>
     <nav class="profile-tabs" role="tablist" aria-label="${escapeHtml(viewModel.header.fullName)} profile sections">
       ${viewModel.tabs.map((tab) => `<a id="profile-tab-${escapeHtml(tab.id)}" role="tab" href="${escapeHtml(profileUrl(viewModel.athlete.id, tab.id))}" data-profile-tab="${escapeHtml(tab.id)}" aria-controls="athleteProfileTabPanel" aria-selected="${tab.id === state.profileTab}" tabindex="${tab.id === state.profileTab ? 0 : -1}">${escapeHtml(tab.label)}</a>`).join("")}
     </nav>
@@ -1608,6 +1759,204 @@ function renderAthleteProfile() {
     </div>
     <aside class="related-searches" aria-labelledby="relatedSearchesHeading"><div><p class="eyebrow">Continue researching</p><h2 id="relatedSearchesHeading">Related searches</h2></div><div>${viewModel.relatedQueries.map((query) => `<button type="button" data-profile-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join("")}</div></aside>
   `;
+}
+
+function renderEntityProfile() {
+  const active = Boolean(state.entityProfileId);
+  document.body.classList.toggle("entity-profile-active", active);
+  elements.entityProfileView.hidden = !active;
+  if (!active) return;
+  elements.entityProfileLoading.hidden = !state.entityProfileLoading;
+  const notFound = !state.entityProfileLoading && state.entityProfileViewModel?.status === "not-found";
+  elements.entityProfileNotFound.hidden = !notFound;
+  if (state.entityProfileLoading || notFound || !state.entityProfileViewModel) {
+    elements.entityProfileContent.innerHTML = "";
+    return;
+  }
+  const viewModel = state.entityProfileViewModel;
+  const { entity, dataStatus } = viewModel;
+  const followed = state.followedEntityIds.includes(entity.id);
+  elements.followEntity.setAttribute("aria-pressed", String(followed));
+  elements.followEntity.textContent = followed ? "Following locally" : "Follow";
+  elements.entityProfileSlipCount.textContent = String(state.slip.length);
+  const facts = Object.values(viewModel.facts);
+  const markets = viewModel.markets.flatMap((market) => market.selections.slice(0, 2).map((selection) => {
+    const pick = getPickBySelectionId(sportsRepository, market.leagueId, selection.id);
+    const actionable = pick?.available && !pick.stale && !state.slip.some((item) => item.id === pick.id);
+    return `
+      <article class="entity-market-card">
+        <div><span class="entity-type-chip">${escapeHtml(market.displayName)}</span><h3>${escapeHtml(selection.name)}</h3></div>
+        <dl><div><dt>Line</dt><dd>${escapeHtml(selection.line)}</dd></div><div><dt>Odds</dt><dd>${selection.odds === null ? "Unavailable" : `${selection.odds > 0 ? "+" : ""}${selection.odds}`}</dd></div></dl>
+        <p>${escapeHtml(selection.sportsbook)} · updated ${formatDateTime(selection.lastUpdatedAt)}</p>
+        <button class="add-button" type="button" data-entity-add="${escapeHtml(selection.id)}" ${actionable ? "" : "disabled"}>${actionable ? "Add to slip" : pick?.stale ? "Stale" : "Unavailable"}</button>
+      </article>`;
+  })).join("");
+  elements.entityProfileContent.innerHTML = `
+    <header class="entity-profile-header">
+      ${renderAthleteMedia(entity.media, { large: true })}
+      <div>
+        <div class="entity-profile-badges"><span class="entity-type-chip">${escapeHtml(viewModel.typeDefinition.label)}</span><span class="sample-badge">Sample data</span></div>
+        <h1 id="entityProfileTitle">${escapeHtml(entity.displayName)}</h1>
+        <p>${escapeHtml([entity.sportId, entity.leagueId?.toUpperCase()].filter(Boolean).join(" · ") || "Multi-sport entity")}</p>
+        <p class="stats-source">${escapeHtml(dataStatus.source)} · updated ${formatDateTime(dataStatus.updatedAt)} · ${escapeHtml(dataStatus.freshness)} · partial sample profile</p>
+      </div>
+    </header>
+    <div class="profile-visual-entry"><div><p class="eyebrow">Evidence-backed charts</p><strong>Visual analytics</strong><span>Availability follows provider capabilities and source coverage.</span></div><button type="button" class="text-button" data-open-visual="${escapeHtml(defaultVisualizationType(entity))}" data-visual-entity="${escapeHtml(entity.id)}">Open visuals</button></div>
+    <div class="entity-data-warning" role="status">${escapeHtml(dataStatus.warning)}</div>
+    <section class="entity-profile-section" aria-labelledby="entityIdentityHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Canonical identity</p><h2 id="entityIdentityHeading">Overview</h2></div></div>
+      <dl class="entity-facts">${facts.map((fact) => `<div class="${fact.available ? "" : "unavailable"}"><dt>${escapeHtml(fact.label)}</dt><dd>${escapeHtml(fact.value)}</dd></div>`).join("")}</dl>
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityRelationshipsHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Entity graph</p><h2 id="entityRelationshipsHeading">Related entities</h2></div></div>
+      <div class="entity-links">${viewModel.relatedEntities.length ? viewModel.relatedEntities.map((related) => {
+        const result = entityRegistry.search(related.displayName, {}, 20).find((item) => item.id === related.id);
+        const href = result?.profileSystem === "athlete" ? profileUrl(related.id) : entityProfileUrl(related.id);
+        const attribute = result?.profileSystem === "athlete" ? `data-open-athlete="${escapeHtml(related.id)}"` : `data-open-entity="${escapeHtml(related.id)}"`;
+        return `<a href="${escapeHtml(href)}" ${attribute}><strong>${escapeHtml(related.displayName)}</strong><span>${escapeHtml(result?.typeLabel || related.type)}</span></a>`;
+      }).join("") : '<p class="profile-empty">No verified relationships are available in the sample registry.</p>'}</div>
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityRosterHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Connected people</p><h2 id="entityRosterHeading">Roster and participants</h2></div></div>
+      <div class="entity-links">${viewModel.roster.length ? viewModel.roster.map((member) => {
+        const result = entityRegistry.search(member.displayName, {}, 20).find((item) => item.id === member.id);
+        const href = result?.profileSystem === "athlete" ? profileUrl(member.id) : entityProfileUrl(member.id);
+        return `<a href="${escapeHtml(href)}" ${result?.profileSystem === "athlete" ? `data-open-athlete="${escapeHtml(member.id)}"` : `data-open-entity="${escapeHtml(member.id)}"`}><strong>${escapeHtml(member.displayName)}</strong><span>${escapeHtml(result?.typeLabel || member.type)}</span></a>`;
+      }).join("") : '<p class="profile-empty">Roster data is unavailable from the sample provider.</p>'}</div>
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityScheduleHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Schedule and results</p><h2 id="entityScheduleHeading">Events</h2></div></div>
+      <div class="entity-event-list">${viewModel.events.length ? viewModel.events.map((event) => `<article><strong>${escapeHtml(event.display.title || event.participants.map((participant) => participant.name).join(" vs "))}</strong><span>${formatDateTime(event.startsAt)} · ${escapeHtml(event.status)}</span></article>`).join("") : '<p class="profile-empty">No verified events are available for this entity.</p>'}</div>
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityMetricsHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Calculated from completed source rows</p><h2 id="entityMetricsHeading">Team and competition metrics</h2></div></div>
+      ${viewModel.metrics?.stats?.length ? `<dl class="entity-facts">${viewModel.metrics.stats.map((metric) => `<div><dt>${escapeHtml(metric.label)}</dt><dd>${escapeHtml(Number.isInteger(metric.value) ? metric.value : metric.value.toFixed(1))}</dd><small>Sample ${metric.sampleSize} · ${escapeHtml(metric.unit)}</small></div>`).join("")}</dl><p class="stats-source">${escapeHtml(viewModel.metrics.metadata.source)} · ${viewModel.metrics.metadata.sampleSize} completed rows</p>` : '<p class="profile-empty">No calculated team metrics are available in the normalized sample rows.</p>'}
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityMarketsHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Provider-confirmed only</p><h2 id="entityMarketsHeading">Related markets</h2></div></div>
+      <div class="entity-market-grid">${markets || '<p class="profile-empty">No available markets are linked to this entity. Unsupported markets are not inferred.</p>'}</div>
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityInsightsHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Calculated findings</p><h2 id="entityInsightsHeading">Insights</h2></div></div>
+      ${viewModel.insights.length ? `<div class="insight-card-grid">${viewModel.insights.map((insight) => renderInsightCard(insight, { context: "entity" })).join("")}</div>` : '<p class="profile-empty">No validated insight candidate exists for this entity in the sample rows.</p>'}
+    </section>
+    <section class="entity-profile-section" aria-labelledby="entityUnavailableHeading">
+      <div class="panel-heading"><div><p class="eyebrow">Provider coverage</p><h2 id="entityUnavailableHeading">Unavailable fields</h2></div></div>
+      ${viewModel.placeholders.length ? `<ul class="entity-placeholder-list">${viewModel.placeholders.map((item) => `<li>${escapeHtml(item)}: unavailable from sample provider</li>`).join("")}</ul>` : '<p class="profile-empty">No additional profile fields are configured.</p>'}
+    </section>
+    <aside class="related-searches" aria-labelledby="entityRelatedSearchesHeading"><div><p class="eyebrow">Continue researching</p><h2 id="entityRelatedSearchesHeading">Related searches</h2></div><div>${viewModel.relatedQueries.map((query) => `<button type="button" data-profile-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join("")}</div></aside>
+  `;
+}
+
+function renderVisualAnalytics() {
+  const active = Boolean(state.visualRequest);
+  document.body.classList.toggle("visual-analytics-active", active);
+  elements.visualAnalyticsView.hidden = !active;
+  if (!active) return;
+  elements.visualAnalyticsLoading.hidden = !state.visualLoading;
+  if (state.visualLoading || !state.visualResult || !visualizationRenderer) {
+    elements.visualAnalyticsContent.innerHTML = "";
+    return;
+  }
+  elements.visualAnalyticsContent.innerHTML = visualizationRenderer.renderVisualization(state.visualResult, {
+    availableVisualizations: state.visualAvailable,
+  });
+}
+
+function setVisualAnalyticsUrl(request, { replace = false } = {}) {
+  const url = new URL(request ? visualAnalyticsUrl(request) : window.location.href, window.location.href);
+  if (!request) {
+    ["visual", "visualEntity", "visualSport", "visualLeague", "visualWindow", "visualThreshold", "visualSeries"]
+      .forEach((parameter) => url.searchParams.delete(parameter));
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardVisual: Boolean(request), visual: request?.visualizationType }, "", url);
+}
+
+async function loadVisualAnalytics({ focusHeading = false } = {}) {
+  if (!state.visualRequest) return;
+  visualAbortController?.abort();
+  visualAbortController = new AbortController();
+  const requestId = ++visualRequestSequence;
+  state.visualLoading = true;
+  state.visualResult = null;
+  renderVisualAnalytics();
+  try {
+    await loadVisualizationModules();
+    if (requestId !== visualRequestSequence || !state.visualRequest) return;
+    state.visualRequest = visualizationServiceModule.buildVisualizationRequest(state.visualRequest);
+    const entity = entityRegistry.getEntity(state.visualRequest.entityIds[0]);
+    state.visualAvailable = visualizationRepository.getAvailableVisualizations({
+      sportId: state.visualRequest.sportId,
+      entityType: state.visualRequest.entityType || entity?.type || "",
+      entityIds: state.visualRequest.entityIds,
+    });
+    const result = await visualizationRepository.getVisualizationData(state.visualRequest, {
+      signal: visualAbortController.signal,
+    });
+    if (requestId !== visualRequestSequence || !state.visualRequest) return;
+    state.visualLoading = false;
+    state.visualResult = result;
+    renderVisualAnalytics();
+    if (focusHeading) {
+      const heading = elements.visualAnalyticsContent.querySelector("#visualizationTitle");
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus({ preventScroll: true });
+      elements.visualAnalyticsView.scrollIntoView({ block: "start" });
+    }
+  } catch (error) {
+    if (error?.name === "AbortError" || requestId !== visualRequestSequence) return;
+    state.visualLoading = false;
+    elements.visualAnalyticsContent.innerHTML = `<div class="visual-unavailable" role="alert"><strong>Visualization failed</strong><p>${escapeHtml(error?.message || "Unknown visualization error")}</p></div>`;
+  }
+}
+
+function openVisualAnalytics(input, { replace = false, focusHeading = true, returnFocus = null } = {}) {
+  const entityId = input.entityIds?.[0] || "";
+  const entity = entityRegistry.getEntity(entityId);
+  visualReturnFocus = returnFocus || document.activeElement;
+  profileRequestSequence += 1;
+  entityProfileRequestSequence += 1;
+  entityProfileAbortController?.abort();
+  state.profileAthleteId = "";
+  state.profileViewModel = null;
+  state.profileLoading = false;
+  state.entityProfileId = "";
+  state.entityProfileViewModel = null;
+  state.entityProfileLoading = false;
+  state.visualRequest = {
+    visualizationType: input.visualizationType || defaultVisualizationType(entity),
+    sportId: input.sportId || entity?.sportId || currentLeague()?.sportId || "",
+    leagueId: input.leagueId || entity?.leagueId || state.leagueId,
+    entityType: input.entityType || entity?.type || "athlete",
+    entityIds: input.entityIds || (entityId ? [entityId] : []),
+    eventIds: input.eventIds || [],
+    statIds: input.statIds || [],
+    dateRange: input.dateRange || { type: "last_n_games", value: 10 },
+    filters: input.filters || {},
+    comparisonMode: input.comparisonMode || null,
+    includeBettingContext: input.includeBettingContext === true,
+  };
+  renderAthleteProfile();
+  renderEntityProfile();
+  renderVisualAnalytics();
+  setVisualAnalyticsUrl(state.visualRequest, { replace });
+  loadVisualAnalytics({ focusHeading });
+}
+
+function closeVisualAnalytics({ useHistory = true } = {}) {
+  visualAbortController?.abort();
+  visualRequestSequence += 1;
+  state.visualRequest = null;
+  state.visualResult = null;
+  state.visualAvailable = [];
+  state.visualLoading = false;
+  elements.visualSlipPanel.hidden = true;
+  elements.visualSlipToggle.setAttribute("aria-expanded", "false");
+  renderVisualAnalytics();
+  setVisualAnalyticsUrl(null, { replace: !useHistory });
+  const target = visualReturnFocus?.isConnected ? visualReturnFocus : elements.queryInput;
+  visualReturnFocus = null;
+  target?.focus({ preventScroll: true });
 }
 
 function renderInterpretation(parsed) {
@@ -1803,6 +2152,128 @@ function renderEventExplorer(result) {
   </article>`;
 }
 
+function renderResearchAnswer(answer) {
+  if (!answer) return "";
+  const completeness = answer.researchCompleteness;
+  const source = answer.disclosure;
+  return `
+    <article class="research-answer-card" data-completeness="${escapeHtml(completeness.level.toLowerCase())}">
+      <header class="research-answer-header">
+        <div>
+          <p class="eyebrow">EdgeBoard deterministic analyst</p>
+          <h2 id="researchAnswerTitle">${escapeHtml(answer.headline)}</h2>
+          <p class="research-answer-summary">${escapeHtml(answer.summary)}</p>
+        </div>
+        <div class="research-completeness" aria-label="Research completeness: ${escapeHtml(completeness.level)}">
+          <span>Research completeness</span>
+          <strong>${escapeHtml(completeness.level)}</strong>
+          <small>${completeness.score}/100</small>
+        </div>
+      </header>
+
+      <div class="research-disclosure" aria-label="Research transparency">
+        <div><span>Source</span><strong>${escapeHtml(source.source)}</strong></div>
+        <div><span>Sample size</span><strong>${source.sampleSize || "Unavailable"}</strong></div>
+        <div><span>Date range</span><strong>${escapeHtml(source.dateRange || "Unavailable")}</strong></div>
+        <div><span>Coverage</span><strong>${escapeHtml(source.coverage)}</strong></div>
+        <div><span>Validation</span><strong>${escapeHtml(source.validation)}</strong></div>
+        <div><span>Freshness</span><strong>${formatDateTime(source.freshness, "Unavailable")}</strong></div>
+      </div>
+
+      <section class="research-answer-section" aria-labelledby="researchEvidenceTitle">
+        <h3 id="researchEvidenceTitle">Evidence</h3>
+        <ul>${answer.sections.find((section) => section.id === "evidence").items.map((item) =>
+          `<li>${escapeHtml(item.text)}${item.evidenceIds.length ? `<small>${item.evidenceIds.map((id) => `#${escapeHtml(id)}`).join(" · ")}</small>` : ""}</li>`).join("")}</ul>
+      </section>
+
+      <details class="research-explanation" open>
+        <summary>Full explanation and counterpoints</summary>
+        <div class="research-explanation-grid">
+          ${answer.sections.filter((section) => section.id !== "evidence").map((section) => `
+            <section aria-labelledby="research-${escapeHtml(section.id)}">
+              <h3 id="research-${escapeHtml(section.id)}">${escapeHtml(section.title)}</h3>
+              <ul>${section.items.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul>
+            </section>
+          `).join("")}
+        </div>
+      </details>
+
+      ${answer.supportingTables.map((table) => `
+        <details class="research-supporting-table">
+          <summary>${escapeHtml(table.caption)}</summary>
+          <div class="stats-table-wrap"><table class="stats-table">
+            <caption>${escapeHtml(table.caption)}</caption>
+            <thead><tr>${table.columns.map((column) => `<th scope="col">${escapeHtml(column)}</th>`).join("")}</tr></thead>
+            <tbody>${table.rows.map((row) => `<tr>${row.map((value, index) =>
+              `<${index === 0 ? "th scope=\"row\"" : "td"}>${escapeHtml(value)}</${index === 0 ? "th" : "td"}>`).join("")}</tr>`).join("")}</tbody>
+          </table></div>
+        </details>
+      `).join("")}
+
+      ${answer.relatedEntities.length ? `
+        <section class="research-related" aria-labelledby="researchRelatedEntities">
+          <h3 id="researchRelatedEntities">Related athletes and teams</h3>
+          <div>${answer.relatedEntities.map((entity) =>
+            entity.entityType === "team"
+              ? `<span class="research-related-chip">${escapeHtml(entity.name)}</span>`
+              : `<a class="text-button" href="${escapeHtml(profileUrl(entity.id))}" data-open-athlete="${escapeHtml(entity.id)}">${escapeHtml(entity.name)} profile</a>`).join("")}</div>
+        </section>
+      ` : ""}
+
+      ${answer.relatedProps.length ? `
+        <section class="research-related" aria-labelledby="researchRelatedProps">
+          <h3 id="researchRelatedProps">Related provider-confirmed props</h3>
+          <div class="research-related-props">${answer.relatedProps.map((prop) => `
+            <article>
+              <strong>${escapeHtml(prop.name)} · ${escapeHtml(prop.marketName)}</strong>
+              <span>${escapeHtml(prop.line)} · ${formatOdds(prop.odds)} · ${escapeHtml(prop.sportsbook)}</span>
+              <small>Updated ${formatDateTime(prop.updatedAt)}</small>
+              <button type="button" class="text-button" data-ai-market-add="${escapeHtml(prop.selectionId)}" data-ai-market-league="${escapeHtml(prop.leagueId)}">Add to research slip</button>
+            </article>
+          `).join("")}</div>
+        </section>
+      ` : ""}
+
+      ${answer.relatedInsights.length ? `
+        <section class="research-related" aria-labelledby="researchRelatedInsights">
+          <h3 id="researchRelatedInsights">Related validated insights</h3>
+          <ul>${answer.relatedInsights.map((insight) =>
+            `<li><strong>${escapeHtml(insight.headline)}</strong><span>${escapeHtml(insight.summary)}</span><small>${escapeHtml(insight.validation)}</small></li>`).join("")}</ul>
+        </section>
+      ` : ""}
+
+      <section class="research-related" aria-labelledby="researchFollowUps">
+        <h3 id="researchFollowUps">Related questions</h3>
+        <div>${answer.relatedQuestions.map((item) =>
+          item.type === "profile"
+            ? `<a class="text-button" href="${escapeHtml(profileUrl(item.entityId))}" data-open-athlete="${escapeHtml(item.entityId)}">${escapeHtml(item.label)}</a>`
+            : item.type === "entity-profile"
+              ? `<a class="text-button" href="${escapeHtml(entityProfileUrl(item.entityId))}" data-open-entity="${escapeHtml(item.entityId)}">${escapeHtml(item.label)}</a>`
+            : `<button type="button" class="text-button" data-ai-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div>
+      </section>
+
+      <details class="research-plan">
+        <summary>Interpreted research plan · ${escapeHtml(answer.plan.questionType.replaceAll("_", " "))}</summary>
+        <ol>${answer.plan.stages.map((stage) => `
+          <li data-status="${escapeHtml(stage.status)}"><strong>${escapeHtml(stage.label)}</strong><span>${escapeHtml(stage.detail)}</span></li>
+        `).join("")}</ol>
+        <p>${escapeHtml(answer.languagePolicy)}</p>
+      </details>
+
+      <div class="research-quality">
+        <strong>Data quality</strong>
+        ${source.warnings.length
+          ? `<ul>${source.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>`
+          : "<p>No additional provider warning was returned.</p>"}
+        ${completeness.reasons.length
+          ? `<ul>${completeness.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>`
+          : ""}
+        <p>Research Completeness measures evidence coverage, sample size, freshness, and missing data. It is not betting confidence or win probability.</p>
+      </div>
+    </article>
+  `;
+}
+
 function renderStatsAnswer(result) {
   if (!result) {
     return `<div class="stats-empty"><h3 id="statsResultTitle">Ask a statistical question</h3><p>Use a sample athlete, team, split, comparison, or leaderboard query. Stats mode does not require odds or a betting market.</p></div>`;
@@ -1946,6 +2417,10 @@ function renderResearchMode() {
   elements.statsLoading.hidden = !state.statsLoading;
   elements.statsInterpretation.innerHTML = statsVisible ? renderInterpretation(state.statsParsedQuery) : "";
   elements.statsResultContent.innerHTML = statsVisible && !state.statsLoading ? renderStatsAnswer(state.statsResult) : "";
+  elements.researchAnswer.hidden = !state.researchAnswer || state.statsLoading;
+  elements.researchAnswerContent.innerHTML = state.researchAnswer && !state.statsLoading
+    ? renderResearchAnswer(state.researchAnswer)
+    : "";
   elements.bettingFilters.hidden = !bettingVisible;
   elements.answerCard.hidden = !bettingVisible;
   elements.betGrid.hidden = !bettingVisible;
@@ -1995,6 +2470,7 @@ function renderAll() {
   renderInsightDiscovery();
   renderResearchMode();
   renderAthleteProfile();
+  renderEntityProfile();
   if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
 }
 
@@ -2003,6 +2479,7 @@ function setProfileUrl(athleteId, tab, { replace = false } = {}) {
   if (athleteId) {
     url.searchParams.set("player", athleteId);
     url.searchParams.set("tab", tab || "overview");
+    url.searchParams.delete("entityProfile");
   } else {
     url.searchParams.delete("player");
     url.searchParams.delete("tab");
@@ -2077,12 +2554,18 @@ async function loadAthleteProfile({ focusHeading = false } = {}) {
 
 function openAthleteProfile(athleteId, tab = "overview", { replace = false, focusHeading = true } = {}) {
   if (!athleteId) return;
+  entityProfileAbortController?.abort();
+  entityProfileRequestSequence += 1;
+  state.entityProfileId = "";
+  state.entityProfileViewModel = null;
+  state.entityProfileLoading = false;
   state.sharedInsightId = "";
   state.sharedInsightOpened = false;
   state.profileAthleteId = athleteId;
   state.profileTab = tab || "overview";
   resetProfileControls();
   setProfileUrl(athleteId, state.profileTab, { replace });
+  renderEntityProfile();
   loadAthleteProfile({ focusHeading }).catch((error) => {
     if (!state.profileAthleteId) return;
     state.profileLoading = false;
@@ -2101,6 +2584,85 @@ function closeAthleteProfile({ useHistory = true } = {}) {
   document.querySelector("[data-open-athlete]")?.focus({ preventScroll: true });
 }
 
+function setEntityProfileUrl(entityId, { replace = false } = {}) {
+  const url = new URL(window.location.href);
+  if (entityId) {
+    url.searchParams.set("entityProfile", entityId);
+    url.searchParams.delete("player");
+    url.searchParams.delete("tab");
+  } else {
+    url.searchParams.delete("entityProfile");
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardEntityProfile: Boolean(entityId), entityId }, "", url);
+}
+
+async function loadEntityProfile({ focusHeading = false } = {}) {
+  if (!state.entityProfileId) {
+    state.entityProfileViewModel = null;
+    state.entityProfileLoading = false;
+    renderEntityProfile();
+    return;
+  }
+  entityProfileAbortController?.abort();
+  entityProfileAbortController = new AbortController();
+  const requestId = ++entityProfileRequestSequence;
+  state.entityProfileLoading = true;
+  state.entityProfileViewModel = null;
+  renderEntityProfile();
+  try {
+    const result = await entityProfileRepository.getProfile(state.entityProfileId, {
+      signal: entityProfileAbortController.signal,
+    });
+    if (requestId !== entityProfileRequestSequence || state.entityProfileId !== (result.entity?.id || result.entityId)) return;
+    state.entityProfileLoading = false;
+    state.entityProfileViewModel = result;
+    renderEntityProfile();
+    if (focusHeading) {
+      const heading = document.querySelector("#entityProfileTitle");
+      heading?.setAttribute("tabindex", "-1");
+      heading?.focus({ preventScroll: true });
+      elements.entityProfileView.scrollIntoView({ block: "start" });
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    if (requestId !== entityProfileRequestSequence) return;
+    state.entityProfileLoading = false;
+    state.entityProfileViewModel = { status: "not-found", entityId: state.entityProfileId, error: error?.message };
+    renderEntityProfile();
+  }
+}
+
+function openEntityProfile(entityId, { replace = false, focusHeading = true } = {}) {
+  if (!entityId) return;
+  profileRequestSequence += 1;
+  state.profileAthleteId = "";
+  state.profileViewModel = null;
+  state.profileLoading = false;
+  state.entityProfileId = entityId;
+  setEntityProfileUrl(entityId, { replace });
+  renderAthleteProfile();
+  loadEntityProfile({ focusHeading });
+}
+
+function closeEntityProfile({ useHistory = true } = {}) {
+  entityProfileAbortController?.abort();
+  entityProfileRequestSequence += 1;
+  state.entityProfileId = "";
+  state.entityProfileViewModel = null;
+  state.entityProfileLoading = false;
+  elements.entityProfileSlipPanel.hidden = true;
+  elements.entityProfileSlipToggle.setAttribute("aria-expanded", "false");
+  renderEntityProfile();
+  setEntityProfileUrl("", { replace: !useHistory });
+  document.querySelector("[data-open-entity]")?.focus({ preventScroll: true });
+}
+
+function openSearchResult(result) {
+  if (!result) return;
+  if (result.profileSystem === "athlete") openAthleteProfile(result.id);
+  else openEntityProfile(result.id);
+}
+
 function renderAthleteSearchResults() {
   const results = state.athleteSearchResults;
   elements.athleteSearchResults.hidden = results.length === 0;
@@ -2109,10 +2671,10 @@ function renderAthleteSearchResults() {
     "aria-activedescendant",
     state.athleteSearchIndex >= 0 ? `athlete-search-option-${state.athleteSearchIndex}` : "",
   );
-  elements.athleteSearchResults.innerHTML = results.map((athlete, index) => `
-    <a id="athlete-search-option-${index}" role="option" aria-selected="${index === state.athleteSearchIndex}" href="${escapeHtml(profileUrl(athlete.id))}" data-open-athlete="${escapeHtml(athlete.id)}">
-      <span>${escapeHtml(athlete.name)}${athlete.active ? "" : " · Inactive"}</span>
-      <small>${escapeHtml(athlete.teamName)} · ${escapeHtml(athlete.leagueId.toUpperCase())} · ${escapeHtml(athlete.role || "Role unavailable")}</small>
+  elements.athleteSearchResults.innerHTML = results.map((entity, index) => `
+    <a id="athlete-search-option-${index}" role="option" aria-selected="${index === state.athleteSearchIndex}" href="${escapeHtml(entity.profileSystem === "athlete" ? profileUrl(entity.id) : entityProfileUrl(entity.id))}" ${entity.profileSystem === "athlete" ? `data-open-athlete="${escapeHtml(entity.id)}"` : `data-open-entity="${escapeHtml(entity.id)}"`}>
+      <span>${escapeHtml(entity.name)}${entity.active ? "" : " · Inactive"}</span>
+      <small>${escapeHtml(entity.typeLabel)}${entity.context ? ` · ${escapeHtml(entity.context)}` : ""}</small>
     </a>
   `).join("");
 }
@@ -2125,10 +2687,10 @@ function updateAthleteSearch(query) {
     renderAthleteSearchResults();
     return;
   }
-  const matches = athleteProfileRepository.searchAthletes(text, {
+  const matches = entityRegistry.search(text, {
     leagueId: state.leagueId,
     sportId: currentLeague()?.sportId || "",
-  });
+  }, 10);
   const activeMatches = matches.filter((match) => match.active);
   state.athleteSearchResults = (activeMatches.length ? activeMatches : matches).slice(0, 6);
   state.athleteSearchIndex = -1;
@@ -2192,6 +2754,8 @@ function activateNavigationSelection(selection, {
     state.analystWorkflow = null;
     state.statsResult = null;
     state.statsParsedQuery = null;
+    state.researchPlan = null;
+    state.researchAnswer = null;
     state.statsContextOverrideDisabled = false;
     statsRequestSequence += 1;
   }
@@ -2439,6 +3003,49 @@ function runBettingResearch(query) {
     state.unsupportedMarketReason = "";
     state.interpretationNote = "";
   }
+  const filteredAnswerPicks = getFilteredPicks(sportsRepository, {
+    leagueId: state.leagueId,
+    market: state.market,
+    canonicalMarketId: state.canonicalMarketId,
+    minConfidence: state.minConfidence,
+    availableOnly: true,
+    query,
+    queryGame: state.queryGame,
+  });
+  const combinedMarketContext = state.researchMode === "both" && state.statsResult?.type === "combined"
+    ? state.statsResult.bettingContext
+    : null;
+  const compatibleSelectionIds = (Array.isArray(combinedMarketContext) ? combinedMarketContext : [combinedMarketContext])
+    .filter(Boolean)
+    .map((market) => market.selectionId)
+    .filter(Boolean);
+  const answerPicks = state.researchMode === "both"
+    ? compatibleSelectionIds
+      .map((selectionId) => getPickBySelectionId(sportsRepository, state.leagueId, selectionId))
+      .filter((pick) => pick?.available && !pick.stale)
+    : filteredAnswerPicks;
+  state.researchPlan = createResearchPlan({
+    query,
+    mode: state.researchMode,
+    parsedStats: state.researchMode === "both" ? state.statsParsedQuery : null,
+    bettingWorkflow: state.analystWorkflow,
+    currentLeague: currentLeague(),
+    availableLeagues: navigationModel.allLeagues,
+    providerName: sportsRepository.getMetadata().provider,
+    resolvedEntities: entityRegistry.search(query, {
+      leagueId: state.leagueId,
+      sportId: currentLeague()?.sportId || "",
+    }, 5),
+  });
+  state.researchAnswer = buildResearchAnswer({
+    query,
+    mode: state.researchMode,
+    plan: state.researchPlan,
+    statsResult: state.researchMode === "both" ? state.statsResult : null,
+    bettingWorkflow: state.analystWorkflow,
+    bettingPicks: answerPicks,
+    statsProvider: statsRepository,
+  });
   renderAll();
   elements.answerCard.classList.remove("analyzed");
   requestAnimationFrame(() => elements.answerCard.classList.add("analyzed"));
@@ -2449,6 +3056,8 @@ async function runStatsResearch(query) {
   state.statsLoading = true;
   state.showBettingResearch = false;
   state.statsResult = null;
+  state.researchAnswer = null;
+  state.researchPlan = null;
   state.statsParsedQuery = parseStatisticalQuery(query, {
     mode: state.researchMode,
     sportsRepository,
@@ -2460,9 +3069,30 @@ async function runStatsResearch(query) {
   await new Promise((resolve) => window.setTimeout(resolve, 140));
   if (requestId !== statsRequestSequence) return null;
   const parsed = state.statsParsedQuery;
+  const plan = createResearchPlan({
+    query,
+    mode: state.researchMode,
+    parsedStats: parsed,
+    currentLeague: sportsRepository.getLeague(parsed.structuredQuery.leagueId) || currentLeague(),
+    availableLeagues: navigationModel.allLeagues,
+    providerName: sportsRepository.getMetadata().provider,
+    resolvedEntities: entityRegistry.search(query, {
+      leagueId: parsed.structuredQuery.leagueId || state.leagueId,
+      sportId: parsed.structuredQuery.sportId || currentLeague()?.sportId || "",
+    }, 5),
+  });
   const result = buildStatsResult(statsRepository, parsed, sportsRepository, insightService, query);
   if (requestId !== statsRequestSequence) return null;
   state.statsResult = result;
+  state.researchPlan = plan;
+  state.researchAnswer = buildResearchAnswer({
+    query,
+    mode: state.researchMode,
+    plan,
+    statsResult: result,
+    bettingPicks: [],
+    statsProvider: statsRepository,
+  });
   state.statsLoading = false;
   const interpretedLeague = sportsRepository.getLeague(parsed.structuredQuery.leagueId);
   if (parsed.structuredQuery.contextOverride && interpretedLeague?.enabled) {
@@ -2494,14 +3124,84 @@ async function submitResearchQuery() {
     state.statsLoading = false;
     state.statsResult = null;
     state.statsParsedQuery = null;
+    state.researchPlan = null;
+    state.researchAnswer = null;
     elements.queryFeedback.textContent = "Enter a sports research question.";
     renderAll();
     return;
+  }
+  if (/\b(chart|map|visual|plot|telemetry|passing network|line movement|odds movement|round by round|race position|lap time)\b/i.test(query)) {
+    const modules = await loadVisualizationModules();
+    const matches = entityRegistry.search(query, {
+      leagueId: state.leagueId,
+      sportId: currentLeague()?.sportId || "",
+    }, 8);
+    let entity = matches[0] ? entityRegistry.getEntity(matches[0].id) : null;
+    const querySport = /\bformula 1|nascar|lap|telemetry|race position\b/i.test(query) ? "motorsport"
+      : /\bbaseball|pitch|batter|hitter|spray\b/i.test(query) ? "baseball"
+        : /\bhockey|shots? on goal|rink\b/i.test(query) ? "ice-hockey"
+          : /\bsoccer|touch|passing network|corner map\b/i.test(query) ? "soccer"
+            : /\bfight|fighter|strike|takedown|ufc|boxing\b/i.test(query) ? "mma"
+              : /\bgolf|golfer|hole\b/i.test(query) ? "golf"
+                : /\btennis|serve|rally\b/i.test(query) ? "tennis"
+                  : entity?.sportId || currentLeague()?.sportId || "";
+    const preliminary = modules.query.parseVisualizationQuery(query, {
+      sportId: querySport,
+      leagueId: entity?.leagueId || state.leagueId,
+      entityType: entity?.type || "athlete",
+      entityIds: entity ? [entity.id] : [],
+    });
+    if (preliminary.visualizationType) {
+      const defaultIds = {
+        shot_chart: ["wnba-caitlin-clark"],
+        spray_chart: ["mlb-aaron-judge"],
+        pitch_location_map: ["mlb-gerrit-cole"],
+        shot_map: querySport === "soccer" ? ["mls-lionel-messi"] : ["nhl-auston-matthews"],
+        heat_map: ["mls-lionel-messi"],
+        passing_network: ["MIA"],
+        strike_map: ["ufc-sample-fighter-a"],
+        fight_timeline: ["ufc-sample-fighter-a", "ufc-sample-fighter-b"],
+        race_position_chart: ["f1-max-verstappen", "f1-lando-norris"],
+        lap_time_chart: ["f1-max-verstappen", "f1-lando-norris"],
+        telemetry_chart: ["f1-max-verstappen", "f1-lando-norris"],
+        qualifying_chart: ["f1-max-verstappen", "f1-lando-norris"],
+        golf_scoring_chart: ["golf-sample-golfer"],
+        golf_dispersion_map: ["golf-sample-golfer"],
+        serve_placement_map: ["tennis-sample-player"],
+        tennis_match_flow: ["tennis-sample-player"],
+        market_line_chart: ["wnba-caitlin-clark"],
+        odds_movement_chart: ["wnba-caitlin-clark"],
+        threshold_chart: ["wnba-caitlin-clark"],
+      }[preliminary.visualizationType] || [];
+      const entityIds = entity && !["league", "promotion", "competition", "organization"].includes(entity.type)
+        ? [entity.id] : defaultIds;
+      entity = entityRegistry.getEntity(entityIds[0]) || entity;
+      const request = {
+        ...preliminary.request,
+        sportId: entity?.sportId || querySport,
+        leagueId: entity?.leagueId || (querySport === "motorsport" ? "f1" : state.leagueId),
+        entityType: entity?.type || preliminary.request.entityType,
+        entityIds,
+      };
+      state.researchPlan = createResearchPlan({
+        query,
+        mode: state.researchMode,
+        currentLeague: sportsRepository.getLeague(request.leagueId) || currentLeague(),
+        availableLeagues: navigationModel.allLeagues,
+        providerName: sportsRepository.getMetadata().provider,
+        resolvedEntities: matches,
+      });
+      elements.queryFeedback.textContent = `Visual request interpreted as ${preliminary.visualizationType.replaceAll("_", " ")}. Provider capability and row validation will run before rendering.`;
+      openVisualAnalytics(request, { returnFocus: elements.queryInput });
+      return;
+    }
   }
   if (state.researchMode === "betting") {
     state.showBettingResearch = true;
     state.statsResult = null;
     state.statsParsedQuery = null;
+    state.researchPlan = null;
+    state.researchAnswer = null;
     runBettingResearch(query);
   } else {
     const statsResult = await runStatsResearch(query);
@@ -2509,7 +3209,9 @@ async function submitResearchQuery() {
     if (state.researchMode === "both" && state.showBettingResearch) runBettingResearch(query);
   }
   document.querySelector(".workspace").scrollIntoView({ behavior: "smooth", block: "start" });
-  const resultHeading = document.querySelector("#statsResultTitle") || document.querySelector("#answerTitle");
+  const resultHeading = document.querySelector("#researchAnswerTitle")
+    || document.querySelector("#statsResultTitle")
+    || document.querySelector("#answerTitle");
   resultHeading?.setAttribute("tabindex", "-1");
   resultHeading?.focus?.({ preventScroll: true });
 }
@@ -2525,6 +3227,8 @@ document.querySelector("#queryForm").addEventListener("submit", (event) => {
       message: error?.message || "An unexpected research error occurred.",
       suggestions: [],
     };
+    state.researchPlan = null;
+    state.researchAnswer = null;
     elements.queryFeedback.textContent = "The research request failed. Review the visible error and try again.";
     renderAll();
   });
@@ -2546,6 +3250,8 @@ function setResearchMode(mode) {
   state.researchMode = safeMode;
   statsRequestSequence += 1;
   state.statsLoading = false;
+  state.researchPlan = null;
+  state.researchAnswer = null;
   state.showBettingResearch = safeMode === "betting"
     || (safeMode === "both" && state.statsResult?.type === "combined" && Boolean(state.statsResult.bettingContext));
   persistResearchState();
@@ -2577,6 +3283,8 @@ elements.queryInput.addEventListener("input", () => {
   state.statsLoading = false;
   state.statsResult = null;
   state.statsParsedQuery = null;
+  state.researchPlan = null;
+  state.researchAnswer = null;
   state.selectedEntityId = "";
   state.statsContextOverrideDisabled = false;
   persistResearchState({ updateUrl: false });
@@ -2596,10 +3304,10 @@ elements.queryInput.addEventListener("keydown", (event) => {
   }
   if (event.key === "Enter" && state.athleteSearchIndex >= 0) {
     event.preventDefault();
-    const athlete = state.athleteSearchResults[state.athleteSearchIndex];
+    const entity = state.athleteSearchResults[state.athleteSearchIndex];
     state.athleteSearchResults = [];
     renderAthleteSearchResults();
-    openAthleteProfile(athlete.id);
+    openSearchResult(entity);
     return;
   }
   if (event.key === "Escape") {
@@ -2750,6 +3458,26 @@ elements.statsResults.addEventListener("click", (event) => {
   }
 });
 
+elements.researchAnswer.addEventListener("click", (event) => {
+  const followUp = event.target.closest("[data-ai-followup]");
+  if (followUp) {
+    elements.queryInput.value = followUp.dataset.aiFollowup;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
+    return;
+  }
+  const marketAdd = event.target.closest("[data-ai-market-add]");
+  if (!marketAdd) return;
+  const leagueId = marketAdd.dataset.aiMarketLeague || state.leagueId;
+  const pick = getPickBySelectionId(sportsRepository, leagueId, marketAdd.dataset.aiMarketAdd);
+  if (!pick?.available || pick.stale || state.slip.some((item) => item.id === pick.id)) return;
+  state.slip.push(pick);
+  state.selectedPickId = pick.id;
+  renderSlip();
+  marketAdd.textContent = "Added";
+  marketAdd.disabled = true;
+});
+
 elements.statsResults.addEventListener("keydown", (event) => {
   const tab = event.target.closest("[data-stats-tab]");
   if (!tab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -2859,16 +3587,184 @@ document.addEventListener("click", (event) => {
     renderAll();
     return;
   }
+  const visualLinkTarget = event.target.closest("[data-open-visual]");
+  if (visualLinkTarget) {
+    event.preventDefault();
+    const entity = entityRegistry.getEntity(visualLinkTarget.dataset.visualEntity);
+    openVisualAnalytics({
+      visualizationType: visualLinkTarget.dataset.openVisual || defaultVisualizationType(entity),
+      sportId: entity?.sportId || "",
+      leagueId: entity?.leagueId || "",
+      entityType: entity?.type || "athlete",
+      entityIds: entity ? [entity.id] : [],
+      dateRange: { type: "last_n_games", value: 10 },
+      filters: {},
+    }, { returnFocus: visualLinkTarget });
+    return;
+  }
   const athleteLinkTarget = event.target.closest("[data-open-athlete]");
-  if (!athleteLinkTarget) return;
-  event.preventDefault();
-  state.athleteSearchResults = [];
-  state.athleteSearchIndex = -1;
-  renderAthleteSearchResults();
-  openAthleteProfile(athleteLinkTarget.dataset.openAthlete);
+  if (athleteLinkTarget) {
+    event.preventDefault();
+    state.athleteSearchResults = [];
+    state.athleteSearchIndex = -1;
+    renderAthleteSearchResults();
+    openAthleteProfile(athleteLinkTarget.dataset.openAthlete);
+    return;
+  }
+  const entityLinkTarget = event.target.closest("[data-open-entity]");
+  if (entityLinkTarget) {
+    event.preventDefault();
+    state.athleteSearchResults = [];
+    state.athleteSearchIndex = -1;
+    renderAthleteSearchResults();
+    openEntityProfile(entityLinkTarget.dataset.openEntity);
+  }
 });
 
 elements.closeAthleteProfile.addEventListener("click", () => closeAthleteProfile());
+elements.closeEntityProfile.addEventListener("click", () => closeEntityProfile());
+elements.closeVisualAnalytics.addEventListener("click", () => closeVisualAnalytics());
+elements.visualSlipToggle.addEventListener("click", () => {
+  const open = elements.visualSlipPanel.hidden;
+  elements.visualSlipPanel.hidden = !open;
+  elements.visualSlipToggle.setAttribute("aria-expanded", String(open));
+});
+document.querySelector("#closeVisualSlip").addEventListener("click", () => {
+  elements.visualSlipPanel.hidden = true;
+  elements.visualSlipToggle.setAttribute("aria-expanded", "false");
+  elements.visualSlipToggle.focus();
+});
+elements.shareVisualAnalytics.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    elements.shareVisualAnalytics.textContent = "Link copied";
+  } catch (error) {
+    elements.shareVisualAnalytics.textContent = "Copy unavailable";
+    elements.shareVisualAnalytics.title = error?.message || "Clipboard permission was denied.";
+  }
+});
+elements.visualAnalyticsContent.addEventListener("click", async (event) => {
+  if (!state.visualRequest || !state.visualResult) return;
+  const status = elements.visualAnalyticsContent.querySelector(".visual-action-status");
+  const fallback = event.target.closest("[data-visual-fallback]");
+  if (fallback) {
+    openVisualAnalytics({ ...state.visualRequest, visualizationType: fallback.dataset.visualFallback }, { replace: false });
+    return;
+  }
+  const reset = event.target.closest("[data-visual-reset]");
+  if (reset) {
+    const entity = entityRegistry.getEntity(state.visualRequest.entityIds[0]);
+    openVisualAnalytics({
+      ...state.visualRequest,
+      visualizationType: defaultVisualizationType(entity),
+      dateRange: { type: "last_n_games", value: 10 },
+      filters: {},
+    }, { replace: true });
+    return;
+  }
+  const legend = event.target.closest("[data-series-toggle]");
+  if (legend) {
+    const current = state.visualRequest.filters?.seriesIds?.length
+      ? [...state.visualRequest.filters.seriesIds]
+      : state.visualResult.series.map((series) => series.id);
+    const next = current.includes(legend.dataset.seriesToggle)
+      ? current.filter((id) => id !== legend.dataset.seriesToggle)
+      : [...current, legend.dataset.seriesToggle];
+    if (!next.length) {
+      if (status) status.textContent = "At least one series must remain visible.";
+      return;
+    }
+    openVisualAnalytics({
+      ...state.visualRequest,
+      filters: { ...state.visualRequest.filters, seriesIds: next },
+    }, { replace: true, focusHeading: false });
+    return;
+  }
+  try {
+    if (event.target.closest("[data-copy-visual-summary]")) {
+      await navigator.clipboard.writeText(state.visualResult.accessibleSummary);
+      if (status) status.textContent = "Accessible summary copied.";
+    } else if (event.target.closest("[data-copy-visual-data]")) {
+      await navigator.clipboard.writeText(visualizationServiceModule.visualizationTableToTsv(state.visualResult));
+      if (status) status.textContent = "Visible data copied as TSV.";
+    } else if (event.target.closest("[data-copy-visual-link]")) {
+      await navigator.clipboard.writeText(window.location.href);
+      if (status) status.textContent = "Visualization link copied.";
+    } else if (event.target.closest("[data-download-visual-csv]")) {
+      const blob = new Blob([visualizationServiceModule.visualizationTableToCsv(state.visualResult)], { type: "text/csv;charset=utf-8" });
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = `edgeboard-${state.visualResult.type}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+      if (status) status.textContent = "CSV download prepared.";
+    }
+  } catch (error) {
+    if (status) status.textContent = `Action unavailable: ${error?.message || "permission denied"}`;
+  }
+});
+elements.visualAnalyticsContent.addEventListener("change", (event) => {
+  const control = event.target.closest("[data-visual-control]");
+  if (!control || !state.visualRequest) return;
+  const next = {
+    ...state.visualRequest,
+    filters: { ...state.visualRequest.filters },
+    dateRange: { ...state.visualRequest.dateRange },
+  };
+  if (control.dataset.visualControl === "type") {
+    next.visualizationType = control.value;
+    next.filters = {};
+  }
+  if (control.dataset.visualControl === "window") {
+    next.dateRange = control.value === "season"
+      ? { type: "season", value: "season" }
+      : { type: "last_n_games", value: Number(control.value) };
+  }
+  if (control.dataset.visualControl === "threshold") {
+    next.filters.threshold = control.value === "" ? null : Number(control.value);
+  }
+  setVisualAnalyticsUrl(next);
+  state.visualRequest = next;
+  loadVisualAnalytics({ focusHeading: false });
+});
+elements.entityProfileSlipToggle.addEventListener("click", () => {
+  const open = elements.entityProfileSlipPanel.hidden;
+  elements.entityProfileSlipPanel.hidden = !open;
+  elements.entityProfileSlipToggle.setAttribute("aria-expanded", String(open));
+});
+document.querySelector("#closeEntityProfileSlip").addEventListener("click", () => {
+  elements.entityProfileSlipPanel.hidden = true;
+  elements.entityProfileSlipToggle.setAttribute("aria-expanded", "false");
+  elements.entityProfileSlipToggle.focus();
+});
+elements.entityProfileContent.addEventListener("click", (event) => {
+  const addButton = event.target.closest("[data-entity-add]");
+  if (addButton) {
+    const pick = getPickBySelectionId(sportsRepository, state.entityProfileViewModel?.entity?.leagueId, addButton.dataset.entityAdd);
+    if (pick?.available && !pick.stale && !state.slip.some((item) => item.id === pick.id)) {
+      state.slip.push(pick);
+      state.selectedPickId = pick.id;
+      renderSlip();
+      renderEntityProfile();
+    }
+    return;
+  }
+  const queryButton = event.target.closest("[data-profile-query]");
+  if (queryButton) {
+    closeEntityProfile({ useHistory: false });
+    elements.queryInput.value = queryButton.dataset.profileQuery;
+    document.querySelector("#queryForm").requestSubmit();
+  }
+});
+elements.followEntity.addEventListener("click", () => {
+  const id = state.entityProfileId;
+  if (!id) return;
+  state.followedEntityIds = state.followedEntityIds.includes(id)
+    ? state.followedEntityIds.filter((item) => item !== id)
+    : [...new Set([...state.followedEntityIds, id])];
+  persistInsightState();
+  renderEntityProfile();
+});
 elements.profileSlipToggle.addEventListener("click", () => {
   const open = elements.profileSlipPanel.hidden;
   elements.profileSlipPanel.hidden = !open;
@@ -3062,10 +3958,80 @@ elements.shareAthleteProfile.addEventListener("click", async () => {
   }
 });
 
+elements.shareEntityProfile.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(window.location.href);
+    elements.shareEntityProfile.textContent = "Link copied";
+  } catch (error) {
+    elements.shareEntityProfile.textContent = "Copy unavailable";
+    elements.shareEntityProfile.title = error?.message || "Clipboard permission was denied.";
+  }
+});
+
 window.addEventListener("popstate", () => {
   const params = new URLSearchParams(window.location.search);
+  const visualType = params.get("visual") || "";
+  const entityId = params.get("entityProfile") || "";
   const athleteId = params.get("player") || "";
   const tab = params.get("tab") || "overview";
+  if (visualType) {
+    const visualEntityId = params.get("visualEntity") || "";
+    const entity = entityRegistry.getEntity(visualEntityId);
+    state.profileAthleteId = "";
+    state.profileViewModel = null;
+    state.entityProfileId = "";
+    state.entityProfileViewModel = null;
+    renderAthleteProfile();
+    renderEntityProfile();
+    state.visualRequest = {
+      visualizationType: visualType,
+      sportId: params.get("visualSport") || entity?.sportId || "",
+      leagueId: params.get("visualLeague") || entity?.leagueId || "",
+      entityType: entity?.type || "athlete",
+      entityIds: visualEntityId ? [visualEntityId] : [],
+      eventIds: [],
+      statIds: [],
+      dateRange: params.get("visualWindow") === "season"
+        ? { type: "season", value: "season" }
+        : { type: "last_n_games", value: Math.max(1, Number(params.get("visualWindow")) || 10) },
+      filters: {
+        threshold: params.get("visualThreshold") === null ? null : Number(params.get("visualThreshold")),
+        seriesIds: String(params.get("visualSeries") || "").split(",").filter(Boolean),
+      },
+    };
+    loadVisualAnalytics({ focusHeading: true });
+    return;
+  }
+  if (state.visualRequest) {
+    visualAbortController?.abort();
+    visualRequestSequence += 1;
+    state.visualRequest = null;
+    state.visualResult = null;
+    state.visualLoading = false;
+    renderVisualAnalytics();
+  }
+  if (entityId) {
+    profileRequestSequence += 1;
+    state.profileAthleteId = "";
+    state.profileViewModel = null;
+    state.profileLoading = false;
+    renderAthleteProfile();
+    if (entityId === state.entityProfileId && state.entityProfileViewModel?.status === "ready") {
+      renderEntityProfile();
+      return;
+    }
+    state.entityProfileId = entityId;
+    loadEntityProfile({ focusHeading: true });
+    return;
+  }
+  if (state.entityProfileId) {
+    entityProfileAbortController?.abort();
+    entityProfileRequestSequence += 1;
+    state.entityProfileId = "";
+    state.entityProfileViewModel = null;
+    state.entityProfileLoading = false;
+    renderEntityProfile();
+  }
   if (!athleteId) {
     profileRequestSequence += 1;
     state.profileAthleteId = "";
@@ -3091,6 +4057,8 @@ window.addEventListener("popstate", () => {
     state.statsContextOverrideDisabled = false;
     state.statsResult = null;
     state.statsParsedQuery = null;
+    state.researchPlan = null;
+    state.researchAnswer = null;
     state.statsLoading = false;
     const queryText = String(params.get("q") || "");
     elements.queryInput.value = queryText;
@@ -3150,7 +4118,9 @@ document.querySelectorAll("[data-theme-option]").forEach((button) => {
 
 document.querySelector(".brand").addEventListener("click", (event) => {
   event.preventDefault();
-  if (state.profileAthleteId) closeAthleteProfile();
+  if (state.visualRequest) closeVisualAnalytics();
+  else if (state.profileAthleteId) closeAthleteProfile();
+  else if (state.entityProfileId) closeEntityProfile();
   else window.scrollTo({ top: 0, behavior: "smooth" });
 });
 
@@ -3176,6 +4146,15 @@ if (initialResearchState.profileAthleteId) {
     renderAthleteProfile();
   });
 }
-if (initialResearchState.queryText) {
+if (initialResearchState.entityProfileId) {
+  loadEntityProfile({ focusHeading: false });
+}
+if (state.visualRequest) {
+  loadVisualAnalytics({ focusHeading: false });
+}
+if (initialResearchState.queryText
+  && !initialResearchState.visualType
+  && !initialResearchState.profileAthleteId
+  && !initialResearchState.entityProfileId) {
   window.setTimeout(() => document.querySelector("#queryForm").requestSubmit(), 0);
 }

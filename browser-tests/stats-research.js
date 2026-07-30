@@ -286,7 +286,9 @@ const staleResult = buildStatsResult(staleProvider, staleParsed, sportsRepositor
 check(staleProvider.getDataFreshness().stale && staleResult.dataQualityWarning.includes("stale"), "stale sample snapshot produces an explicit warning");
 
 // Live app interaction, persistence, accessibility, stale-response, and regression checks.
-await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+if (frame.contentDocument?.readyState !== "complete") {
+  await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+}
 await wait(700);
 let app = frame.contentDocument;
 let view = frame.contentWindow;

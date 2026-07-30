@@ -1,6 +1,6 @@
 import { normalizeResearchMode } from "./research-mode-service.js";
 
-const bettingTerms = /\b(prop|props|odds|sportsbook|parlay|moneyline|spread|line movement|sgp|same game|plus money|confidence|edge)\b/i;
+const bettingTerms = /\b(prop|props|odds|sportsbook|parlay|moneyline|spread|line movement|sgp|same game|plus money|confidence|edge|upside|over candidate|under candidate|rated highly)\b/i;
 const marketLine = /\b(over|under|line)\s*[+-]?\d+(?:\.\d+)?/i;
 const statTerms = /\b(average|averaging|total|per game|games?|points?|assists?|rebounds?|yards?|touchdowns?|hits?|home runs?|strikeouts?|goals?|shots?|wins?|podiums?|minutes?|threes?|three-pointers?|leader|most|fewest|highest|lowest)\b/i;
 const unsupportedTerms = /\b(fantasy points?|qbr|wins above replacement|war)\b/i;

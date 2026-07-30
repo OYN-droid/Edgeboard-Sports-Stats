@@ -19,6 +19,14 @@ const check = (condition, label) => {
   if (!condition) failures.push(label);
 };
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const waitFor = async (predicate, timeout = 2000) => {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await wait(25);
+  }
+  return false;
+};
 const sportsRepository = createSportsRepository(mockProviderPayload);
 const statsRepository = createStatsRepository();
 const profileRepository = createAthleteProfileRepository(statsRepository, sportsRepository);
@@ -235,12 +243,14 @@ check(app.querySelector('[data-profile-tab="props"]').getAttribute("aria-selecte
 check(app.querySelector(".profile-empty")?.textContent.includes("No current market available"), "no-market profile state is explicit");
 
 view.history.back();
-await wait(120);
+await waitFor(() => new URL(view.location.href).searchParams.get("tab") === "trends"
+  && app.querySelector('[data-profile-tab="trends"]')?.getAttribute("aria-selected") === "true");
 check(new URL(view.location.href).searchParams.get("tab") === "trends"
   && app.querySelector('[data-profile-tab="trends"]')?.getAttribute("aria-selected") === "true",
 "browser back restores the prior profile tab");
 view.history.forward();
-await wait(120);
+await waitFor(() => new URL(view.location.href).searchParams.get("tab") === "props"
+  && app.querySelector('[data-profile-tab="props"]')?.getAttribute("aria-selected") === "true");
 check(new URL(view.location.href).searchParams.get("tab") === "props"
   && app.querySelector('[data-profile-tab="props"]')?.getAttribute("aria-selected") === "true",
 "browser forward restores the next profile tab");

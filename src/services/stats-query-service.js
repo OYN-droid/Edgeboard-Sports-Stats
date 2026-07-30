@@ -8,7 +8,7 @@ import { normalizeResearchMode } from "./research-mode-service.js";
 import { resolveLeagueFromQuery } from "./research-service.js";
 
 const VALID_INTENTS = new Set([
-  "statistical_lookup", "athlete_comparison", "team_comparison", "multi_entity_comparison",
+  "statistical_lookup", "player_lookup", "team_lookup", "athlete_comparison", "team_comparison", "multi_entity_comparison",
   "league_leaderboard", "team_leaderboard", "event_leaderboard", "performance_ranking",
   "single_game_high", "season_high", "career_high", "streak_leaderboard", "threshold_leaderboard",
   "historical_record", "record_progression", "statistical_filter", "multi_stat_filter",
@@ -334,6 +334,14 @@ export function parseStatisticalQuery(query, {
   if (!stats.length && !["betting_research", "ambiguous", "unsupported"].includes(classification.intent)
     && !INSIGHT_INTENTS.has(classification.intent)) warnings.push("No supported canonical stat was recognized.");
   let resolvedIntent = classification.intent;
+  if (resolvedIntent === "ambiguous" && exactResolution.status === "resolved" && entityMatches.length === 1) {
+    resolvedIntent = entityMatches[0].entityType === "team" ? "team_lookup" : "player_lookup";
+  }
+  if (!stats.length && ["player_lookup", "team_lookup"].includes(resolvedIntent)) {
+    stats = (DEFAULT_STATS_BY_SPORT[league?.sportId] || [])
+      .map((id) => STAT_REGISTRY.find((definition) => definition.id === id))
+      .filter(Boolean);
+  }
   if (teamIds.length >= 2 && ["athlete_comparison", "multi_entity_comparison"].includes(resolvedIntent)) resolvedIntent = "team_comparison";
   if (playerIds.length > 2 && resolvedIntent === "athlete_comparison") resolvedIntent = "multi_entity_comparison";
   const thresholdDefinitions = extractThresholdDefinitions(text, stats);

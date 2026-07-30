@@ -87,7 +87,7 @@
                     aria-expanded="false"
                     value="Which available markets have the strongest sample signal today?"
                   />
-                  <div class="athlete-search-results" id="athleteSearchResults" role="listbox" aria-label="Athlete suggestions" hidden></div>
+                  <div class="athlete-search-results" id="athleteSearchResults" role="listbox" aria-label="Sports entity suggestions" hidden></div>
                 </div>
                 <button class="primary-button" type="submit">Analyze</button>
               </div>
@@ -95,6 +95,52 @@
               <div class="quick-prompts" aria-label="Example queries"></div>
             </form>
           </div>
+        </section>
+
+        <section class="visual-analytics-view" id="visualAnalyticsView" aria-label="Visual analytics workspace" aria-live="polite" hidden>
+          <div class="profile-view-toolbar">
+            <button class="text-button profile-back" id="closeVisualAnalytics" type="button">← Back to research</button>
+            <div class="profile-toolbar-actions">
+              <button class="text-button" id="visualSlipToggle" type="button" aria-controls="visualSlipPanel" aria-expanded="false">Bet slip <span id="visualSlipCount">0</span></button>
+              <button class="text-button" id="shareVisualAnalytics" type="button">Copy link</button>
+            </div>
+          </div>
+          <div class="profile-loading" id="visualAnalyticsLoading" role="status" hidden>
+            <span class="stats-skeleton wide" aria-hidden="true"></span>
+            <span class="stats-skeleton" aria-hidden="true"></span>
+            <span>Validating and transforming sample visualization data…</span>
+          </div>
+          <div id="visualAnalyticsContent"></div>
+          <aside class="profile-slip-panel" id="visualSlipPanel" aria-label="Visual analytics bet slip" hidden>
+            <div class="panel-heading"><h2>Bet Slip</h2><button class="text-button" id="closeVisualSlip" type="button">Close</button></div>
+            <div id="visualSlipList" class="slip-list empty">Add legs from provider-confirmed markets.</div>
+          </aside>
+        </section>
+
+        <section class="entity-profile-view" id="entityProfileView" aria-label="Sports entity profile" aria-live="polite" hidden>
+          <div class="profile-view-toolbar">
+            <button class="text-button profile-back" id="closeEntityProfile" type="button">← Back to research</button>
+            <div class="profile-toolbar-actions">
+              <button class="text-button" id="entityProfileSlipToggle" type="button" aria-controls="entityProfileSlipPanel" aria-expanded="false">Bet slip <span id="entityProfileSlipCount">0</span></button>
+              <button class="text-button" id="followEntity" type="button" aria-pressed="false">Follow</button>
+              <button class="text-button" id="shareEntityProfile" type="button">Copy link</button>
+            </div>
+          </div>
+          <div class="profile-loading" id="entityProfileLoading" role="status" hidden>
+            <span class="stats-skeleton wide" aria-hidden="true"></span>
+            <span class="stats-skeleton" aria-hidden="true"></span>
+            <span>Loading sample entity profile…</span>
+          </div>
+          <div class="profile-not-found" id="entityProfileNotFound" hidden>
+            <p class="eyebrow">Entity unavailable</p>
+            <h1>Profile not found</h1>
+            <p>The canonical entity ID is unknown or no longer available from the sample provider.</p>
+          </div>
+          <div id="entityProfileContent"></div>
+          <aside class="profile-slip-panel" id="entityProfileSlipPanel" aria-label="Entity profile bet slip" hidden>
+            <div class="panel-heading"><h2>Bet Slip</h2><button class="text-button" id="closeEntityProfileSlip" type="button">Close</button></div>
+            <div id="entityProfileSlipList" class="slip-list empty">Add legs from a provider-confirmed entity market.</div>
+          </aside>
         </section>
 
         <section class="athlete-profile-view" id="athleteProfileView" aria-label="Athlete profile" aria-live="polite" hidden>
@@ -188,6 +234,9 @@
                 <span class="timestamp">Sample source - updated locally</span>
               </div>
             </div>
+            <section class="research-answer" id="researchAnswer" aria-label="EdgeBoard research analyst answer" aria-live="polite" hidden>
+              <div id="researchAnswerContent"></div>
+            </section>
             <section class="stats-results" id="statsResults" aria-label="Statistical research result" aria-live="polite" aria-busy="false" hidden>
               <div class="stats-loading" id="statsLoading" hidden>
                 <span class="stats-skeleton wide" aria-hidden="true"></span>

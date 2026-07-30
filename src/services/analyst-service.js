@@ -125,6 +125,7 @@ export function runAnalystWorkflow(repository, query, options = {}) {
     sportName: league?.sportDisplayName || "Unresolved sport",
     category: eventModelLabel(league),
     market: parsed.market,
+    marketId: parsed.canonicalMarketId,
     marketLabel: getMarketDefinition(parsed.canonicalMarketId)?.displayName || marketLabel(parsed.market),
     eventId: resolvedEvent?.id || "",
     constraints: describeConstraints(constraints, minimumConfidence),

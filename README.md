@@ -50,6 +50,34 @@ The athlete-profile harness covers canonical routes, media fallbacks, sport-awar
 http://127.0.0.1:9010/browser-tests/athlete-profiles.html
 ```
 
+The Phase 5 deterministic research-analyst harness covers structured planning,
+evidence identity, explanation boundaries, Research Completeness, Stats/Betting/
+Both separation, stale-market exclusion, transparency, follow-ups, themes, and
+mobile overflow:
+
+```text
+http://127.0.0.1:9010/browser-tests/research-analyst.html
+```
+
+The Phase 6 sports-entity harness covers the unified canonical hierarchy,
+cross-type autocomplete, generic and athlete-compatible profile routing,
+relationships, caching and cancellation, research-assistant identity evidence,
+responsive behavior, history restoration, accessibility, and themes:
+
+```text
+http://127.0.0.1:9010/browser-tests/entities.html
+```
+
+The Phase 7 visual-analytics harness covers the centralized visualization
+registry, provider capability gates, normalized visual requests, validation,
+sport-specific renderers, honest fallbacks, caching and cancellation, query and
+profile integration, shareable controls, accessible tables, themes, and
+responsive overflow:
+
+```text
+http://127.0.0.1:9010/browser-tests/visualizations.html
+```
+
 ## Market taxonomy
 
 `src/config/market-catalog.js` is the provider-neutral source of truth for canonical market definitions and confidence bands. The sports registry declares which definitions a sport can support; the repository maps provider offers to those definitions; and the UI only promotes categories and markets that have an open or explicitly suspended provider instance.
@@ -70,5 +98,17 @@ See [Deterministic insights](docs/deterministic-insights.md) for the Phase 4 rul
 registry, evidence pipeline, scoring, streak handling, rarity pools, record
 validation, Both-mode market compatibility, saved-state behavior, and provider
 limitations.
+
+See [Deterministic research analyst](docs/research-analyst.md) for the Phase 5
+planner, evidence contract, explanation layer, Research Completeness rules, and
+mode-specific behavior.
+
+See [Sports entity intelligence](docs/entity-intelligence.md) for the Phase 6
+canonical hierarchy, shared athlete/generic profile strategy, entity graph,
+search, routing, caching, provider gaps, and validation harness.
+
+See [Visual analytics architecture](docs/visual-analytics.md) for the Phase 7
+registry, provider contract, request and validation flow, native SVG renderer,
+accessibility behavior, shareable state, and explicit provider gaps.
 
 See [Advanced statistical research](docs/advanced-statistical-research.md) for comparison calculations, leaderboard qualification and tie handling, record validation, exports, and Phase 3 provider methods.

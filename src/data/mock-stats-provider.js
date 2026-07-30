@@ -1,6 +1,6 @@
 import { CANONICAL_ENTITIES } from "./canonical-entities.js";
 
-const UPDATED_AT = "2026-07-28T15:20:00.000Z";
+const UPDATED_AT = "2026-07-30T12:30:00.000Z";
 
 function gameRows(entityId, leagueId, sportId, opponents, values, startDate = "2026-07-01") {
   const start = new Date(`${startDate}T00:00:00.000Z`);
