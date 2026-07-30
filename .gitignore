@@ -1,6 +1,12 @@
 .DS_Store
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .coverage
 .cache/
+*.db
+*.sqlite
+*.sqlite3
+data/

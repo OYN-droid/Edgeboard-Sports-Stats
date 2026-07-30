@@ -1,6 +1,6 @@
 # EdgeBoard provider integration
 
-EdgeBoard remains usable with no credentials. The static application imports the existing mock payload by default. The optional Python gateway keeps live credentials server-side and emits the same normalized payload consumed by the browser.
+EdgeBoard remains usable with no credentials. The static application imports the existing mock payload by default. The Phase 9 Python API keeps credentials server-side and emits the same normalized payload consumed by the browser. Its default representative path is a recorded fixture and is not live.
 
 ## Data flow
 
@@ -63,7 +63,7 @@ python3 -m unittest discover -s tests -v
 - combat cards and participants
 - motorsports sessions and competitors
 
-`server/providers.py` contains the default mock and a server-only HTTP template. `server/adapters.py` maps upstream staging fields to the existing normalized EdgeBoard contract. Exact vendor field names belong in a vendor-specific adapter, not in the UI or repository.
+`server/providers.py` contains the recorded fixture provider and a server-only HTTP template. `server/adapters.py` maps upstream staging fields to the existing normalized EdgeBoard contract. Exact vendor field names belong in a vendor-specific adapter, not in the UI or repository. Extended provider, database, ingestion, security, and deployment details are documented in [Production data foundation](production-data-foundation.md).
 
 ## Normalized output
 
@@ -115,18 +115,12 @@ Values between one and three times the limit are `delayed`; older values are `st
 
 ## Environment variables
 
-- `EDGEBOARD_PROVIDER_MODE`
-- `EDGEBOARD_PROVIDER_NAME`
-- `EDGEBOARD_PROVIDER_BASE_URL`
-- `EDGEBOARD_PROVIDER_API_KEY`
-- `EDGEBOARD_PROVIDER_API_KEY_HEADER`
-- `EDGEBOARD_REQUEST_TIMEOUT_SECONDS`
-- `EDGEBOARD_MAX_RETRIES`
-- `EDGEBOARD_RETRY_BASE_SECONDS`
-- `EDGEBOARD_CACHE_TTL_SECONDS`
-- `EDGEBOARD_CACHE_STALE_SECONDS`
-- `EDGEBOARD_SERVER_HOST`
-- `EDGEBOARD_SERVER_PORT`
+`.env.example` is the source of truth for Phase 9 environment names. It groups
+application, sports and odds providers, secondary providers, cache/database,
+optional authentication, observability, public feature flags, provider terms,
+and server settings. Legacy `EDGEBOARD_PROVIDER_*` names remain readable for
+local compatibility, but new deployments should use `SPORTS_PROVIDER_*`,
+`PROVIDER_*`, `CACHE_*`, and the named feature flags.
 
 Do not put real credentials in `.env.example`, browser code, query parameters, or committed files. `.env` is ignored.
 

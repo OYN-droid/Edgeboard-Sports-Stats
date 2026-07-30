@@ -3,6 +3,23 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 
+PROVIDER_DOMAINS = (
+    "sport_catalog", "league_catalog", "league_availability", "schedules", "live_status",
+    "event_details", "entity_search", "athlete_profiles", "teams", "rosters", "standings",
+    "historical_statistics", "game_logs", "play_by_play", "injuries", "lineups",
+    "depth_charts", "odds", "player_props", "futures", "line_movement", "archived_odds",
+    "combat_cards", "fighter_statistics", "motorsport_sessions", "lap_data", "telemetry",
+    "golf_events", "tennis_matches", "media", "weather",
+)
+
+
+class Provider(Protocol):
+    name: str
+    mode: str
+
+    def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any: ...
+
+
 class LeagueAvailabilityProvider(Protocol):
     def get_league_availability(self) -> Any: ...
 

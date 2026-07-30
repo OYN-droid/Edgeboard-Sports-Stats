@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
 from .config import ProviderConfig
-from .errors import ProviderConfigurationError
+from .errors import ProviderConfigurationError, ProviderValidationError
 from .http_client import JsonHttpClient
 
 
@@ -23,6 +25,30 @@ DOMAIN_METHODS = {
     "line_movement": "get_line_movement",
     "combat_cards": "get_combat_cards",
     "motorsport_sessions": "get_motorsport_sessions",
+}
+
+EXTENDED_DOMAIN_METHODS = {
+    **DOMAIN_METHODS,
+    "sport_catalog": "get_sport_catalog",
+    "league_catalog": "get_league_catalog",
+    "event_details": "get_event_details",
+    "entity_search": "search_entities",
+    "athlete_profiles": "get_athlete_profiles",
+    "teams": "get_teams",
+    "rosters": "get_rosters",
+    "standings": "get_standings",
+    "historical_statistics": "get_historical_statistics",
+    "game_logs": "get_game_logs",
+    "play_by_play": "get_play_by_play",
+    "depth_charts": "get_depth_charts",
+    "futures": "get_futures",
+    "archived_odds": "get_archived_odds",
+    "fighter_statistics": "get_fighter_statistics",
+    "lap_data": "get_lap_data",
+    "telemetry": "get_telemetry",
+    "golf_events": "get_golf_events",
+    "tennis_matches": "get_tennis_matches",
+    "media": "get_media",
 }
 
 
@@ -85,6 +111,55 @@ class MockProvider:
     def get_combat_cards(self) -> Any: return {"items": []}
     def get_motorsport_sessions(self) -> Any: return {"items": []}
 
+    def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
+        method_name = EXTENDED_DOMAIN_METHODS.get(domain)
+        return getattr(self, method_name)() if method_name and hasattr(self, method_name) else {"items": []}
+
+
+class OfflineProvider(MockProvider):
+    name = "edgeboard-offline"
+    mode = "offline"
+
+    def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
+        return {"items": []}
+
+    def __getattribute__(self, name: str):
+        if name.startswith("get_"):
+            return lambda: {"items": []}
+        return super().__getattribute__(name)
+
+
+class FixtureProvider(MockProvider):
+    """Recorded-fixture provider used for contract tests and deployment smoke checks."""
+
+    mode = "sample"
+
+    def __init__(self, fixture_path: str | Path | None = None):
+        super().__init__()
+        path = Path(fixture_path) if fixture_path else Path(__file__).parent / "fixtures" / "representative_provider.json"
+        with path.open("r", encoding="utf-8") as handle:
+            self.fixture = json.load(handle)
+        self.name = str(self.fixture.get("provider") or "edgeboard-fixture")
+
+    def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
+        payload = self.fixture.get(domain, {"items": []})
+        if not scope or not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
+            return payload
+        league_id = scope.get("leagueId")
+        if not league_id:
+            return payload
+        return {**payload, "items": [
+            item for item in payload["items"]
+            if item.get("league_id") == league_id or item.get("league_key") == league_id
+        ]}
+
+    def __getattribute__(self, name: str):
+        if name.startswith("get_"):
+            domain = next((domain for domain, method in EXTENDED_DOMAIN_METHODS.items() if method == name), None)
+            if domain:
+                return lambda: object.__getattribute__(self, "fetch")(domain)
+        return super().__getattribute__(name)
+
 
 class TemplateHttpProvider:
     """Server-only integration template. Subclass or replace its endpoints and adapter for a selected vendor."""
@@ -110,6 +185,11 @@ class TemplateHttpProvider:
     def _get(self, domain: str) -> Any:
         endpoint = f"v1/{domain.replace('_', '-')}"
         return self.client.get_json(urljoin(self.base_url, endpoint), self.headers)
+
+    def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
+        if domain not in EXTENDED_DOMAIN_METHODS:
+            raise ProviderValidationError(f"Provider domain '{domain}' is unsupported.")
+        return self._get(domain)
 
     def get_league_availability(self) -> Any: return self._get("league_availability")
     def get_schedules(self) -> Any: return self._get("schedules")

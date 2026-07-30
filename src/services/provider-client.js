@@ -22,7 +22,7 @@ function offlineFallback(error) {
       state: "offline-fallback",
       offline_fallback: true,
       partial: true,
-      last_updated_at: now,
+      fetched_at: now,
       errors: [{ domain: "gateway", code: "gateway_unavailable", message: error?.message || "Provider gateway unavailable." }],
     },
   };

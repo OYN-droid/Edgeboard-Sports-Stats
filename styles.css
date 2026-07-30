@@ -1996,6 +1996,8 @@ body.workspace-active .mobile-slip-toggle {
 }
 
 .data-status.stale .data-status-dot,
+.data-status.expired .data-status-dot,
+.data-status.unavailable .data-status-dot,
 .data-status.offline-fallback .data-status-dot,
 .data-status.error .data-status-dot {
   background: #d85b5b;

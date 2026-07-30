@@ -231,11 +231,14 @@ export function createSportsRepository(payload = mockProviderPayload) {
     getMetadata: () => {
       const status = payload?.provider_status && typeof payload.provider_status === "object" ? payload.provider_status : {};
       const generatedAt = normalizeTimestamp(status.last_updated_at || payload?.generated_at);
+      const retrievedAt = normalizeTimestamp(status.fetched_at || payload?.generated_at);
       return {
         provider: fallbackText(status.provider, fallbackText(payload?.provider, "unknown")),
         mode: fallbackText(status.mode, "sample"),
+        sample: status.sample === true || status.mode === "sample",
         state: fallbackText(status.state, isStale(generatedAt) ? "stale" : "fresh"),
         generatedAt,
+        retrievedAt,
         lastSuccessfulUpdateAt: normalizeTimestamp(status.last_successful_update_at),
         stale: isStale(generatedAt) || status.state === "stale",
         partial: status.partial === true,

@@ -357,6 +357,9 @@ const elements = {
   researchAnswer: document.querySelector("#researchAnswer"),
   researchAnswerContent: document.querySelector("#researchAnswerContent"),
   dataStatus: document.querySelector("#dataStatus"),
+  dataStatusDialog: document.querySelector("#dataStatusDialog"),
+  dataStatusDetails: document.querySelector("#dataStatusDetails"),
+  closeDataStatusDialog: document.querySelector("#closeDataStatusDialog"),
   modeBadge: document.querySelector("#modeBadge"),
   statsResults: document.querySelector("#statsResults"),
   statsLoading: document.querySelector("#statsLoading"),
@@ -1220,15 +1223,18 @@ function renderDataStatus() {
   const metadata = sportsRepository.getMetadata();
   const state = metadata.offlineFallback
     ? "offline-fallback"
-    : metadata.partial ? "partial"
+    : metadata.mode === "sample" ? "sample"
+      : metadata.partial ? "partial"
       : metadata.stale ? "stale"
-        : metadata.mode === "sample" ? "sample" : metadata.state;
+        : metadata.state;
   const labels = {
     sample: "Sample data",
     fresh: "Fresh",
     delayed: "Delayed",
     stale: "Stale",
     partial: "Partial",
+    unavailable: "Unavailable",
+    expired: "Expired",
     "offline-fallback": "Offline fallback",
     error: "Provider error",
   };
@@ -1238,12 +1244,43 @@ function renderDataStatus() {
     <span class="data-status-dot" aria-hidden="true"></span>
     <span><strong>${escapeHtml(labels[state] || state)}</strong><small>${escapeHtml(metadata.provider)} · ${escapeHtml(updated)}</small></span>
   `;
-  elements.dataStatus.title = `${metadata.sources.length} source domain${metadata.sources.length === 1 ? "" : "s"} · ${metadata.errors.length} provider error${metadata.errors.length === 1 ? "" : "s"}${metadata.mode === "sample" ? " · no live provider configured" : ""}`;
-  elements.modeBadge.textContent = metadata.mode === "sample" ? "Sample" : "Provider";
-  elements.modeBadge.title = metadata.mode === "sample"
-    ? "EdgeBoard is using sample data."
-    : "A server-side provider is configured; verify the data-status indicator before use.";
+  elements.dataStatus.title = `${metadata.sources.length} source domain${metadata.sources.length === 1 ? "" : "s"} · ${metadata.errors.length} provider error${metadata.errors.length === 1 ? "" : "s"}${metadata.sample ? " · no live provider configured" : ""}`;
+  const sourceRows = metadata.sources.length
+    ? metadata.sources.map((source) => `<tr><td>${escapeHtml(source.domain || "Unknown")}</td><td>${escapeHtml(source.provider || metadata.provider)}</td><td>${escapeHtml(source.state || "unknown")}</td><td>${escapeHtml(source.cache || "unknown")}</td><td>${escapeHtml(formatDateTime(source.updated_at, "Unavailable"))}</td></tr>`).join("")
+    : '<tr><td colspan="5">No provider-domain detail is available.</td></tr>';
+  elements.dataStatusDetails.innerHTML = `
+    <dl class="workspace-detail-list">
+      <div><dt>Provider</dt><dd>${escapeHtml(metadata.provider)}</dd></div>
+      <div><dt>Mode</dt><dd>${escapeHtml(metadata.mode)}</dd></div>
+      <div><dt>EdgeBoard retrieval</dt><dd>${escapeHtml(formatDateTime(metadata.retrievedAt, "Unavailable"))}</dd></div>
+      <div><dt>Last successful update</dt><dd>${escapeHtml(updated)}</dd></div>
+    </dl>
+    <p>${metadata.sample ? "Recorded or generated sample data; no live provider is claimed." : "Server-side provider data. Freshness and attribution remain visible below."}</p>
+    <div class="table-scroll"><table><thead><tr><th>Domain</th><th>Source</th><th>Freshness</th><th>Cache</th><th>Provider timestamp</th></tr></thead><tbody>${sourceRows}</tbody></table></div>
+    ${metadata.errors.length ? `<div class="data-warning"><strong>${metadata.errors.length} provider warning${metadata.errors.length === 1 ? "" : "s"}</strong><p>${metadata.errors.map((error) => escapeHtml(error.code || error.message || "Provider warning")).join(" · ")}</p></div>` : ""}
+  `;
+  elements.modeBadge.textContent = metadata.mode === "sample" ? "Sample"
+    : metadata.mode === "offline" ? "Offline"
+      : metadata.mode === "degraded" ? "Degraded"
+        : metadata.mode === "hybrid" ? "Hybrid"
+          : "Provider";
+  elements.modeBadge.title = metadata.sample
+    ? `EdgeBoard is using clearly labeled sample data in ${metadata.mode} mode.`
+    : metadata.mode === "offline"
+      ? "EdgeBoard is offline; saved local data remains available where possible."
+      : metadata.mode === "degraded"
+        ? "One or more providers are degraded; inspect freshness and fallback details."
+        : "A server-side provider is configured; verify the data-status indicator before use.";
 }
+
+elements.dataStatus.addEventListener("click", () => {
+  elements.dataStatusDialog.showModal();
+  elements.closeDataStatusDialog.focus();
+});
+elements.closeDataStatusDialog.addEventListener("click", () => {
+  elements.dataStatusDialog.close();
+  elements.dataStatus.focus();
+});
 
 function persistResearchState({ updateUrl = true, historyMode = "replace" } = {}) {
   const queryText = elements.queryInput.value.trim();

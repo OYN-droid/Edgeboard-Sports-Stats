@@ -16,10 +16,10 @@
           <span class="sample-badge" id="modeBadge">Sample</span>
         </a>
         <nav class="sport-tabs" id="sportTabs" aria-label="Sports"></nav>
-        <div class="data-status sample" id="dataStatus" role="status" aria-live="polite">
+        <button class="data-status sample" id="dataStatus" type="button" aria-haspopup="dialog" aria-controls="dataStatusDialog">
           <span class="data-status-dot" aria-hidden="true"></span>
           <span><strong>Sample data</strong><small>EdgeBoard Mock</small></span>
-        </div>
+        </button>
         <button class="workspace-entry" id="openWorkspace" type="button" aria-label="Open My EdgeBoard local workspace">
           My EdgeBoard <span id="workspaceSavedCount" aria-label="0 saved items">0</span>
           <span id="workspaceAlertCount" aria-label="0 unread alerts">0</span>
@@ -337,6 +337,13 @@
         <button class="text-button" id="closeInsightDialog" type="button">Close</button>
       </div>
       <div id="insightDialogContent"></div>
+    </dialog>
+
+    <dialog class="workspace-dialog" id="dataStatusDialog" aria-labelledby="dataStatusDialogTitle">
+      <div class="workspace-share-preview">
+        <div class="dialog-heading"><div><p class="eyebrow">Provider transparency</p><h2 id="dataStatusDialogTitle">Data status</h2></div><button type="button" id="closeDataStatusDialog">Close</button></div>
+        <div id="dataStatusDetails"></div>
+      </div>
     </dialog>
 
     <dialog class="workspace-dialog" id="workspaceSaveDialog" aria-labelledby="workspaceSaveDialogTitle">

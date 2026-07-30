@@ -20,6 +20,19 @@ python3 -m server.app --port 9010
 
 Open `http://127.0.0.1:9010/?provider=gateway` to load the gateway's mock normalized response. Without the query parameter, the browser continues to use the complete local sample dataset.
 
+Phase 9 production-boundary server:
+
+```bash
+python3 -m server.app --check-config
+python3 scripts/migrate.py
+python3 -m server.app --port 9010
+```
+
+The default remains a clearly attributed recorded fixture. Useful endpoints are
+`/api/status`, `/api/status/ready`, `/api/config/public`, and
+`/api/provider-data`. No live-data claim is active without a configured,
+authenticated, successfully validated provider.
+
 ## Tests
 
 ```bash
@@ -124,3 +137,8 @@ See [Advanced statistical research](docs/advanced-statistical-research.md) for c
 See [Personal workspaces](docs/personal-workspaces.md) for the Phase 8 normalized
 domain, IndexedDB persistence, snapshot semantics, privacy boundaries, local
 alert evaluation, tracked-research distinction, and Phase 9 backend needs.
+
+See [Production data foundation](docs/production-data-foundation.md) for the
+Phase 9 server boundary, normalized contracts, persistence, reconciliation,
+cache and failover behavior, ingestion, auth/sync foundations, API operations,
+deployment, and rollback.

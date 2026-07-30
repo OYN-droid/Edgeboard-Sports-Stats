@@ -1,0 +1,57 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EdgeBoard normalized API",
+    "version": "0.9.0",
+    "description": "Production-boundary scaffold. Default responses are recorded fixture/sample data, not live data."
+  },
+  "servers": [{"url": "/"}],
+  "paths": {
+    "/api/status": {
+      "get": {
+        "summary": "Liveness",
+        "responses": {"200": {"description": "Service is running"}}
+      }
+    },
+    "/api/status/ready": {
+      "get": {
+        "summary": "Database and cache readiness",
+        "responses": {"200": {"description": "Readiness detail"}}
+      }
+    },
+    "/api/config/public": {
+      "get": {
+        "summary": "Safe public flags and data mode",
+        "responses": {"200": {"description": "No credentials are included"}}
+      }
+    },
+    "/api/sports": {"get": {"summary": "Normalized sport catalog", "responses": {"200": {"description": "Provider-attributed items"}}}},
+    "/api/leagues": {"get": {"summary": "Normalized league catalog", "responses": {"200": {"description": "Provider-attributed items"}}}},
+    "/api/events": {"get": {"summary": "Normalized events", "responses": {"200": {"description": "Freshness and sample state included"}}}},
+    "/api/entities": {"get": {"summary": "Canonical entity search boundary", "responses": {"200": {"description": "Canonical IDs only"}}}},
+    "/api/stats": {"get": {"summary": "Normalized stat rows", "responses": {"200": {"description": "Coverage and source included"}}}},
+    "/api/leaderboards": {"get": {"summary": "Deterministic leaderboards", "responses": {"200": {"description": "Qualification coverage included"}}}},
+    "/api/markets": {"get": {"summary": "Normalized market offers", "responses": {"200": {"description": "Period and settlement retained"}}}},
+    "/api/odds": {"get": {"summary": "Normalized odds", "responses": {"200": {"description": "Sportsbook attribution retained"}}}},
+    "/api/injuries": {"get": {"summary": "Injury statuses", "responses": {"200": {"description": "Confirmation and freshness retained"}}}},
+    "/api/lineups": {"get": {"summary": "Lineup statuses", "responses": {"200": {"description": "Projected and confirmed remain distinct"}}}},
+    "/api/standings": {"get": {"summary": "Normalized standings", "responses": {"200": {"description": "Competition scope retained"}}}},
+    "/api/live/updates": {"get": {"summary": "Visibility-aware polling response", "responses": {"200": {"description": "Connection and delay state"}}}},
+    "/api/research": {
+      "post": {
+        "summary": "Deterministic research orchestration",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object"}}}},
+        "responses": {
+          "200": {"description": "Evidence IDs and completeness"},
+          "400": {"description": "Validation error"},
+          "429": {"description": "Application rate limit"}
+        }
+      }
+    },
+    "/api/workspaces": {"get": {"summary": "Optional private cloud workspaces", "responses": {"200": {"description": "Local-only or authenticated cloud state"}}}},
+    "/api/workspaces/sync": {"post": {"summary": "User-scoped object sync", "responses": {"200": {"description": "Accepted objects and conflicts"}, "403": {"description": "Ownership or CSRF failure"}}}},
+    "/api/alerts": {"get": {"summary": "Configured alert capabilities", "responses": {"200": {"description": "Only real delivery channels"}}}},
+    "/api/alerts/evaluate": {"post": {"summary": "Optional server alert evaluation", "responses": {"200": {"description": "Old/new value and trigger result"}, "501": {"description": "Feature disabled"}}}},
+    "/api/admin/diagnostics": {"get": {"summary": "Protected read-only diagnostics", "responses": {"200": {"description": "Redacted operations state"}, "403": {"description": "Admin token required"}}}}
+  }
+}

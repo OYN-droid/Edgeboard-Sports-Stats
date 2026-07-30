@@ -1,0 +1,118 @@
+{
+  "provider": "edgeboard-recorded-fixture",
+  "recordedAt": "2026-07-30T16:00:00Z",
+  "license": {
+    "fixtureOnly": true,
+    "publicRedistributionAllowed": true,
+    "liveData": false
+  },
+  "league_availability": {
+    "items": [
+      {
+        "league_id": "nba",
+        "status": "upcoming",
+        "today_event_count": 1,
+        "upcoming_event_count": 1,
+        "available_market_count": 1,
+        "player_prop_count": 0,
+        "data_quality_status": "sample",
+        "updated_at": "2026-07-30T16:00:00Z",
+        "status_label": "Recorded fixture — not live"
+      }
+    ]
+  },
+  "schedules": {
+    "items": [
+      {
+        "id": "fixture-nba-bos-nyk-20261020",
+        "league_id": "nba",
+        "event_type": "team",
+        "status": "scheduled",
+        "start_time": "2026-10-20T23:30:00Z",
+        "away_id": "nba-bos",
+        "away_name": "Boston",
+        "away_short_name": "BOS",
+        "home_id": "nba-nyk",
+        "home_name": "New York",
+        "home_short_name": "NYK",
+        "updated_at": "2026-07-30T16:00:00Z",
+        "display": {
+          "spread": "Unavailable",
+          "total": "Unavailable",
+          "edge": "Fixture only",
+          "featured": true
+        }
+      }
+    ]
+  },
+  "live_status": {"items": []},
+  "odds": {
+    "items": [
+      {
+        "id": "fixture-nba-moneyline",
+        "league_id": "nba",
+        "event_id": "fixture-nba-bos-nyk-20261020",
+        "market_type": "moneyline",
+        "canonical_market_id": "basketball-moneyline",
+        "provider_market_id": "fixture:moneyline:1",
+        "period": "full-event",
+        "settlement_scope": "including-overtime",
+        "ui_group": "moneylines",
+        "status": "open",
+        "source_name": "EdgeBoard Recorded Fixture",
+        "updated_at": "2026-07-30T16:00:00Z",
+        "selections": [
+          {
+            "id": "fixture-bos",
+            "name": "Boston",
+            "side": "away",
+            "line": "Moneyline",
+            "odds": -105,
+            "confirmed": true,
+            "data_quality_status": "sample",
+            "data_quality_warning": "Recorded fixture — not a current sportsbook price."
+          },
+          {
+            "id": "fixture-nyk",
+            "name": "New York",
+            "side": "home",
+            "line": "Moneyline",
+            "odds": -115,
+            "confirmed": true,
+            "data_quality_status": "sample",
+            "data_quality_warning": "Recorded fixture — not a current sportsbook price."
+          }
+        ]
+      }
+    ]
+  },
+  "player_props": {"items": []},
+  "team_statistics": {"items": []},
+  "player_statistics": {"items": []},
+  "injuries": {"items": []},
+  "lineups": {"items": []},
+  "weather": {"items": []},
+  "line_movement": {"items": []},
+  "combat_cards": {"items": []},
+  "motorsport_sessions": {"items": []},
+  "sport_catalog": {"items": [{"id": "basketball", "name": "Basketball"}]},
+  "league_catalog": {"items": [{"id": "nba", "sport_id": "basketball", "name": "NBA"}]},
+  "event_details": {"items": []},
+  "entity_search": {"items": []},
+  "athlete_profiles": {"items": []},
+  "teams": {"items": []},
+  "rosters": {"items": []},
+  "standings": {"items": []},
+  "historical_statistics": {"items": []},
+  "game_logs": {"items": []},
+  "play_by_play": {"items": []},
+  "depth_charts": {"items": []},
+  "futures": {"items": []},
+  "archived_odds": {"items": []},
+  "fighter_statistics": {"items": []},
+  "lap_data": {"items": []},
+  "telemetry": {"items": []},
+  "golf_events": {"items": []},
+  "tennis_matches": {"items": []},
+  "media": {"items": []}
+}

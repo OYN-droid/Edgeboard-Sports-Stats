@@ -1,0 +1,38 @@
+name: EdgeBoard quality gates
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APP_ENV: test
+      DATA_MODE: sample
+      SAMPLE_MODE: "true"
+      DATABASE_URL: "sqlite:///:memory:"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile server
+        run: python -m compileall -q server scripts tests
+      - name: Validate configuration
+        run: python -m server.app --check-config
+      - name: Run migrations
+        run: python scripts/migrate.py
+      - name: Unit and integration tests
+        run: python -m unittest discover -s tests -v
+      - name: Sample-mode API smoke test
+        run: python scripts/smoke.py
+      - name: Check committed secret patterns
+        run: |
+          ! git grep -nE '(sk-[A-Za-z0-9]{16,}|Bearer [A-Za-z0-9._~-]{16,})' -- ':!*.md'
+      - name: Check diff hygiene
+        run: git diff --check

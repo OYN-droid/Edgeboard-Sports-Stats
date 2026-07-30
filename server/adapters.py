@@ -177,6 +177,56 @@ class PassthroughAdapter:
         return _items(payload)
 
 
+class CatalogAdapter:
+    def sports(self, payload: Any, provider: str) -> list[dict[str, Any]]:
+        return [{
+            "sportId": item.get("sportId") or item.get("sport_id") or item.get("id"),
+            "displayName": item.get("displayName") or item.get("display_name") or item.get("name"),
+            "category": item.get("category") or "other",
+            "source": provider,
+            "providerUpdatedAt": item.get("providerUpdatedAt") or item.get("updated_at"),
+        } for item in _items(payload) if item.get("sportId") or item.get("sport_id") or item.get("id")]
+
+    def leagues(self, payload: Any, provider: str) -> list[dict[str, Any]]:
+        return [{
+            "leagueId": item.get("leagueId") or item.get("league_id") or item.get("id"),
+            "sportId": item.get("sportId") or item.get("sport_id"),
+            "displayName": item.get("displayName") or item.get("display_name") or item.get("name"),
+            "competitionId": item.get("competitionId") or item.get("competition_id"),
+            "source": provider,
+            "providerUpdatedAt": item.get("providerUpdatedAt") or item.get("updated_at"),
+        } for item in _items(payload) if item.get("leagueId") or item.get("league_id") or item.get("id")]
+
+
+class EntitySearchAdapter:
+    def adapt(self, payload: Any, provider: str) -> list[dict[str, Any]]:
+        return [{
+            "canonicalEntityId": item.get("canonicalEntityId") or item.get("canonical_entity_id"),
+            "providerEntityId": item.get("providerEntityId") or item.get("provider_entity_id") or item.get("id"),
+            "entityType": item.get("entityType") or item.get("entity_type"),
+            "displayName": item.get("displayName") or item.get("display_name") or item.get("name"),
+            "sportId": item.get("sportId") or item.get("sport_id"),
+            "leagueId": item.get("leagueId") or item.get("league_id"),
+            "reconciliationState": item.get("reconciliationState") or item.get("reconciliation_state") or "unresolved",
+            "source": provider,
+        } for item in _items(payload) if item.get("id") or item.get("providerEntityId") or item.get("provider_entity_id")]
+
+
+class StandingsAdapter:
+    def adapt(self, payload: Any, provider: str) -> list[dict[str, Any]]:
+        return [{
+            "standingId": item.get("standingId") or item.get("standing_id") or item.get("id"),
+            "leagueId": item.get("leagueId") or item.get("league_id"),
+            "competitionId": item.get("competitionId") or item.get("competition_id"),
+            "season": item.get("season"),
+            "entityId": item.get("entityId") or item.get("entity_id"),
+            "rank": item.get("rank"),
+            "record": item.get("record") if isinstance(item.get("record"), dict) else {},
+            "source": provider,
+            "providerUpdatedAt": item.get("providerUpdatedAt") or item.get("updated_at"),
+        } for item in _items(payload) if item.get("id") or item.get("standingId") or item.get("standing_id")]
+
+
 class CompositeProviderAdapter:
     """Combines domain adapters into the vendor-neutral payload consumed by EdgeBoard."""
 
