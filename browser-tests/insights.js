@@ -35,7 +35,9 @@ const frame = document.querySelector("#app");
 frame.contentWindow.addEventListener("error", (event) => window.testErrors.push(`app: ${event.message}`));
 frame.contentWindow.addEventListener("unhandledrejection", (event) => window.testErrors.push(`app: ${String(event.reason)}`));
 
-const provider = createStatsRepository();
+// Keep rule assertions independent of wall-clock drift while retaining the
+// production behavior that suppresses stale record candidates.
+const provider = createStatsRepository(mockStatsProviderPayload, { generatedAt: "2099-01-01T00:00:00.000Z" });
 const sportsRepository = createSportsRepository(mockProviderPayload);
 const service = createInsightService(provider, sportsRepository);
 const entity = (id) => provider.entities.find((item) => item.id === id);

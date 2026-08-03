@@ -34,10 +34,12 @@ class JobResult:
 
 
 class IngestionRunner:
-    def __init__(self, database: Database, provider_manager: Any, cache: Any | None = None):
+    def __init__(self, database: Database, provider_manager: Any, cache: Any | None = None, correction_service: Any | None = None, rollout_service: Any | None = None):
         self.database = database
         self.provider_manager = provider_manager
         self.cache = cache
+        self.correction_service = correction_service
+        self.rollout_service = rollout_service
         self.handlers: dict[str, Callable[[dict[str, Any]], JobResult]] = {}
         self._locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
@@ -62,6 +64,10 @@ class IngestionRunner:
     ) -> JobResult:
         if job_type not in JOB_TYPES:
             raise ValueError("Unsupported ingestion job type.")
+        if league_id and self.rollout_service:
+            rollout = self.rollout_service.get(league_id)
+            if rollout["rolloutState"] in {"disabled", "suspended"}:
+                raise ValueError(f"Ingestion is disabled while {league_id} is {rollout['rolloutState']}.")
         lock_key = f"{job_type}:{provider}:{sport_id}:{league_id}:{date_scope}"
         with self._guard:
             lock = self._locks.setdefault(lock_key, threading.Lock())
@@ -132,6 +138,12 @@ class IngestionRunner:
                 self.cache.invalidate(tag=f"event:{persisted['eventId']}")
                 self.cache.invalidate(tag=f"league:{event['league_key']}:schedule")
                 self.cache.invalidate(tag="domain:schedules")
+            if persisted["corrected"] and self.correction_service:
+                self.correction_service.record(
+                    league_id=event["league_key"], domain="event", record_id=persisted["eventId"],
+                    provider=fetched.provider, old_value=persisted["previous"] or {}, new_value=persisted["current"],
+                    provider_corrected_at=event.get("provider_updated_at"),
+                )
             accepted += 1
         status = "partial" if validation.partial else "succeeded"
         return JobResult(

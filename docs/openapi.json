@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "EdgeBoard normalized API",
-    "version": "0.9.0",
-    "description": "Production-boundary scaffold. Default responses are recorded fixture/sample data, not live data."
+    "version": "0.10.0",
+    "description": "League-scoped rollout and certification boundary. Default responses are recorded fixture/sample data, not live data."
   },
   "servers": [{"url": "/"}],
   "paths": {
@@ -25,6 +25,7 @@
         "responses": {"200": {"description": "No credentials are included"}}
       }
     },
+    "/api/coverage": {"get": {"summary": "Public league and domain coverage", "responses": {"200": {"description": "Honest Live, Partial, Delayed, Sample, Planned, or Unavailable labels"}}}},
     "/api/sports": {"get": {"summary": "Normalized sport catalog", "responses": {"200": {"description": "Provider-attributed items"}}}},
     "/api/leagues": {"get": {"summary": "Normalized league catalog", "responses": {"200": {"description": "Provider-attributed items"}}}},
     "/api/events": {"get": {"summary": "Normalized events", "responses": {"200": {"description": "Freshness and sample state included"}}}},
@@ -52,6 +53,11 @@
     "/api/workspaces/sync": {"post": {"summary": "User-scoped object sync", "responses": {"200": {"description": "Accepted objects and conflicts"}, "403": {"description": "Ownership or CSRF failure"}}}},
     "/api/alerts": {"get": {"summary": "Configured alert capabilities", "responses": {"200": {"description": "Only real delivery channels"}}}},
     "/api/alerts/evaluate": {"post": {"summary": "Optional server alert evaluation", "responses": {"200": {"description": "Old/new value and trigger result"}, "501": {"description": "Feature disabled"}}}},
-    "/api/admin/diagnostics": {"get": {"summary": "Protected read-only diagnostics", "responses": {"200": {"description": "Redacted operations state"}, "403": {"description": "Admin token required"}}}}
+    "/api/admin/diagnostics": {"get": {"summary": "Protected read-only diagnostics", "responses": {"200": {"description": "Redacted operations state"}, "403": {"description": "Admin token required"}}}},
+    "/api/admin/certification": {"get": {"summary": "Protected certification dashboard", "responses": {"200": {"description": "Rollouts, evidence, shadow, usage, and schedules"}, "403": {"description": "Admin token required"}}}},
+    "/api/admin/rollout/transition": {"post": {"summary": "Audited safe rollout transition", "responses": {"200": {"description": "State transition"}, "400": {"description": "Unsafe state or missing certification"}, "403": {"description": "Admin token required"}}}},
+    "/api/admin/certification/record": {"post": {"summary": "Record structured certification evidence", "responses": {"200": {"description": "Updated checklist"}, "403": {"description": "Admin token required"}}}},
+    "/api/admin/shadow/compare": {"post": {"summary": "Compare and persist shadow discrepancies", "responses": {"200": {"description": "Discrepancy categories and summary"}, "403": {"description": "Admin token required"}}}},
+    "/api/admin/fixtures/validate": {"post": {"summary": "Validate one safe rollout fixture", "responses": {"200": {"description": "Normalized and rejected counts"}, "403": {"description": "Admin token required"}}}}
   }
 }

@@ -42,6 +42,8 @@ function common(event, league, markets, kind) {
     sportName: league.sportDisplayName,
     status: event.status,
     startsAt: event.startsAt,
+    sourceMode: event.sourceMode,
+    live: event.live,
     venue: event.venue,
     dataQualityWarning: league.dataQualityStatus === "good"
       ? "Sample provider data — verify event status and market rules"

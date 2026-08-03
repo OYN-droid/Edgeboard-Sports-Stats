@@ -2004,6 +2004,66 @@ body.workspace-active .mobile-slip-toggle {
   box-shadow: 0 0 0 3px rgba(216, 91, 91, 0.14);
 }
 
+.coverage-dialog {
+  width: min(1100px, calc(100vw - 32px));
+  max-width: none;
+}
+
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.coverage-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--control-bg);
+  padding: 16px;
+}
+
+.coverage-card header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.coverage-card h3 { margin: 2px 0 0; }
+.coverage-card p, .coverage-card details { color: var(--muted); }
+.coverage-sport { color: var(--muted); font-size: .7rem; font-weight: 800; text-transform: uppercase; }
+
+.source-mode-badge {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 7px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.source-mode-badge.live_verified { border-color: rgba(85, 184, 121, .55); color: #55b879; }
+.source-mode-badge.live_partial,
+.source-mode-badge.cached_fresh,
+.source-mode-badge.cached_stale { border-color: rgba(209, 155, 56, .55); color: #d19b38; }
+.source-mode-badge.fixture,
+.source-mode-badge.sample { border-color: rgba(206, 17, 65, .48); color: var(--text); }
+
+@media (max-width: 700px) {
+  .coverage-grid { grid-template-columns: 1fr; }
+  .coverage-dialog { width: calc(100vw - 32px); max-width: calc(100vw - 32px); padding: 0; }
+  .coverage-dialog .workspace-share-preview { min-width: 0; padding: 14px; }
+  .coverage-dialog .dialog-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-width: 0; align-items: flex-start; }
+  .coverage-dialog .dialog-heading > div { min-width: 0; }
+  .coverage-card { width: 100%; max-width: 100%; overflow: hidden; padding: 12px; }
+  .coverage-card table { width: 100%; table-layout: fixed; font-size: .72rem; }
+  .coverage-card th,
+  .coverage-card td { padding: 4px; white-space: normal; overflow-wrap: anywhere; }
+}
+
 .discovery-backdrop {
   position: fixed;
   inset: 0;
@@ -4227,6 +4287,13 @@ input[type="range"] {
 }
 
 @media (max-width: 720px) {
+  html,
+  body,
+  .app-shell {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .topbar {
     grid-template-columns: 1fr auto;
     gap: 8px;
@@ -4296,7 +4363,31 @@ input[type="range"] {
   }
 
   .hero-content {
+    grid-template-columns: minmax(0, 1fr);
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+    min-width: 0;
     padding: 34px 0 30px;
+  }
+
+  .hero-copy,
+  .hero-copy h1,
+  .ask-panel,
+  .query-support-actions,
+  .quick-prompts {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(1.9rem, 8vw, 2.3rem);
+    line-height: 1.02;
+    overflow-wrap: anywhere;
+  }
+
+  .ask-panel {
+    width: 100%;
+    overflow: hidden;
   }
 
   h1 {
@@ -4313,6 +4404,26 @@ input[type="range"] {
   .comparison-grid,
   .split-grid {
     grid-template-columns: 1fr;
+  }
+
+  .query-support-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .query-row .primary-button,
+  .query-support-actions > button {
+    width: 100%;
+  }
+
+  .theme-switch {
+    max-width: 148px;
+  }
+
+  .theme-option {
+    padding-inline: 7px;
+    font-size: .72rem;
   }
 
   .athlete-search-shell {

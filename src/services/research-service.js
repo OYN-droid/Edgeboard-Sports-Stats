@@ -41,6 +41,7 @@ function flattenMarkets(repository, leagueId) {
       period: market.period,
       settlementScope: market.settlementScope,
       source: market.source,
+      sourceMode: selection.sourceMode || market.sourceMode || "unavailable",
       isLive: market.isLive,
       isAlternate: market.isAlternate,
       isSgpEligible: market.isSgpEligible,

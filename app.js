@@ -37,10 +37,14 @@ import {
   advancedResultSummaryToText,
   advancedResultToText,
 } from "./src/services/advanced-stats-results-service.js";
+import { loadCoverage } from "./src/services/coverage-client.js";
 
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
-const statsRepository = createStatsRepository();
+const testFixtureTimestamp = document.referrer.includes("/browser-tests/")
+  ? new URLSearchParams(window.location.search).get("testFixtureTimestamp") || ""
+  : "";
+const statsRepository = createStatsRepository(undefined, { generatedAt: testFixtureTimestamp });
 const insightService = createInsightService(statsRepository, sportsRepository);
 const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository, insightService);
 const entityRegistry = createEntityRegistry();
@@ -360,6 +364,12 @@ const elements = {
   dataStatusDialog: document.querySelector("#dataStatusDialog"),
   dataStatusDetails: document.querySelector("#dataStatusDetails"),
   closeDataStatusDialog: document.querySelector("#closeDataStatusDialog"),
+  openCoverage: document.querySelector("#openCoverage"),
+  coverageDialog: document.querySelector("#coverageDialog"),
+  coverageTitle: document.querySelector("#coverageDialogTitle"),
+  coverageNotice: document.querySelector("#coverageNotice"),
+  coverageContent: document.querySelector("#coverageContent"),
+  closeCoverageDialog: document.querySelector("#closeCoverageDialog"),
   modeBadge: document.querySelector("#modeBadge"),
   statsResults: document.querySelector("#statsResults"),
   statsLoading: document.querySelector("#statsLoading"),
@@ -961,7 +971,7 @@ function renderPicks() {
         </div>
         <div class="odds">${formatOdds(pick.odds)}</div>
       </div>
-      <div class="bet-source-row"><span>${escapeHtml(pick.sportsbook)}</span><span>Updated ${formatDateTime(pick.lastUpdatedAt)}</span></div>
+      <div class="bet-source-row"><span>${escapeHtml(pick.sportsbook)} <span class="source-mode-badge ${escapeHtml(pick.sourceMode || "unavailable")}">${escapeHtml(sourceModeLabel(pick.sourceMode))}</span></span><span>Updated ${formatDateTime(pick.lastUpdatedAt)}</span></div>
       <div class="prop-metrics">
         <div class="prop-metric">
           <span class="prop-metric-label">Line <button class="info-button" type="button" aria-label="About line" title="The displayed threshold or outcome for this sample market.">i</button></span>
@@ -1155,10 +1165,22 @@ function renderBout(label, bout) {
 }
 
 function renderEventPresentation(presentation) {
+  const providerDelay = Number.isFinite(Number(presentation.live?.delaySeconds))
+    ? Math.max(0, Math.round(Number(presentation.live.delaySeconds)))
+    : null;
+  const liveLabel = presentation.live?.connectionState === "reconnecting"
+    ? "Reconnecting"
+    : providerDelay > 0 ? `Delayed ${providerDelay}s` : "Live";
+  const liveSourceMode = presentation.live?.connectionState === "connected" && providerDelay === 0
+    ? "live_verified" : "live_partial";
+  const liveStatus = presentation.live
+    ? `<span class="source-mode-badge ${liveSourceMode}">${escapeHtml(liveLabel)}</span>
+       <span>${escapeHtml([presentation.live.period, presentation.live.clock, presentation.live.score].filter(Boolean).join(" · "))}</span>`
+    : `<span class="source-mode-badge ${escapeHtml(presentation.sourceMode || "sample")}">${escapeHtml(sourceModeLabel(presentation.sourceMode))}</span>`;
   const commonHeader = `
     <div class="presentation-header">
       <div><p class="eyebrow">${escapeHtml(presentation.sportName)} · ${escapeHtml(presentation.leagueName)}</p><h3>${escapeHtml(presentation.title)}</h3><p>${escapeHtml(presentation.subtitle)}</p></div>
-      <div class="presentation-status"><strong>${escapeHtml(presentation.status)}</strong><span>${formatDateTime(presentation.startsAt, "Time unavailable")}</span><small>Updated ${formatDateTime(presentation.lastUpdatedAt)}</small></div>
+      <div class="presentation-status"><strong>${escapeHtml(presentation.status)}</strong>${liveStatus}<span>${formatDateTime(presentation.startsAt, "Time unavailable")}</span><small>Updated ${formatDateTime(presentation.live?.lastUpdatedAt || presentation.lastUpdatedAt)}</small></div>
     </div>
   `;
   const markets = `<div class="market-support-grid">${renderMarketSupport(presentation.markets)}</div>`;
@@ -1279,6 +1301,51 @@ elements.dataStatus.addEventListener("click", () => {
 });
 elements.closeDataStatusDialog.addEventListener("click", () => {
   elements.dataStatusDialog.close();
+  elements.dataStatus.focus();
+});
+
+function sourceModeLabel(value) {
+  return ({
+    live_verified: "Live", live_partial: "Partial", cached_fresh: "Delayed",
+    cached_stale: "Delayed", fixture: "Sample", sample: "Sample", unavailable: "Unavailable",
+  })[value] || "Unavailable";
+}
+
+async function openCoverageView() {
+  elements.dataStatusDialog.close();
+  elements.coverageDialog.showModal();
+  const coverageUrl = new URL(window.location.href);
+  coverageUrl.searchParams.set("coverage", "1");
+  history.replaceState(null, "", coverageUrl);
+  elements.coverageContent.setAttribute("aria-busy", "true");
+  elements.coverageContent.innerHTML = '<div class="profile-loading"><span class="stats-skeleton wide" aria-hidden="true"></span><span>Loading coverage…</span></div>';
+  elements.coverageTitle.focus({ preventScroll: true });
+  const coverage = await loadCoverage();
+  elements.coverageNotice.textContent = coverage.notice || "Coverage varies by league and domain.";
+  elements.coverageContent.innerHTML = `<div class="coverage-grid">${coverage.leagues.map((league) => `
+    <article class="coverage-card">
+      <header><div><span class="coverage-sport">${escapeHtml(league.sportId)}</span><h3>${escapeHtml(league.displayName)}</h3></div><span class="source-mode-badge ${escapeHtml(league.dataMode)}">${escapeHtml(sourceModeLabel(league.dataMode))}</span></header>
+      <p>${escapeHtml(league.rolloutState.replaceAll("_", " "))} · ${escapeHtml(league.provider)}</p>
+      <div class="table-scroll"><table><thead><tr><th>Domain</th><th>Coverage</th><th>Updated</th></tr></thead><tbody>
+        ${league.domains.map((domain) => `<tr><th scope="row">${escapeHtml(domain.label)}</th><td><span class="source-mode-badge ${escapeHtml(domain.sourceMode)}">${escapeHtml(domain.publicStatus || sourceModeLabel(domain.sourceMode))}</span></td><td>${escapeHtml(formatDateTime(domain.lastUpdatedAt, "Not available"))}</td></tr>`).join("")}
+      </tbody></table></div>
+      ${league.knownLimitations?.length ? `<details><summary>Known limitations</summary><ul>${league.knownLimitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>` : ""}
+    </article>
+  `).join("")}</div>`;
+  elements.coverageContent.setAttribute("aria-busy", "false");
+}
+
+elements.openCoverage.addEventListener("click", () => {
+  openCoverageView().catch((error) => {
+    elements.coverageContent.setAttribute("aria-busy", "false");
+    elements.coverageContent.innerHTML = `<div class="data-warning"><strong>Coverage unavailable</strong><p>${escapeHtml(error?.message || "Unable to load league coverage.")}</p></div>`;
+  });
+});
+elements.closeCoverageDialog.addEventListener("click", () => {
+  elements.coverageDialog.close();
+  const coverageUrl = new URL(window.location.href);
+  coverageUrl.searchParams.delete("coverage");
+  history.replaceState(null, "", coverageUrl);
   elements.dataStatus.focus();
 });
 
@@ -4007,8 +4074,13 @@ elements.shareVisualAnalytics.addEventListener("click", async () => {
   }
 });
 elements.visualAnalyticsContent.addEventListener("click", async (event) => {
-  if (!state.visualRequest || !state.visualResult) return;
   const status = elements.visualAnalyticsContent.querySelector(".visual-action-status");
+  if (!state.visualRequest || !state.visualResult) {
+    if (event.target.closest("[data-copy-visual-summary], [data-copy-visual-data], [data-copy-visual-link], [data-download-visual-csv]") && status) {
+      status.textContent = "Action unavailable while the visualization is refreshing.";
+    }
+    return;
+  }
   const fallback = event.target.closest("[data-visual-fallback]");
   if (fallback) {
     openVisualAnalytics({ ...state.visualRequest, visualizationType: fallback.dataset.visualFallback }, { replace: false });
@@ -5077,6 +5149,14 @@ setTheme(savedTheme);
 persistNavigationSelection();
 renderAll();
 scheduleMarketBoardLoad();
+if (new URLSearchParams(window.location.search).get("coverage") === "1") {
+  window.setTimeout(() => {
+    openCoverageView().catch((error) => {
+      elements.coverageContent.setAttribute("aria-busy", "false");
+      elements.coverageContent.textContent = error?.message || "Unable to load league coverage.";
+    });
+  }, 0);
+}
 if (initialWorkspaceRoute) {
   loadWorkspace({ focusHeading: false });
 }

@@ -323,7 +323,7 @@ class DatabaseTests(unittest.TestCase):
         self.db.close()
 
     def test_migration_and_health(self):
-        self.assertEqual(self.db.schema_version(), 1)
+        self.assertEqual(self.db.schema_version(), 2)
         self.assertTrue(self.db.health()["connected"])
 
     def test_transaction_failure_rolls_back(self):

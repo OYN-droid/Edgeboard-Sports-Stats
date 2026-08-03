@@ -343,6 +343,18 @@
       <div class="workspace-share-preview">
         <div class="dialog-heading"><div><p class="eyebrow">Provider transparency</p><h2 id="dataStatusDialogTitle">Data status</h2></div><button type="button" id="closeDataStatusDialog">Close</button></div>
         <div id="dataStatusDetails"></div>
+        <div class="dialog-actions"><button type="button" id="openCoverage">View Data Coverage</button></div>
+      </div>
+    </dialog>
+
+    <dialog class="workspace-dialog coverage-dialog" id="coverageDialog" aria-labelledby="coverageDialogTitle">
+      <div class="workspace-share-preview">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">Source transparency</p><h2 id="coverageDialogTitle" tabindex="-1">Data Coverage</h2></div>
+          <button type="button" id="closeCoverageDialog">Close</button>
+        </div>
+        <p id="coverageNotice">Loading league coverage…</p>
+        <div id="coverageContent" aria-live="polite" aria-busy="true"></div>
       </div>
     </dialog>
 

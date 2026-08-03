@@ -8,6 +8,7 @@ from urllib.parse import parse_qs
 
 from .adapters import CatalogAdapter, EntitySearchAdapter, StandingsAdapter
 from .auth import Principal
+from .database import utc_now
 from .errors import (
     AuthenticationError,
     AuthorizationError,
@@ -18,6 +19,9 @@ from .errors import (
 )
 from .ingestion import schedule_manifest
 from .observability import Timer, request_id
+from .rollout_adapters import RolloutFixtureAdapter
+from .rollout_schedules import league_schedule
+from .shadow import compare_shadow
 
 
 PUBLIC_RATE_POLICIES = {
@@ -124,6 +128,16 @@ class Api:
             }
         if path == "/api/config/public":
             return self.runtime.config.public_config()
+        if path == "/api/coverage":
+            if not self.runtime.config.flags.coverage_page_enabled:
+                raise UnsupportedFeatureError("The public data-coverage page is disabled.")
+            return {
+                "generatedAt": utc_now(),
+                "liveProviderVerified": self.runtime.live_provider_verified,
+                "leagues": self.runtime.rollout.list_coverage(public=True),
+                "labels": ["Live", "Partial", "Delayed", "Sample", "Planned", "Unavailable"],
+                "notice": "Fixture and sample evidence are not live data. No league is promoted automatically.",
+            }
         if path in {"/api/provider-data", "/api/provider-status"}:
             bundle = self.runtime.gateway.get_bundle()
             return bundle if path.endswith("provider-data") else bundle["provider_status"]
@@ -200,6 +214,18 @@ class Api:
                 "metrics": self.runtime.metrics.snapshot(),
                 "sampleMode": not self.runtime.config.live_configured,
                 "readOnly": True,
+                "rollouts": self.runtime.rollout.list_coverage(public=False),
+                "shadow": self.runtime.shadow.summary(),
+                "usage": self.runtime.usage.summary(),
+            }
+        if path == "/api/admin/certification":
+            self._require_admin(headers)
+            coverage = self.runtime.rollout.list_coverage(public=False)
+            checklists = [self.runtime.certification.checklist(item["leagueId"]) for item in coverage]
+            return {
+                "readOnly": True, "rollouts": coverage, "certification": checklists,
+                "shadow": self.runtime.shadow.summary(), "usage": self.runtime.usage.summary(),
+                "schedules": {item["leagueId"]: league_schedule(item["leagueId"]) for item in coverage},
             }
         raise UnsupportedFeatureError("API endpoint is not implemented.")
 
@@ -265,6 +291,63 @@ class Api:
                 date_scope=str(data.get("dateScope") or ""),
             )
             return asdict(result)
+        if path == "/api/admin/rollout/transition":
+            self._require_admin(headers)
+            result = self.runtime.rollout.transition(
+                str(data.get("leagueId") or ""), str(data.get("state") or ""), actor="admin-token",
+                reason=str(data.get("reason") or ""), confirmation=str(data.get("confirmation") or ""),
+                certification_service=self.runtime.certification,
+            )
+            self.runtime.cache.invalidate(tag=f"league:{result.league_id}")
+            return asdict(result)
+        if path == "/api/admin/rollout/domain":
+            self._require_admin(headers)
+            league_id, domain = str(data.get("leagueId") or ""), str(data.get("domain") or "")
+            self.runtime.rollout.set_domain(
+                league_id, domain, str(data.get("readiness") or ""), str(data.get("sourceMode") or ""),
+                actor="admin-token", evidence=data.get("evidence") if isinstance(data.get("evidence"), dict) else {},
+                limitations=data.get("limitations") if isinstance(data.get("limitations"), list) else [],
+                provider=str(data.get("provider") or ""),
+            )
+            self.runtime.cache.invalidate(tag=f"league:{league_id}")
+            return {"league": self.runtime.rollout.get(league_id), "domain": domain}
+        if path == "/api/admin/rollout/provider":
+            self._require_admin(headers)
+            league_id = str(data.get("leagueId") or "")
+            self.runtime.rollout.switch_provider(league_id, str(data.get("provider") or ""), actor="admin-token", reason=str(data.get("reason") or ""))
+            self.runtime.cache.invalidate(tag=f"league:{league_id}")
+            return {"league": self.runtime.rollout.get(league_id)}
+        if path == "/api/admin/cache/clear":
+            self._require_admin(headers)
+            if data.get("confirmation") != "CLEAR PUBLIC CACHE":
+                raise ValidationError("Clearing public cache requires explicit confirmation.")
+            return {"cleared": self.runtime.cache.clear_public(), "privateEntriesPreserved": True}
+        if path == "/api/admin/certification/record":
+            self._require_admin(headers)
+            result_id = self.runtime.certification.record(
+                str(data.get("leagueId") or ""), str(data.get("category") or ""), str(data.get("checkKey") or ""),
+                str(data.get("status") or ""), evidence=data.get("evidence") if isinstance(data.get("evidence"), dict) else {},
+                actor="admin-token", evidence_at=data.get("evidenceAt"), expires_at=data.get("expiresAt"),
+                notes=str(data.get("notes") or ""),
+            )
+            return {"resultId": result_id, "checklist": self.runtime.certification.checklist(str(data.get("leagueId") or ""))}
+        if path == "/api/admin/shadow/compare":
+            self._require_admin(headers)
+            league_id = str(data.get("leagueId") or "")
+            domain = str(data.get("domain") or "")
+            discrepancies = compare_shadow(data.get("primary"), data.get("secondary"), domain=domain)
+            self.runtime.shadow.record(league_id, domain, str(data.get("primaryProvider") or "primary"), str(data.get("secondaryProvider") or "secondary"), discrepancies)
+            return {"discrepancies": discrepancies, "summary": self.runtime.shadow.summary(league_id)}
+        if path == "/api/admin/fixtures/validate":
+            self._require_admin(headers)
+            adapter = RolloutFixtureAdapter()
+            league_id = str(data.get("leagueId") or "")
+            normalized = adapter.normalize(league_id)
+            return {
+                "leagueId": league_id, "fixture": adapter.metadata,
+                "counts": {key: len(normalized[key]) for key in ("entities", "events", "statistics", "markets", "rejected_markets")},
+                "sourceMode": normalized["source_mode"],
+            }
         if path == "/api/auth/logout":
             principal = self._principal(headers)
             self.runtime.sessions.verify_csrf(principal, headers.get("x-csrf-token"))

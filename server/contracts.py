@@ -8,7 +8,7 @@ from typing import Any
 from .freshness import parse_timestamp
 
 
-EVENT_STATUSES = {"scheduled", "live", "postponed", "cancelled", "final", "suspended", "unknown"}
+EVENT_STATUSES = {"scheduled", "live", "postponed", "cancelled", "abandoned", "final", "suspended", "unknown"}
 COLLECTION_KEYS = (
     "league_statuses",
     "events",
@@ -146,7 +146,7 @@ def validate_normalized_bundle(bundle: object, now: datetime | None = None) -> V
                 item["american_odds"] = odds
             valid_selections.append(item)
         normalized["selections"] = valid_selections
-        if event_statuses.get(normalized["event_id"]) in {"postponed", "cancelled"}:
+        if event_statuses.get(normalized["event_id"]) in {"postponed", "cancelled", "abandoned"}:
             normalized["status"] = "suspended"
             for selection in normalized["selections"]:
                 selection["available"] = False

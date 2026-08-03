@@ -68,6 +68,13 @@ class MemoryCache:
         with self._lock:
             self._entries.clear()
 
+    def clear_public(self) -> int:
+        with self._lock:
+            keys = [key for key, entry in self._entries.items() if not entry.private]
+            for key in keys:
+                self._entries.pop(key, None)
+            return len(keys)
+
     def invalidate(self, *, prefix: str = "", tag: str = "") -> int:
         with self._lock:
             keys = [

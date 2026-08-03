@@ -31,8 +31,32 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Sample-mode API smoke test
         run: python scripts/smoke.py
+      - name: Phase 10 four-league fixture validation
+        run: python scripts/validate_rollout.py
       - name: Check committed secret patterns
         run: |
           ! git grep -nE '(sk-[A-Za-z0-9]{16,}|Bearer [A-Za-z0-9._~-]{16,})' -- ':!*.md'
       - name: Check diff hygiene
         run: git diff --check
+
+  rollout-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [fixture-only, shadow-discrepancy, limited-live, degraded-cache, provider-timeout, malformed-market]
+    env:
+      APP_ENV: test
+      DATA_MODE: sample
+      SAMPLE_MODE: "true"
+      ROLLOUT_TEST_SCENARIO: ${{ matrix.scenario }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Credential-free rollout suite
+        run: |
+          python scripts/validate_rollout.py --scenario "$ROLLOUT_TEST_SCENARIO"
+          python -m unittest -v tests.test_phase10_rollout

@@ -876,6 +876,7 @@ export class MockHistoricalStatsProvider extends HistoricalStatsProvider {
   }
 }
 
-export function createStatsRepository(payload = mockStatsProviderPayload) {
-  return new MockHistoricalStatsProvider(payload);
+export function createStatsRepository(payload = mockStatsProviderPayload, { generatedAt = "" } = {}) {
+  const source = generatedAt ? { ...payload, generated_at: generatedAt } : payload;
+  return new MockHistoricalStatsProvider(source);
 }

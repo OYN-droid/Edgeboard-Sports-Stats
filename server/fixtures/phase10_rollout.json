@@ -1,0 +1,75 @@
+{
+  "fixtureVersion": "phase10-v1",
+  "providerSchemaVersion": "recorded-contract-v1",
+  "provider": "edgeboard-phase10-fixture",
+  "recordedAt": "2026-08-01T12:00:00Z",
+  "license": {
+    "recordingAllowed": true,
+    "containsSecrets": false,
+    "containsPersonalData": false,
+    "redistribution": "test-fixture-only"
+  },
+  "leagues": {
+    "mlb": {
+      "entities": [
+        {"providerId":"mlb-nyy","name":"New York Yankees","type":"team","abbreviation":"NYY","division":"AL East","venue":"Yankee Stadium"},
+        {"providerId":"mlb-bos","name":"Boston Red Sox","type":"team","abbreviation":"BOS","division":"AL East","venue":"Fenway Park"},
+        {"providerId":"mlb-p1","name":"Fixture Pitcher","type":"athlete","role":"pitcher","teamProviderId":"mlb-nyy"},
+        {"providerId":"mlb-b1","name":"Fixture Batter","type":"athlete","role":"batter","teamProviderId":"mlb-bos"}
+      ],
+      "events": [
+        {"providerId":"mlb-2026-001-g1","doubleheaderGame":1,"startsAt":"2026-08-03T17:05:00Z","status":"scheduled","homeId":"mlb-nyy","awayId":"mlb-bos","probablePitcherId":"mlb-p1"},
+        {"providerId":"mlb-2026-001-g2","doubleheaderGame":2,"startsAt":"2026-08-03T23:05:00Z","status":"scheduled","homeId":"mlb-nyy","awayId":"mlb-bos","probablePitcherId":"mlb-p1"}
+      ],
+      "statistics": [
+        {"providerId":"mlb-stat-p1-k","eventId":"mlb-2026-000","entityId":"mlb-p1","statId":"pitcher_strikeouts","value":7,"unit":"count","status":"final"},
+        {"providerId":"mlb-stat-p1-ip","eventId":"mlb-2026-000","entityId":"mlb-p1","statId":"innings_pitched","value":"6.2","unit":"baseball_innings","status":"final"},
+        {"providerId":"mlb-stat-b1-h","eventId":"mlb-2026-000","entityId":"mlb-b1","statId":"hits","value":2,"unit":"count","status":"final"}
+      ],
+      "markets": [
+        {"providerMarketId":"mlb-mkt-k","eventId":"mlb-2026-001-g1","canonicalMarketId":"pitcher_strikeouts","period":"full_game","settlementScope":"including_extra_innings","sportsbookId":"fixture-book","status":"open","selections":[{"id":"over","entityId":"mlb-p1","participantRole":"pitcher","side":"over","line":6.5,"americanOdds":-110},{"id":"under","entityId":"mlb-p1","participantRole":"pitcher","side":"under","line":6.5,"americanOdds":-110}]},
+        {"providerMarketId":"mlb-mkt-f5","eventId":"mlb-2026-001-g1","canonicalMarketId":"first_five_total","period":"first_five_innings","settlementScope":"first_five_complete_innings","sportsbookId":"fixture-book","status":"open","selections":[{"id":"over","participantRole":"team","side":"over","line":4.5,"americanOdds":-105},{"id":"under","participantRole":"team","side":"under","line":4.5,"americanOdds":-115}]}
+      ],
+      "lineups": [{"eventId":"mlb-2026-001-g1","entityId":"mlb-b1","status":"starter","confirmationState":"projected","updatedAt":"2026-08-01T12:00:00Z"}]
+    },
+    "wnba": {
+      "entities": [
+        {"providerId":"wnba-ind","name":"Indiana Fever","type":"team","abbreviation":"IND","venue":"Gainbridge Fieldhouse"},
+        {"providerId":"wnba-nyl","name":"New York Liberty","type":"team","abbreviation":"NYL","venue":"Barclays Center"},
+        {"providerId":"wnba-p1","name":"Fixture Guard","type":"athlete","role":"player","teamProviderId":"wnba-ind"}
+      ],
+      "events": [{"providerId":"wnba-2026-001","startsAt":"2026-08-03T19:00:00Z","status":"scheduled","homeId":"wnba-ind","awayId":"wnba-nyl","competitionContext":"regular_season"}],
+      "statistics": [
+        {"providerId":"wnba-stat-a","eventId":"wnba-2026-000","entityId":"wnba-p1","statId":"assists","value":9,"unit":"count","status":"final","overtime":true},
+        {"providerId":"wnba-stat-p","eventId":"wnba-2026-000","entityId":"wnba-p1","statId":"points","value":24,"unit":"count","status":"final","overtime":true}
+      ],
+      "markets": [{"providerMarketId":"wnba-mkt-a","eventId":"wnba-2026-001","canonicalMarketId":"player_assists","period":"full_game","settlementScope":"including_overtime","sportsbookId":"fixture-book","status":"open","selections":[{"id":"over","entityId":"wnba-p1","participantRole":"player","side":"over","line":7.5,"americanOdds":-115},{"id":"under","entityId":"wnba-p1","participantRole":"player","side":"under","line":7.5,"americanOdds":-105}]}],
+      "injuries": [{"entityId":"wnba-p1","status":"available","confirmationState":"confirmed","updatedAt":"2026-08-01T12:00:00Z"}],
+      "lineups": [{"eventId":"wnba-2026-001","entityId":"wnba-p1","status":"starter","confirmationState":"projected","updatedAt":"2026-08-01T12:00:00Z"}]
+    },
+    "ufc": {
+      "entities": [
+        {"providerId":"ufc-f1","name":"Fixture Fighter Alpha","type":"fighter","stance":"orthodox","reachInches":74,"record":"18-3-0"},
+        {"providerId":"ufc-f2","name":"Fixture Fighter Beta","type":"fighter","stance":"southpaw","reachInches":72,"record":"15-4-0"}
+      ],
+      "events": [{"providerId":"ufc-2026-001-bout-1","cardId":"ufc-2026-001","eventName":"UFC Fixture Night","startsAt":"2026-08-08T23:00:00Z","status":"scheduled","fighterIds":["ufc-f1","ufc-f2"],"cardOrder":1,"cardSection":"main_event","scheduledRounds":5,"titleFight":true,"interimTitle":false,"weightClass":"welterweight"}],
+      "statistics": [{"providerId":"ufc-stat-kd","eventId":"ufc-2025-010-bout-3","entityId":"ufc-f1","statId":"knockdowns","value":1,"unit":"count","status":"final"},{"providerId":"ufc-stat-sub","eventId":"ufc-2025-010-bout-3","entityId":"ufc-f1","statId":"submission_attempts","value":2,"unit":"count","status":"final"}],
+      "markets": [{"providerMarketId":"ufc-mkt-method","eventId":"ufc-2026-001-bout-1","canonicalMarketId":"method_of_victory","period":"fight","settlementScope":"official_result","sportsbookId":"fixture-book","status":"open","scheduledRounds":5,"fighterIds":["ufc-f1","ufc-f2"],"selections":[{"id":"f1-sub","entityId":"ufc-f1","participantRole":"fighter","side":"submission","americanOdds":350},{"id":"f2-ko","entityId":"ufc-f2","participantRole":"fighter","side":"ko_tko","americanOdds":220}]}]
+    },
+    "mls": {
+      "entities": [
+        {"providerId":"mls-atl","name":"Atlanta United","type":"team","country":"US","organizer":"MLS"},
+        {"providerId":"mls-mia","name":"Inter Miami","type":"team","country":"US","organizer":"MLS"},
+        {"providerId":"mls-p1","name":"Fixture Forward","type":"athlete","role":"player","teamProviderId":"mls-mia"}
+      ],
+      "events": [{"providerId":"mls-2026-001","competitionId":"mls","season":"2026","stage":"regular_season","startsAt":"2026-08-04T00:30:00Z","status":"scheduled","homeId":"mls-atl","awayId":"mls-mia","neutralVenue":false}],
+      "statistics": [{"providerId":"mls-stat-sot","eventId":"mls-2026-000","entityId":"mls-p1","statId":"shots_on_target","value":3,"unit":"count","status":"final"}],
+      "markets": [
+        {"providerMarketId":"mls-mkt-3way","eventId":"mls-2026-001","canonicalMarketId":"three_way_moneyline","period":"regulation","settlementScope":"90_minutes_plus_stoppage","sportsbookId":"fixture-book","status":"open","selections":[{"id":"home","entityId":"mls-atl","participantRole":"team","side":"home","americanOdds":180},{"id":"draw","participantRole":"draw","side":"draw","americanOdds":240},{"id":"away","entityId":"mls-mia","participantRole":"team","side":"away","americanOdds":145}]},
+        {"providerMarketId":"mls-mkt-sot","eventId":"mls-2026-001","canonicalMarketId":"player_shots_on_target","period":"regulation","settlementScope":"90_minutes_plus_stoppage","sportsbookId":"fixture-book","status":"open","selections":[{"id":"over","entityId":"mls-p1","participantRole":"player","side":"over","line":1.5,"americanOdds":-105},{"id":"under","entityId":"mls-p1","participantRole":"player","side":"under","line":1.5,"americanOdds":-115}]}
+      ],
+      "standings": [{"entityId":"mls-mia","rank":1,"season":"2026","competitionId":"mls"}],
+      "lineups": [{"eventId":"mls-2026-001","entityId":"mls-p1","status":"starter","confirmationState":"projected","updatedAt":"2026-08-01T12:00:00Z"}]
+    }
+  }
+}

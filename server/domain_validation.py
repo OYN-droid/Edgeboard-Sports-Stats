@@ -8,7 +8,7 @@ from typing import Any, Callable
 from .freshness import parse_timestamp
 
 
-EVENT_STATUSES = {"scheduled", "live", "postponed", "cancelled", "final", "suspended", "unknown"}
+EVENT_STATUSES = {"scheduled", "live", "postponed", "cancelled", "abandoned", "final", "suspended", "unknown"}
 MARKET_STATUSES = {"open", "suspended", "closed", "unavailable"}
 MARKET_SIDES = {"home", "away", "draw", "over", "under", "yes", "no", "competitor", ""}
 SETTLEMENT_SCOPES = {

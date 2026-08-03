@@ -142,3 +142,8 @@ See [Production data foundation](docs/production-data-foundation.md) for the
 Phase 9 server boundary, normalized contracts, persistence, reconciliation,
 cache and failover behavior, ingestion, auth/sync foundations, API operations,
 deployment, and rollback.
+
+See [Phase 10 rollout playbook](docs/phase10-rollout-playbook.md) for per-league
+rollout states, the MLB/WNBA/UFC/MLS readiness matrix, certification gates,
+shadow validation, limited-live behavior, corrections, usage monitoring, and
+rollback. No live league is currently certified.

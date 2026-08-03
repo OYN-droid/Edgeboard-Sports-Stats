@@ -74,7 +74,7 @@ def create_handler(runtime: Runtime):
                 return
             self.send_response(204)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Request-ID")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Request-ID, X-EdgeBoard-Admin")
             self.send_header("Access-Control-Max-Age", "600")
             self.end_headers()
 

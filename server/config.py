@@ -8,6 +8,8 @@ from typing import Mapping
 TRUE_VALUES = {"1", "true", "yes", "on"}
 APP_ENVS = {"development", "test", "staging", "production"}
 DATA_MODES = {"sample", "live", "hybrid", "degraded", "offline"}
+ROLLOUT_STATE_VALUES = {"disabled", "fixture_only", "internal_testing", "shadow", "limited_live", "production", "degraded", "suspended"}
+ROLLOUT_LEAGUE_IDS = ("mlb", "wnba", "ufc", "mls")
 
 
 def _bool(env: Mapping[str, str], name: str, default: bool = False) -> bool:
@@ -45,6 +47,8 @@ class FeatureFlags:
     ai_explanations_enabled: bool = False
     visual_telemetry_enabled: bool = False
     sample_mode_enabled: bool = True
+    league_rollout_enabled: bool = True
+    coverage_page_enabled: bool = True
 
     def public(self) -> dict[str, bool]:
         return asdict(self)
@@ -102,6 +106,10 @@ class ProviderConfig:
     allowed_origins: tuple[str, ...]
     admin_token: str
     request_body_limit_bytes: int
+    league_rollout_states: tuple[tuple[str, str], ...]
+    provider_request_warning_per_hour: int
+    provider_retry_warning_per_hour: int
+    provider_expensive_warning_per_hour: int
     host: str
     port: int
     flags: FeatureFlags = field(default_factory=FeatureFlags)
@@ -126,6 +134,8 @@ class ProviderConfig:
             ai_explanations_enabled=_bool(env, "AI_EXPLANATIONS_ENABLED"),
             visual_telemetry_enabled=_bool(env, "VISUAL_TELEMETRY_ENABLED"),
             sample_mode_enabled=_bool(env, "SAMPLE_MODE_ENABLED", True),
+            league_rollout_enabled=_bool(env, "LEAGUE_ROLLOUT_ENABLED", True),
+            coverage_page_enabled=_bool(env, "COVERAGE_PAGE_ENABLED", True),
         )
         terms = ProviderTerms(
             attribution_required=_bool(env, "PROVIDER_ATTRIBUTION_REQUIRED", True),
@@ -176,6 +186,13 @@ class ProviderConfig:
             allowed_origins=_csv(env, "ALLOWED_ORIGINS", "http://127.0.0.1:9010,http://localhost:9010"),
             admin_token=env.get("ADMIN_TOKEN", "").strip(),
             request_body_limit_bytes=max(1024, _int(env, "REQUEST_BODY_LIMIT_BYTES", 262_144)),
+            league_rollout_states=tuple(
+                (league_id, env.get(f"{league_id.upper()}_ROLLOUT_STATE", "fixture_only").strip().lower())
+                for league_id in ROLLOUT_LEAGUE_IDS
+            ),
+            provider_request_warning_per_hour=max(1, _int(env, "PROVIDER_REQUEST_WARNING_PER_HOUR", 5000)),
+            provider_retry_warning_per_hour=max(1, _int(env, "PROVIDER_RETRY_WARNING_PER_HOUR", 250)),
+            provider_expensive_warning_per_hour=max(1, _int(env, "PROVIDER_EXPENSIVE_WARNING_PER_HOUR", 100)),
             host=env.get("EDGEBOARD_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1",
             port=max(1, _int(env, "EDGEBOARD_SERVER_PORT", 9010)),
             flags=flags,
@@ -223,6 +240,11 @@ class ProviderConfig:
             errors.append("SAMPLE_MODE_ENABLED must be enabled while DATA_MODE is sample.")
         if self.app_env == "production" and not self.allowed_origins:
             errors.append("ALLOWED_ORIGINS is required in production.")
+        invalid_rollouts = [f"{league_id}={state}" for league_id, state in self.league_rollout_states if state not in ROLLOUT_STATE_VALUES]
+        if invalid_rollouts:
+            errors.append(f"Invalid league rollout state(s): {', '.join(invalid_rollouts)}.")
+        if any(state in {"internal_testing", "shadow", "limited_live", "production", "degraded"} for _, state in self.league_rollout_states) and not self.live_configured:
+            errors.append("Live league rollout states require a configured server-side sports provider.")
         if not self.live_configured:
             if self.data_mode == "offline":
                 warnings.append("Offline mode is active; no provider or sample fallback will be queried.")
@@ -247,6 +269,7 @@ class ProviderConfig:
             "sampleMode": self.data_mode == "sample",
             "features": self.flags.public(),
             "providerConfigured": self.live_configured,
+            "leagueRollouts": {league_id: state for league_id, state in self.league_rollout_states},
             "warnings": list(warnings),
             "configurationReady": not errors,
         }

@@ -11,7 +11,7 @@ from typing import Any, Iterator
 from .errors import DatabaseError
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 MIGRATION_1 = """
@@ -188,6 +188,62 @@ CREATE TABLE IF NOT EXISTS audit_log (
 """
 
 
+MIGRATION_2 = """
+CREATE TABLE IF NOT EXISTS league_rollouts (
+  league_id TEXT PRIMARY KEY, sport_id TEXT NOT NULL, display_name TEXT NOT NULL,
+  provider TEXT, rollout_state TEXT NOT NULL, selected_competition INTEGER NOT NULL DEFAULT 0,
+  known_limitations_json TEXT NOT NULL DEFAULT '[]', health_score REAL NOT NULL DEFAULT 0,
+  health_state TEXT NOT NULL DEFAULT 'failing', last_success_at TEXT, last_failure_at TEXT,
+  state_reason TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS league_domain_readiness (
+  league_id TEXT NOT NULL, domain TEXT NOT NULL, readiness_state TEXT NOT NULL,
+  source_mode TEXT NOT NULL, provider TEXT, last_updated_at TEXT, evidence_json TEXT NOT NULL DEFAULT '{}',
+  limitations_json TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL,
+  PRIMARY KEY(league_id, domain)
+);
+CREATE INDEX IF NOT EXISTS idx_domain_readiness_state ON league_domain_readiness(readiness_state, source_mode);
+CREATE TABLE IF NOT EXISTS certification_results (
+  id TEXT PRIMARY KEY, league_id TEXT NOT NULL, category TEXT NOT NULL,
+  check_key TEXT NOT NULL, status TEXT NOT NULL, evidence_json TEXT NOT NULL DEFAULT '{}',
+  evidence_at TEXT NOT NULL, expires_at TEXT, decided_by TEXT NOT NULL,
+  notes TEXT, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_certification_latest ON certification_results(league_id, category, check_key, created_at);
+CREATE TABLE IF NOT EXISTS shadow_discrepancies (
+  id TEXT PRIMARY KEY, league_id TEXT NOT NULL, domain TEXT NOT NULL,
+  primary_provider TEXT NOT NULL, comparison_provider TEXT NOT NULL,
+  category TEXT NOT NULL, record_id TEXT, details_json TEXT NOT NULL DEFAULT '{}',
+  detected_at TEXT NOT NULL, resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_shadow_summary ON shadow_discrepancies(league_id, category, resolved_at);
+CREATE TABLE IF NOT EXISTS data_corrections (
+  id TEXT PRIMARY KEY, league_id TEXT NOT NULL, domain TEXT NOT NULL,
+  record_id TEXT NOT NULL, provider TEXT NOT NULL, old_value_json TEXT NOT NULL,
+  new_value_json TEXT NOT NULL, provider_corrected_at TEXT, detected_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_corrections_record ON data_corrections(domain, record_id, detected_at);
+CREATE TABLE IF NOT EXISTS recalculation_queue (
+  id TEXT PRIMARY KEY, league_id TEXT NOT NULL, trigger_type TEXT NOT NULL,
+  record_id TEXT NOT NULL, affected_outputs_json TEXT NOT NULL,
+  model_version TEXT, input_timestamp TEXT, status TEXT NOT NULL DEFAULT 'queued',
+  created_at TEXT NOT NULL, completed_at TEXT
+);
+CREATE TABLE IF NOT EXISTS provider_usage (
+  id TEXT PRIMARY KEY, provider TEXT NOT NULL, endpoint TEXT NOT NULL, league_id TEXT,
+  response_bytes INTEGER NOT NULL DEFAULT 0, cache_hit INTEGER NOT NULL DEFAULT 0,
+  retries INTEGER NOT NULL DEFAULT 0, error_code TEXT, rate_limit_remaining INTEGER,
+  cost_category TEXT NOT NULL DEFAULT 'unknown', occurred_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_provider_usage_scope ON provider_usage(provider, league_id, occurred_at);
+CREATE TABLE IF NOT EXISTS rollout_gate_results (
+  id TEXT PRIMARY KEY, league_id TEXT NOT NULL, domain TEXT NOT NULL, gate_key TEXT NOT NULL,
+  status TEXT NOT NULL, observed_value REAL, threshold_json TEXT NOT NULL DEFAULT '{}',
+  evidence_json TEXT NOT NULL DEFAULT '{}', evaluated_at TEXT NOT NULL
+);
+"""
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -224,7 +280,12 @@ class Database:
             connection.executescript(MIGRATION_1)
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
-                (SCHEMA_VERSION, utc_now()),
+                (1, utc_now()),
+            )
+            connection.executescript(MIGRATION_2)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (2, utc_now()),
             )
         return self.schema_version()
 
@@ -297,6 +358,8 @@ class Database:
             "eventId": event_id,
             "revision": revision,
             "corrected": corrected,
+            "previous": json.loads(existing["payload_json"]) if corrected else None,
+            "current": event,
         }
 
     def insert_odds_snapshot(self, snapshot: dict[str, Any]) -> bool:
