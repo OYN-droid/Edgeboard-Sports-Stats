@@ -22,6 +22,7 @@ from .observability import Timer, request_id
 from .rollout_adapters import RolloutFixtureAdapter
 from .rollout_schedules import league_schedule
 from .shadow import compare_shadow
+from .edge_trust import trust_from_coverage
 
 
 PUBLIC_RATE_POLICIES = {
@@ -43,6 +44,10 @@ class Api:
         self.catalog_adapter = CatalogAdapter()
         self.entity_adapter = EntitySearchAdapter()
         self.standings_adapter = StandingsAdapter()
+
+    def _edge_trust(self, league: dict[str, Any], *, include_internal: bool = False) -> dict[str, Any]:
+        conflicts = self.runtime.shadow.active_conflicts(league["leagueId"], limit=10)
+        return trust_from_coverage(league, conflicts=conflicts, include_internal=include_internal)
 
     def handle(
         self,
@@ -131,10 +136,11 @@ class Api:
         if path == "/api/coverage":
             if not self.runtime.config.flags.coverage_page_enabled:
                 raise UnsupportedFeatureError("The public data-coverage page is disabled.")
+            coverage = self.runtime.rollout.list_coverage(public=True)
             return {
                 "generatedAt": utc_now(),
                 "liveProviderVerified": self.runtime.live_provider_verified,
-                "leagues": self.runtime.rollout.list_coverage(public=True),
+                "leagues": [{**league, "edgeTrust": self._edge_trust(league)} for league in coverage],
                 "labels": ["Live", "Partial", "Delayed", "Sample", "Planned", "Unavailable"],
                 "notice": "Fixture and sample evidence are not live data. No league is promoted automatically.",
             }
@@ -204,6 +210,7 @@ class Api:
             return {"enabled": True, "capabilities": self.runtime.alerts.capabilities(), "continuousMonitoring": False}
         if path == "/api/admin/diagnostics":
             self._require_admin(headers)
+            rollouts = self.runtime.rollout.list_coverage(public=False)
             return {
                 "configuration": self.runtime.config.redacted(),
                 "providers": self.runtime.provider_manager.summary(),
@@ -214,9 +221,11 @@ class Api:
                 "metrics": self.runtime.metrics.snapshot(),
                 "sampleMode": not self.runtime.config.live_configured,
                 "readOnly": True,
-                "rollouts": self.runtime.rollout.list_coverage(public=False),
+                "rollouts": rollouts,
+                "edgeTrust": [{"leagueId": league["leagueId"], **self._edge_trust(league, include_internal=True)} for league in rollouts],
                 "shadow": self.runtime.shadow.summary(),
                 "usage": self.runtime.usage.summary(),
+                "researchQualityHistory": self.runtime.edge_trust.history(limit=100),
             }
         if path == "/api/admin/certification":
             self._require_admin(headers)
@@ -224,8 +233,10 @@ class Api:
             checklists = [self.runtime.certification.checklist(item["leagueId"]) for item in coverage]
             return {
                 "readOnly": True, "rollouts": coverage, "certification": checklists,
+                "edgeTrust": [{"leagueId": league["leagueId"], **self._edge_trust(league, include_internal=True)} for league in coverage],
                 "shadow": self.runtime.shadow.summary(), "usage": self.runtime.usage.summary(),
                 "schedules": {item["leagueId"]: league_schedule(item["leagueId"]) for item in coverage},
+                "researchQualityHistory": self.runtime.edge_trust.history(limit=100),
             }
         raise UnsupportedFeatureError("API endpoint is not implemented.")
 
@@ -299,6 +310,7 @@ class Api:
                 certification_service=self.runtime.certification,
             )
             self.runtime.cache.invalidate(tag=f"league:{result.league_id}")
+            self.runtime.edge_trust.evaluate_league(self.runtime.rollout.get(result.league_id), trigger="rollout_transition", record=True)
             return asdict(result)
         if path == "/api/admin/rollout/domain":
             self._require_admin(headers)
@@ -310,12 +322,14 @@ class Api:
                 provider=str(data.get("provider") or ""),
             )
             self.runtime.cache.invalidate(tag=f"league:{league_id}")
+            self.runtime.edge_trust.evaluate_league(self.runtime.rollout.get(league_id), trigger=f"domain_validation:{domain}", record=True)
             return {"league": self.runtime.rollout.get(league_id), "domain": domain}
         if path == "/api/admin/rollout/provider":
             self._require_admin(headers)
             league_id = str(data.get("leagueId") or "")
             self.runtime.rollout.switch_provider(league_id, str(data.get("provider") or ""), actor="admin-token", reason=str(data.get("reason") or ""))
             self.runtime.cache.invalidate(tag=f"league:{league_id}")
+            self.runtime.edge_trust.evaluate_league(self.runtime.rollout.get(league_id), trigger="provider_changed", record=True)
             return {"league": self.runtime.rollout.get(league_id)}
         if path == "/api/admin/cache/clear":
             self._require_admin(headers)
@@ -330,7 +344,9 @@ class Api:
                 actor="admin-token", evidence_at=data.get("evidenceAt"), expires_at=data.get("expiresAt"),
                 notes=str(data.get("notes") or ""),
             )
-            return {"resultId": result_id, "checklist": self.runtime.certification.checklist(str(data.get("leagueId") or ""))}
+            league_id = str(data.get("leagueId") or "")
+            self.runtime.edge_trust.evaluate_league(self.runtime.rollout.get(league_id), trigger="certification_recorded", record=True)
+            return {"resultId": result_id, "checklist": self.runtime.certification.checklist(league_id)}
         if path == "/api/admin/shadow/compare":
             self._require_admin(headers)
             league_id = str(data.get("leagueId") or "")

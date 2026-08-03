@@ -63,10 +63,10 @@ The athlete-profile harness covers canonical routes, media fallbacks, sport-awar
 http://127.0.0.1:9010/browser-tests/athlete-profiles.html
 ```
 
-The Phase 5 deterministic research-analyst harness covers structured planning,
-evidence identity, explanation boundaries, Research Completeness, Stats/Betting/
-Both separation, stale-market exclusion, transparency, follow-ups, themes, and
-mobile overflow:
+The deterministic research-analyst harness covers the scoped sports-discovery
+home, structured planning, evidence identity, research sessions, immutable Edge
+Lab scenarios, rejected assumptions, Stats/Betting/Both separation,
+stale-market exclusion, transparency, follow-ups, themes, and mobile overflow:
 
 ```text
 http://127.0.0.1:9010/browser-tests/research-analyst.html
@@ -147,3 +147,27 @@ See [Phase 10 rollout playbook](docs/phase10-rollout-playbook.md) for per-league
 rollout states, the MLB/WNBA/UFC/MLS readiness matrix, certification gates,
 shadow validation, limited-live behavior, corrections, usage monitoring, and
 rollback. No live league is currently certified.
+
+See [Version 1.1 UX refinement](docs/version-1.1-ux.md) for proactive research
+guidance, scoped search paths, Today’s research pulse, first-visit onboarding,
+workspace defaults, accessibility behavior, and provider limits.
+
+See [Edge Trust architecture](docs/edge-trust.md) for Version 1.2 Research
+Quality, provider-conflict handling, sport-aware applicability, league
+certification states, coverage projection, protected diagnostics, and history.
+
+See [Edge Intelligence research sessions](docs/research-sessions.md) for Version
+1.3 session structure, visible workflow steps, revision history, workspace
+resume/save behavior, note privacy, sharing, and Markdown/CSV exports.
+
+See [Edge Lab scenario architecture](docs/edge-lab.md) for Version 1.4 immutable
+scenario overlays, controlled assumptions, data classifications, derived-output
+boundaries, workspace behavior, sharing, exports, and current limitations.
+
+See [Sports discovery home architecture](docs/home-discovery.md) for Version 1.4
+Sprint 1 section composition, deterministic source rules, canonical navigation
+scope, mode-aware actions, empty states, and current provider limitations.
+
+See [Deterministic Story Engine](docs/deterministic-story-engine.md) for Version
+1.4 Sprint 2 candidate contracts, eligibility, scoring, deduplication, phrasing,
+Edge Trust, lifecycle, workspace snapshots, detail routing, and fixture limits.

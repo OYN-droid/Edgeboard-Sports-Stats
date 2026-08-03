@@ -40,7 +40,8 @@ async function run() {
   assert(repository.listWorkspaces().find((item) => item.id === workspace.id).title === "Renamed Lab", "rename workspace");
 
   const originalBoards = repository.listBoards(workspace.id, { includeArchived: true });
-  assert(originalBoards.length === 6, "default boards created");
+  assert(originalBoards.length === 7 && originalBoards.some((board) => board.title === "Edge Lab"),
+    "default boards include Edge Lab");
   const board = await repository.createBoard({ workspaceId: workspace.id, title: "WNBA Lab", tags: ["WNBA"] });
   await repository.updateBoard(board.id, { title: "WNBA Research", isPinned: true });
   assert(repository.listBoards(workspace.id).find((item) => item.id === board.id)?.isPinned, "pin and rename board");
@@ -65,6 +66,7 @@ async function run() {
   assert((await repository.saveResearchObject(savedInput)).status === "duplicate", "detect duplicate saved research");
   const updated = await repository.saveResearchObject({ ...savedInput, title: "Updated title" }, { duplicateStrategy: "update" });
   assert(updated.status === "updated" && updated.item.id === saved.item.id, "update existing duplicate");
+  assert(updated.item.snapshots.length === 1, "updating saved research preserves the original snapshot");
   const staleVersion = updated.item.version;
   await repository.updateSavedResearchObject(saved.item.id, { description: "Newer edit" }, staleVersion);
   const conflict = await repository.updateSavedResearchObject(saved.item.id, { description: "Stale edit" }, staleVersion)
@@ -73,12 +75,32 @@ async function run() {
   const copied = await repository.saveResearchObject(savedInput, { duplicateStrategy: "copy" });
   assert(copied.item.id !== saved.item.id, "save duplicate as another copy");
   const refreshed = await repository.refreshSavedResearchObject(saved.item.id, { ranking: 2, line: 21.5, confidence: 58, source: "Sample v2" });
-  assert(refreshed.item.snapshots.length === 1, "refresh preserves original snapshot");
+  assert(refreshed.item.snapshots.length === 2, "refresh preserves original and prior saved snapshots");
   assert(refreshed.comparison.changedFields.includes("ranking"), "refresh compares changed rankings");
   await repository.refreshSavedResearchObject(saved.item.id, { ranking: 2, line: 22, confidence: 57, source: "Sample v3" });
   const thirdRefresh = await repository.refreshSavedResearchObject(saved.item.id, { ranking: 3, line: 22, confidence: 55, source: "Sample v4" });
-  assert(thirdRefresh.item.snapshots.length === 3, "three refresh snapshots remain available");
+  assert(thirdRefresh.item.snapshots.length === 4, "saved revision and three refresh snapshots remain available");
   assert(compareSnapshots({ line: 20 }, { line: null }).changes[0].missingRegression, "missing refresh value is a regression");
+  await repository.updateSavedResearchObject(saved.item.id, { researchSnapshot: { id: "research-session-test", notes: [{ text: "private" }], evidence: [] } });
+  const sharedResearchSession = await repository.createShareSnapshot({ itemId: saved.item.id });
+  assert(sharedResearchSession.privateNotesExcluded && !("notes" in sharedResearchSession.researchSnapshot), "shared research session excludes embedded private notes");
+  const scenarioSaved = await repository.saveResearchObject({
+    ...savedInput,
+    type: "saved_scenario",
+    boardId: originalBoards.find((item) => item.title === "Edge Lab").id,
+    title: "Immutable assists scenario",
+    sourceState: { ...savedInput.sourceState, queryText: "scenario assists" },
+    researchSnapshot: {
+      type: "edge_lab_scenario", id: "edge-lab-test", scenarioDifferences: [{ targetId: "evidence-1", before: 7, after: 8 }],
+      originalData: { id: "research-session-test", notes: [{ text: "private baseline note" }] },
+      updatedResearch: { notes: [{ text: "private derived note" }] },
+    },
+  });
+  const sharedScenario = await repository.createShareSnapshot({ itemId: scenarioSaved.item.id });
+  assert(scenarioSaved.item.type === "saved_scenario"
+    && !("notes" in sharedScenario.researchSnapshot.originalData)
+    && !("notes" in sharedScenario.researchSnapshot.updatedResearch),
+  "saved Edge Lab scenarios use the workspace domain and exclude nested private notes when shared");
 
   await repository.addNote({ workspaceId: workspace.id, attachmentType: "saved_research", attachmentId: saved.item.id, text: "<script>alert(1)</script>\nplain text" });
   assert(searchWorkspace(repository.snapshot(), "plain text", { workspaceId: workspace.id }).length === 1, "search private notes");

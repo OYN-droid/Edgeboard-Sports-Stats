@@ -4,6 +4,7 @@ import {
 } from "../config/visualization-registry.js";
 import { getProviderVisualizationCapabilities } from "../config/provider-visualization-capabilities.js";
 import { mockVisualizationProviderPayload } from "../data/mock-visualization-provider.js";
+import { evaluateEdgeTrust } from "./edge-trust-service.js";
 
 const SPATIAL_TYPES = new Set([
   "shot_chart", "shot_map", "spray_chart", "pitch_location_map", "heat_map",
@@ -334,6 +335,12 @@ function accessibleSummary(definition, rows, metrics, dataset, warnings) {
 }
 
 function unavailableResult(request, validation, provider, reason, fallback = null) {
+  const edgeTrust = evaluateEdgeTrust({
+    components: { visualizations: "unavailable", freshness: provider.lastUpdatedAt ? "stale" : "unavailable", coverage: 0, identity: request.entityIds?.length ? "verified" : "pending", completeness: 0 },
+    applicable: ["visualizations", "freshness", "coverage", "identity", "completeness"],
+    sample: provider.sample === true,
+    lastValidation: provider.lastUpdatedAt,
+  });
   return Object.freeze({
     status: "unavailable",
     type: "unavailable",
@@ -361,6 +368,7 @@ function unavailableResult(request, validation, provider, reason, fallback = nul
       available: Boolean(fallback),
     }),
     table: Object.freeze({ caption: "No visualization data", columns: Object.freeze([]), rows: Object.freeze([]) }),
+    edgeTrust,
   });
 }
 
@@ -481,6 +489,16 @@ export class VisualizationRepository {
       validation.definition.id === "matchup_radar" ? "Normalized radar dimensions are descriptive sample indices, not a predictive model." : "",
       validation.definition.id === "correlation_matrix" ? "Historical correlation does not imply causation or a joint probability." : "",
     ]);
+    const edgeTrust = evaluateEdgeTrust({
+      components: {
+        visualizations: "verified", freshness: stale ? "stale" : "fresh",
+        coverage: dataset.partial ? .55 : 1, identity: request.entityIds.length ? "verified" : "pending",
+        completeness: checked.validRows.length / Math.max(checked.validRows.length, filtered.length || 1),
+      },
+      applicable: ["visualizations", "freshness", "coverage", "identity", "completeness"],
+      sample: dataset.sample === true,
+      lastValidation: dataset.last_updated_at,
+    });
     return Object.freeze({
       status: "ready",
       type: validation.definition.id,
@@ -527,6 +545,7 @@ export class VisualizationRepository {
       request,
       unit: dataset.unit,
       interactions: validation.definition.interactions,
+      edgeTrust,
     });
   }
 }

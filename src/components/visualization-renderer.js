@@ -1,3 +1,5 @@
+import { evaluateEdgeTrust } from "../services/edge-trust-service.js";
+
 const escapeHtml = (value) => String(value ?? "")
   .replaceAll("&", "&amp;")
   .replaceAll("<", "&lt;")
@@ -183,10 +185,22 @@ export function renderVisualization(result, options = {}) {
   const typeOptions = options.availableVisualizations || [];
   const dateValue = result.request?.dateRange?.value || 10;
   const threshold = result.request?.filters?.threshold ?? "";
+  const edgeTrust = result.edgeTrust?.researchQuality ? result.edgeTrust : evaluateEdgeTrust({
+    components: {
+      visualizations: result.status === "ready" ? result.coverage?.sample ? "sample" : "verified" : "unavailable",
+      freshness: result.dataFreshness?.status || "unavailable",
+      coverage: result.coverage?.partial ? .5 : result.status === "ready" ? 1 : 0,
+      identity: result.scope?.entityIds?.length ? "verified" : "pending",
+      completeness: result.status === "ready" ? 1 : 0,
+    },
+    applicable: ["visualizations", "freshness", "coverage", "identity", "completeness"],
+    sample: result.coverage?.sample === true,
+    lastValidation: result.dataFreshness?.lastUpdatedAt,
+  });
   return `<article class="visualization-card" aria-labelledby="visualizationTitle" aria-describedby="visualizationSummary">
     <header class="visualization-header">
       <div><p class="eyebrow">EdgeBoard visual analytics · ${result.coverage.sample ? "Sample data" : "Provider data"}</p><h1 id="visualizationTitle">${escapeHtml(result.title)}</h1><p>${escapeHtml(result.subtitle)}</p></div>
-      <span class="visual-status" data-status="${escapeHtml(result.dataFreshness.status)}">${escapeHtml(result.status === "ready" ? result.dataFreshness.status : "unavailable")}</span>
+      <div><span class="visual-status" data-status="${escapeHtml(result.dataFreshness.status)}">${escapeHtml(result.status === "ready" ? result.dataFreshness.status : "unavailable")}</span><details class="visual-edge-trust"><summary>Research Quality · ${escapeHtml(edgeTrust.researchQuality.label)} · ${edgeTrust.researchQuality.score}%</summary><dl>${edgeTrust.details.map((item) => `<div><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.status)}${Number.isFinite(item.percentage) ? ` · ${item.percentage}%` : ""}</dd></div>`).join("")}</dl><p>Not betting confidence, projection, edge, hit rate, or probability.</p></details></div>
     </header>
     <div class="visual-controls" aria-label="Visualization controls">
       <label>Visual<select data-visual-control="type">${typeOptions.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === result.requestedType || item.id === result.type ? "selected" : ""} ${item.available ? "" : "disabled"}>${escapeHtml(item.label)}${item.available ? "" : " · unavailable"}</option>`).join("")}</select></label>

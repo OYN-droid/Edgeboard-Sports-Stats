@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .errors import UnsupportedFeatureError, ValidationError
+from .edge_trust import evaluate_edge_trust
 
 
 SUPPORTED_RESEARCH_INTENTS = {
@@ -38,7 +39,7 @@ class DeterministicResearchService:
             raise ValidationError("Research evidenceIds must be a list.")
         evidence_ids = [str(value)[:240] for value in raw_evidence_ids if value][:100]
         if intent in {"historical_summary", "comparison", "leaderboard", "insight"} and not self.flags.historical_stats_enabled:
-            return {
+            response = {
                 "status": "unavailable",
                 "intent": intent,
                 "message": "Historical statistics are not enabled on this server.",
@@ -48,7 +49,12 @@ class DeterministicResearchService:
                 "llmSourceOfTruth": False,
                 "partial": False,
             }
-        return {
+            response["edgeTrust"] = evaluate_edge_trust({
+                "historical_data": "unavailable", "freshness": "unavailable",
+                "coverage": 0, "identity": "pending", "research_completeness": 0,
+            }, applicable={"historical_data", "freshness", "coverage", "identity", "research_completeness"})
+            return response
+        response = {
             "status": "ready",
             "intent": intent,
             "evidence": [],
@@ -58,3 +64,8 @@ class DeterministicResearchService:
             "message": "The server research boundary is ready; no compatible normalized evidence rows were supplied.",
             "partial": True,
         }
+        response["edgeTrust"] = evaluate_edge_trust({
+            "historical_data": "pending", "freshness": "pending", "coverage": .25,
+            "identity": "verified", "research_completeness": .25,
+        }, applicable={"historical_data", "freshness", "coverage", "identity", "research_completeness"})
+        return response

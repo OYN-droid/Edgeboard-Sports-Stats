@@ -173,6 +173,7 @@ function normalizedReferences(input = {}) {
     eventIds: unique(input.eventIds),
     marketIds: unique(input.marketIds),
     insightIds: unique(input.insightIds),
+    storyIds: unique(input.storyIds),
     queryId: input.queryId || null,
     visualizationId: input.visualizationId || null,
   };
@@ -218,10 +219,21 @@ function duplicateIdentity(item) {
     eventIds: [...(references.eventIds || [])].sort(),
     marketIds: [...(references.marketIds || [])].sort(),
     insightIds: [...(references.insightIds || [])].sort(),
+    storyIds: [...(references.storyIds || [])].sort(),
     queryId: references.queryId,
     visualizationId: references.visualizationId,
     structuredQuery: item.sourceState?.structuredQuery || {},
   });
+}
+
+function shareableResearchSnapshot(snapshot, includePrivateNotes = false) {
+  const copy = clone(snapshot || {});
+  if (!includePrivateNotes && copy?.id?.startsWith?.("research-session-")) delete copy.notes;
+  if (!includePrivateNotes && copy?.type === "edge_lab_scenario") {
+    if (copy.originalData) delete copy.originalData.notes;
+    if (copy.updatedResearch) delete copy.updatedResearch.notes;
+  }
+  return copy;
 }
 
 function importRecordIdentity(collection, record) {
@@ -521,7 +533,23 @@ export class WorkspaceRepository {
       const existing = state.savedObjects.find((item) => duplicateIdentity(item) === identity);
       if (existing && options.duplicateStrategy !== "copy") {
         if (options.duplicateStrategy === "update") {
-          Object.assign(existing, record, { id: existing.id, createdAt: existing.createdAt, version: existing.version + 1, updatedAt: isoNow(this.clock) });
+          const priorSnapshots = [
+            ...(existing.snapshots || []),
+            {
+              id: createLocalId("snapshot", this.clock(), this.random()),
+              capturedAt: existing.dataSnapshotAt || existing.updatedAt,
+              source: clone(existing.researchSnapshot?.source || {}),
+              data: clone(existing.researchSnapshot),
+              schemaVersion: WORKSPACE_SCHEMA_VERSION,
+            },
+          ];
+          Object.assign(existing, record, {
+            id: existing.id,
+            createdAt: existing.createdAt,
+            snapshots: priorSnapshots,
+            version: existing.version + 1,
+            updatedAt: isoNow(this.clock),
+          });
           ensureTagRecords(state, existing.workspaceId, existing.tags, this.clock, this.random);
           return { status: "updated", item: existing, duplicate: existing };
         }
@@ -1023,10 +1051,11 @@ export class WorkspaceRepository {
         generatedAt: isoNow(this.clock),
         canonicalReferences: clone(item.canonicalReferences),
         sourceState: clone(item.sourceState),
-        researchSnapshot: clone(item.researchSnapshot),
+        researchSnapshot: shareableResearchSnapshot(item.researchSnapshot, input.includePrivateNotes === true),
         notes: input.includePrivateNotes === true
           ? clone(state.notes.filter((note) => note.attachmentId === item.id))
           : [],
+        privateNotesExcluded: input.includePrivateNotes !== true,
         excludesActivity: true,
         sample: item.sample === true,
         source: item.researchSnapshot?.source || "Unavailable",

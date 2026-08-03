@@ -55,6 +55,40 @@ function evidenceNeeds(questionType, mode) {
   return needs;
 }
 
+function normalizeStoryContext(context) {
+  if (!context?.storyId || !context?.claimData || !context?.supportingEvidence?.length) return null;
+  return Object.freeze({
+    storyId: String(context.storyId),
+    headline: String(context.headline || "Validated story context"),
+    entityIds: Object.freeze([...new Set(context.entityIds || [])]),
+    sportId: String(context.sportId || ""),
+    leagueId: String(context.leagueId || ""),
+    eventIds: Object.freeze([...new Set(context.eventIds || [])]),
+    claimData: Object.freeze({ ...context.claimData }),
+    supportingEvidence: Object.freeze(context.supportingEvidence.map((item) => Object.freeze({
+      id: String(item.id || ""),
+      type: String(item.type || "story_evidence"),
+      label: String(item.label || "Supporting story evidence"),
+      eventId: item.eventId || null,
+      occurredAt: item.occurredAt || null,
+      values: Object.freeze({ ...(item.values || {}) }),
+      sourceId: item.sourceId || null,
+      status: item.status || null,
+    }))),
+    dateRange: Object.freeze({ ...(context.dateRange || {}) }),
+    sourceIds: Object.freeze([...new Set(context.sourceIds || [])]),
+    sources: Object.freeze((context.sources || []).map((source) => Object.freeze({
+      id: String(source.id || ""),
+      label: String(source.label || source.id || "Source unavailable"),
+      sample: source.sample !== false,
+    }))),
+    freshness: Object.freeze({ ...(context.freshness || {}) }),
+    warnings: Object.freeze([...(context.warnings || [])].map(String)),
+    validationStatus: String(context.validationStatus || "unvalidated"),
+    researchQuality: context.researchQuality ? Object.freeze({ ...context.researchQuality }) : null,
+  });
+}
+
 export function createResearchPlan({
   query = "",
   mode = "stats",
@@ -64,10 +98,12 @@ export function createResearchPlan({
   availableLeagues = [],
   providerName = "",
   resolvedEntities = [],
+  storyContext = null,
 } = {}) {
   const safeQuery = String(query || "").trim();
   const safeMode = normalizeResearchMode(mode, "stats");
   const classification = classifyResearchQuery(safeQuery, safeMode);
+  const normalizedStoryContext = normalizeStoryContext(storyContext);
   const structuredQuery = parsedStats?.structuredQuery || null;
   const questionType = determineQuestionType(safeQuery, classification.intent, structuredQuery);
   const entityIds = [...new Set([
@@ -78,14 +114,15 @@ export function createResearchPlan({
       ...(structuredQuery.primaryEntityIds || []),
       ] : []),
     ...resolvedEntities.map((entity) => entity.id),
+    ...(normalizedStoryContext?.entityIds || []),
   ])];
   const statIds = structuredQuery?.statIds || [];
   const marketIds = [
     structuredQuery?.rankingMetric && safeMode !== "stats" ? structuredQuery.rankingMetric : "",
     bettingWorkflow?.marketId || "",
   ].filter(Boolean);
-  const resolvedLeagueId = structuredQuery?.leagueId || bettingWorkflow?.leagueId || currentLeague?.leagueId || "";
-  const resolvedSportId = structuredQuery?.sportId || currentLeague?.sportId || "";
+  const resolvedLeagueId = structuredQuery?.leagueId || normalizedStoryContext?.leagueId || bettingWorkflow?.leagueId || currentLeague?.leagueId || "";
+  const resolvedSportId = structuredQuery?.sportId || normalizedStoryContext?.sportId || currentLeague?.sportId || "";
   const scopeLabel = [
     currentLeague?.sportDisplayName || resolvedSportId,
     currentLeague?.leagueDisplayName || resolvedLeagueId,
@@ -136,6 +173,7 @@ export function createResearchPlan({
     }))),
     statIds: Object.freeze([...statIds]),
     marketIds: Object.freeze(marketIds),
+    storyContext: normalizedStoryContext,
     discovery: Object.freeze({
       provider: providerName || bettingWorkflow?.evidence?.provider || "Normalized sports registry",
       leagues: Object.freeze(discoveryLeagues),
@@ -145,7 +183,10 @@ export function createResearchPlan({
       betting: needsBetting,
       comparisons: ["comparison", "leaderboards", "historical_threshold", "records"].includes(questionType),
       insights: ["trends", "streaks", "milestones", "fun_facts", "records"].includes(questionType),
-      supportingEvidence: Object.freeze(evidenceNeeds(questionType, safeMode)),
+      supportingEvidence: Object.freeze([
+        ...evidenceNeeds(questionType, safeMode),
+        ...(normalizedStoryContext ? ["retained structured story claim and supporting rows"] : []),
+      ]),
     }),
     stages: Object.freeze([
       stage("resolve", "Resolve entities", entityIds.length
@@ -162,7 +203,9 @@ export function createResearchPlan({
         ? marketLabels.join(", ")
         : needsBetting ? "Use only provider-confirmed markets in the resolved scope." : "Betting retrieval disabled in Stats mode.",
       needsBetting ? "ready" : "skipped"),
-      stage("evidence", "Determine supporting evidence", evidenceNeeds(questionType, safeMode).join(", "), "ready"),
+      stage("evidence", "Determine supporting evidence", normalizedStoryContext
+        ? `${evidenceNeeds(questionType, safeMode).join(", ")}; retain ${normalizedStoryContext.supportingEvidence.length} structured story evidence item${normalizedStoryContext.supportingEvidence.length === 1 ? "" : "s"} without broadening the claim.`
+        : evidenceNeeds(questionType, safeMode).join(", "), "ready"),
       stage("comparisons", "Determine related comparisons", questionType === "comparison"
         ? "Apply identical filters to every resolved entity."
         : "Related comparisons are optional and cannot change the primary finding.",

@@ -25,7 +25,7 @@
         "responses": {"200": {"description": "No credentials are included"}}
       }
     },
-    "/api/coverage": {"get": {"summary": "Public league and domain coverage", "responses": {"200": {"description": "Honest Live, Partial, Delayed, Sample, Planned, or Unavailable labels"}}}},
+    "/api/coverage": {"get": {"summary": "Public league, certification, and Edge Trust coverage", "responses": {"200": {"description": "Honest certification states and public Research Quality without internal weights"}}}},
     "/api/sports": {"get": {"summary": "Normalized sport catalog", "responses": {"200": {"description": "Provider-attributed items"}}}},
     "/api/leagues": {"get": {"summary": "Normalized league catalog", "responses": {"200": {"description": "Provider-attributed items"}}}},
     "/api/events": {"get": {"summary": "Normalized events", "responses": {"200": {"description": "Freshness and sample state included"}}}},

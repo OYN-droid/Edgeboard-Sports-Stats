@@ -243,6 +243,15 @@ CREATE TABLE IF NOT EXISTS rollout_gate_results (
 );
 """
 
+MIGRATION_3 = """
+CREATE TABLE IF NOT EXISTS edge_trust_history (
+  id TEXT PRIMARY KEY, league_id TEXT NOT NULL, research_quality INTEGER NOT NULL,
+  quality_label TEXT NOT NULL, details_json TEXT NOT NULL DEFAULT '{}',
+  trigger TEXT NOT NULL, evaluated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_edge_trust_history ON edge_trust_history(league_id, evaluated_at);
+"""
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -286,6 +295,11 @@ class Database:
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (2, utc_now()),
+            )
+            connection.executescript(MIGRATION_3)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (3, utc_now()),
             )
         return self.schema_version()
 

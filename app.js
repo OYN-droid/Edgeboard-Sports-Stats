@@ -38,6 +38,30 @@ import {
   advancedResultToText,
 } from "./src/services/advanced-stats-results-service.js";
 import { loadCoverage } from "./src/services/coverage-client.js";
+import {
+  getEntityResearchActions,
+  getOnboardingSteps,
+  getRecoveryActions,
+  getResearchProgressCopy,
+} from "./src/services/ux-guidance-service.js";
+import { edgeTrustForResearch, evaluateEdgeTrust } from "./src/services/edge-trust-service.js";
+import {
+  addResearchSessionNote,
+  createResearchSession,
+  refreshResearchSession,
+  researchSessionShareSnapshot,
+  researchSessionToCsv,
+  researchSessionToMarkdown,
+} from "./src/services/research-session-service.js";
+import {
+  addEdgeLabAssumption,
+  createEdgeLabScenario,
+  edgeLabShareSnapshot,
+  edgeLabToCsv,
+  edgeLabToMarkdown,
+} from "./src/services/edge-lab-service.js";
+import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js";
+import { createStoryEngine } from "./src/services/story-engine.js";
 
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
@@ -48,6 +72,7 @@ const statsRepository = createStatsRepository(undefined, { generatedAt: testFixt
 const insightService = createInsightService(statsRepository, sportsRepository);
 const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository, insightService);
 const entityRegistry = createEntityRegistry();
+const storyEngine = createStoryEngine({ insightService, sportsRepository, statsRepository, entityRegistry });
 const entityProfileRepository = createEntityProfileRepository(
   entityRegistry,
   sportsRepository,
@@ -172,6 +197,7 @@ function loadResearchState() {
     advancedSort: String(params.get("sort") || ""),
     advancedSortDirection: params.get("direction") === "asc" ? "asc" : "desc",
     insightId: String(params.get("insight") || ""),
+    storyId: String(params.get("story") || ""),
   };
 }
 
@@ -248,6 +274,9 @@ const state = {
   analystWorkflow: null,
   researchPlan: null,
   researchAnswer: null,
+  researchSession: null,
+  researchSessionRefreshRequested: false,
+  edgeLabScenario: null,
   researchMode: initialResearchState.mode,
   statsResult: null,
   statsParsedQuery: null,
@@ -295,6 +324,7 @@ const state = {
   profileInsightCategory: "recent",
   athleteSearchResults: [],
   athleteSearchIndex: -1,
+  athleteSearchGuidance: [],
   advancedDisplay: initialResearchState.advancedDisplay,
   advancedSort: initialResearchState.advancedSort,
   advancedSortDirection: initialResearchState.advancedSortDirection,
@@ -306,6 +336,10 @@ const state = {
   activeInsightId: "",
   sharedInsightId: initialResearchState.insightId,
   sharedInsightOpened: false,
+  activeStoryId: "",
+  sharedStoryId: initialResearchState.storyId,
+  sharedStoryOpened: false,
+  storyResearchContext: null,
   workspaceActive: Boolean(initialWorkspaceRoute),
   workspaceRoute: initialWorkspaceRoute,
   workspaceViewModel: null,
@@ -370,6 +404,9 @@ const elements = {
   coverageNotice: document.querySelector("#coverageNotice"),
   coverageContent: document.querySelector("#coverageContent"),
   closeCoverageDialog: document.querySelector("#closeCoverageDialog"),
+  edgeTrustDialog: document.querySelector("#edgeTrustDialog"),
+  edgeTrustDialogContent: document.querySelector("#edgeTrustDialogContent"),
+  closeEdgeTrustDialog: document.querySelector("#closeEdgeTrustDialog"),
   modeBadge: document.querySelector("#modeBadge"),
   statsResults: document.querySelector("#statsResults"),
   statsLoading: document.querySelector("#statsLoading"),
@@ -413,7 +450,12 @@ const elements = {
   insightDiscovery: document.querySelector("#insightDiscovery"),
   insightDiscoverySummary: document.querySelector("#insightDiscoverySummary"),
   insightDiscoveryGrid: document.querySelector("#insightDiscoveryGrid"),
+  todayPulse: document.querySelector("#todayPulse"),
+  todayPulseSummary: document.querySelector("#todayPulseSummary"),
+  todayPulseGrid: document.querySelector("#todayPulseGrid"),
+  homeDiscoverySections: document.querySelector("#homeDiscoverySections"),
   insightDialog: document.querySelector("#insightDialog"),
+  insightDialogTitle: document.querySelector("#insightDialogTitle"),
   insightDialogContent: document.querySelector("#insightDialogContent"),
   closeInsightDialog: document.querySelector("#closeInsightDialog"),
   openWorkspace: document.querySelector("#openWorkspace"),
@@ -438,6 +480,13 @@ const elements = {
   workspaceConfirmTextLabel: document.querySelector("#workspaceConfirmTextLabel"),
   workspaceShareDialog: document.querySelector("#workspaceShareDialog"),
   workspaceSharePreview: document.querySelector("#workspaceSharePreview"),
+  edgeLabDialog: document.querySelector("#edgeLabDialog"),
+  edgeLabForm: document.querySelector("#edgeLabForm"),
+  edgeLabTarget: document.querySelector("#edgeLabTarget"),
+  edgeLabStatus: document.querySelector("#edgeLabStatus"),
+  onboarding: document.querySelector("#edgeboardOnboarding"),
+  onboardingSteps: document.querySelector("#onboardingSteps"),
+  dismissOnboarding: document.querySelector("#dismissOnboarding"),
 };
 
 let renderedPicks = new Map();
@@ -962,6 +1011,7 @@ function renderPicks() {
     const cardState = pick.stale ? " stale" : !pick.available ? " unavailable" : "";
     const confidenceBand = getConfidenceBand(pick.confidence);
     const athleteId = profileIdForPick(pick);
+    const trust = trustForMarket(pick);
     return `
     <article class="bet-card${cardState}">
       <div class="bet-top">
@@ -997,6 +1047,7 @@ function renderPicks() {
       <div class="data-warning" title="${pick.stale ? "Stale data may no longer match the current sportsbook market." : "This application is using sample provider data."}">
         ${escapeHtml(pick.stale ? "Odds are stale — verify before using." : pick.dataQualityWarning || "Data-quality status unavailable.")}
       </div>
+      <div class="market-research-quality" title="Research Quality evaluates source evidence, not model confidence or win probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
       <div class="card-actions">
         <button class="add-button" type="button" data-add="${escapeHtml(pick.id)}" ${actionable ? "" : "disabled"}>${actionable ? "Add to slip" : "Unavailable"}</button>
         ${athleteId ? `<a class="text-button" href="${escapeHtml(profileUrl(athleteId))}" data-open-athlete="${escapeHtml(athleteId)}">View profile</a>` : ""}
@@ -1311,6 +1362,95 @@ function sourceModeLabel(value) {
   })[value] || "Unavailable";
 }
 
+function trustForResearchAnswer(answer) {
+  if (answer?.edgeTrust?.researchQuality) return answer.edgeTrust;
+  return edgeTrustForResearch({
+    plan: answer?.plan,
+    disclosure: answer?.disclosure,
+    completeness: answer?.researchCompleteness,
+    evidence: answer?.evidence,
+    relatedProps: answer?.relatedProps,
+    conflicts: answer?.providerConflicts,
+  });
+}
+
+function trustForMarket(market = {}) {
+  const sample = !["live_verified", "live_partial"].includes(market.sourceMode);
+  const timestamp = market.lastUpdatedAt || market.updatedAt || null;
+  return evaluateEdgeTrust({
+    components: {
+      markets: market.available === false || market.suspended ? "unavailable" : sample ? "sample" : "verified",
+      freshness: market.stale ? "stale" : timestamp ? sample ? "sample" : "fresh" : "unavailable",
+      coverage: market.available === false ? 0 : 1,
+      identity: market.playerId || market.competitorId || market.entityId || market.name ? "verified" : "pending",
+      completeness: [market.odds, market.line, timestamp].filter((value) => value !== null && value !== undefined && value !== "").length / 3,
+    },
+    applicable: ["markets", "freshness", "coverage", "identity", "completeness"],
+    sample,
+    lastValidation: timestamp,
+  });
+}
+
+function synchronizeResearchSession(question, overrides = {}) {
+  const previousQuestion = state.researchSession?.question || "";
+  const input = {
+    question,
+    mode: state.researchMode,
+    scope: {
+      sportId: currentLeague()?.sportId || "",
+      leagueId: currentLeague()?.leagueId || "",
+      label: currentLeague()?.leagueDisplayName || "All sports",
+    },
+    plan: state.researchPlan,
+    answer: state.researchAnswer,
+    statistics: state.statsResult,
+    visualizations: state.visualResult ? [state.visualResult] : [],
+    markets: state.researchAnswer?.relatedProps || [],
+    ...overrides,
+  };
+  if (state.researchSessionRefreshRequested && state.researchSession?.id) {
+    state.researchSession = refreshResearchSession(state.researchSession, input);
+    state.researchSessionRefreshRequested = false;
+  } else if (state.researchSession?.question === question) {
+    state.researchSession = createResearchSession({
+      ...input,
+      id: state.researchSession.id,
+      revision: state.researchSession.revision,
+      createdAt: state.researchSession.createdAt,
+      notes: state.researchSession.notes,
+      history: state.researchSession.history,
+      refreshedAt: state.researchSession.refreshedAt,
+    });
+  } else {
+    state.researchSession = createResearchSession(input);
+    if (previousQuestion && previousQuestion !== question) state.edgeLabScenario = null;
+  }
+  return state.researchSession;
+}
+
+function renderEdgeTrustDetails(trust) {
+  if (!trust?.researchQuality) return '<div class="data-warning"><strong>Research Quality unavailable</strong><p>Edge Trust has not received enough validated metadata to evaluate this result.</p></div>';
+  return `<section class="edge-trust-details" aria-label="Edge Trust details">
+    <div class="edge-trust-score"><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)}</strong><span>${trust.researchQuality.score}%</span></div>
+    <p>Last validation ${formatDateTime(trust.lastValidation, "Not available")}</p>
+    <dl>${trust.details.map((item) => `<div><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.status)}${Number.isFinite(item.percentage) ? ` · ${item.percentage}%` : ""}</dd></div>`).join("")}</dl>
+    ${trust.conflicts?.length ? `<section class="edge-trust-conflicts" aria-labelledby="edgeTrustConflictsTitle"><h3 id="edgeTrustConflictsTitle">Conflicting sources</h3>${trust.conflicts.map((conflict) => `<article><strong>${escapeHtml(conflict.category.replaceAll("_", " "))}</strong>${conflict.sources?.map((source) => `<span>${escapeHtml(source.provider || source.name || "Provider")} · ${escapeHtml(source.value || source.status || "Conflicting value")}</span>`).join("") || ""}<p>${escapeHtml(conflict.recommendation)}</p></article>`).join("")}</section>` : ""}
+    ${trust.limitations?.length ? `<div class="data-warning"><strong>Why quality is reduced</strong><ul>${trust.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></div>` : ""}
+    <p class="edge-trust-disclaimer">Edge Trust evaluates underlying research quality. It is not betting confidence, model confidence, probability, projection, edge, or historical hit rate.</p>
+  </section>`;
+}
+
+function openEdgeTrustDetails(trust) {
+  elements.edgeTrustDialogContent.innerHTML = renderEdgeTrustDetails(trust);
+  elements.edgeTrustDialog.showModal();
+  elements.closeEdgeTrustDialog.focus();
+}
+
+elements.closeEdgeTrustDialog.addEventListener("click", () => {
+  elements.edgeTrustDialog.close();
+  elements.researchAnswer.querySelector("[data-open-edge-trust]")?.focus();
+});
+
 async function openCoverageView() {
   elements.dataStatusDialog.close();
   elements.coverageDialog.showModal();
@@ -1322,13 +1462,15 @@ async function openCoverageView() {
   elements.coverageTitle.focus({ preventScroll: true });
   const coverage = await loadCoverage();
   elements.coverageNotice.textContent = coverage.notice || "Coverage varies by league and domain.";
-  elements.coverageContent.innerHTML = `<div class="coverage-grid">${coverage.leagues.map((league) => `
+  elements.coverageContent.innerHTML = `<div class="coverage-summary"><strong>${coverage.leagues.length} supported league scopes</strong><span>${coverage.liveProviderVerified ? "Certified live coverage is enabled only where shown." : "No league is currently labeled Certified Live."}</span></div><div class="coverage-grid">${coverage.leagues.map((league) => `
     <article class="coverage-card">
-      <header><div><span class="coverage-sport">${escapeHtml(league.sportId)}</span><h3>${escapeHtml(league.displayName)}</h3></div><span class="source-mode-badge ${escapeHtml(league.dataMode)}">${escapeHtml(sourceModeLabel(league.dataMode))}</span></header>
-      <p>${escapeHtml(league.rolloutState.replaceAll("_", " "))} · ${escapeHtml(league.provider)}</p>
+      <header><div><span class="coverage-sport">${escapeHtml(league.sportId)} · Group ${league.certificationGroup || "—"}</span><h3>${escapeHtml(league.displayName)}</h3></div><span class="source-mode-badge ${escapeHtml(league.dataMode)}">${escapeHtml(league.certificationState || league.rolloutState.replaceAll("_", " "))}</span></header>
+      <div class="coverage-quality"><span>Research Quality</span><strong>${escapeHtml(league.edgeTrust.researchQuality.label)}</strong><span>${league.edgeTrust.researchQuality.score}%</span></div>
+      <p>${escapeHtml(league.provider)} · last validation ${formatDateTime(league.edgeTrust.lastValidation, "not available")} · last update ${formatDateTime(league.lastUpdatedAt, "not available")}</p>
       <div class="table-scroll"><table><thead><tr><th>Domain</th><th>Coverage</th><th>Updated</th></tr></thead><tbody>
         ${league.domains.map((domain) => `<tr><th scope="row">${escapeHtml(domain.label)}</th><td><span class="source-mode-badge ${escapeHtml(domain.sourceMode)}">${escapeHtml(domain.publicStatus || sourceModeLabel(domain.sourceMode))}</span></td><td>${escapeHtml(formatDateTime(domain.lastUpdatedAt, "Not available"))}</td></tr>`).join("")}
       </tbody></table></div>
+      <details class="coverage-trust-details"><summary>Edge Trust details</summary>${renderEdgeTrustDetails(league.edgeTrust)}</details>
       ${league.knownLimitations?.length ? `<details><summary>Known limitations</summary><ul>${league.knownLimitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>` : ""}
     </article>
   `).join("")}</div>`;
@@ -1515,11 +1657,30 @@ function savedInsightIndex(insight) {
         || saved.statIds.join("|") === insight.statIds.join("|"))));
 }
 
+function trustForInsight(insight = {}) {
+  const complete = insight.validationStatus === "validated" || insight.validationStatus === "provider_asserted";
+  return evaluateEdgeTrust({
+    components: {
+      historical: "sample",
+      agreement: insight.providerConflicts?.length ? "partial" : "verified",
+      freshness: insight.freshness?.state === "stale" ? "stale" : "sample",
+      coverage: complete ? 1 : .5,
+      identity: insight.entity?.id || insight.entityIds?.length ? "verified" : "pending",
+      completeness: complete ? 1 : .5,
+    },
+    applicable: ["historical", "agreement", "freshness", "coverage", "identity", "completeness"],
+    conflicts: insight.providerConflicts || [],
+    sample: true,
+    lastValidation: insight.freshness?.lastUpdated,
+  });
+}
+
 function renderInsightCard(insight, { feature = false, context = "discovery" } = {}) {
   const savedIndex = savedInsightIndex(insight);
   const saved = savedIndex >= 0;
   const savedStatus = saved ? insightService.reconcileSavedInsight(state.savedInsights[savedIndex]) : null;
   const archived = ["stale", "invalid", "incomplete"].includes(insight.validationStatus);
+  const trust = trustForInsight(insight);
   return `
     <article class="insight-card${feature ? " feature" : ""}${archived ? " archived" : ""}" data-insight-card="${escapeHtml(insight.id)}">
       <div class="insight-card-kickers">
@@ -1534,6 +1695,7 @@ function renderInsightCard(insight, { feature = false, context = "discovery" } =
         <span>${escapeHtml(insightCategory(insight))}</span>
       </div>
       ${insight.rarity?.comparisonPoolSize ? `<p class="insight-rarity">${escapeHtml(insight.rarity.label)} · ${insight.rarity.qualifyingEntityCount} of ${insight.rarity.comparisonPoolSize} qualified entities</p>` : ""}
+      <div class="market-research-quality" title="Research Quality evaluates source evidence, not projection or probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
       ${insight.bettingContext ? `<aside class="related-insight-market"><strong>Related current market</strong><span>${escapeHtml(insight.bettingContext.line)} · ${formatOdds(insight.bettingContext.odds)} · ${escapeHtml(insight.bettingContext.sportsbook)}</span><small>Historical context remains separate from projection and model confidence.</small></aside>` : ""}
       <div class="insight-card-footer">
         <span>${escapeHtml(insight.source.attribution || insight.source.provider)} · ${formatDateTime(insight.freshness.lastUpdated)}</span>
@@ -1561,33 +1723,104 @@ function visibleInsightCandidates(candidates) {
     && insight.freshness?.state !== "stale");
 }
 
-function renderInsightDiscovery() {
-  const summary = getSelectionSummary(state.navigationSelection);
-  const leagueIds = summary.visibleLeagues.map((league) => league.leagueId);
-  const sportIds = [...new Set(summary.visibleLeagues.map((league) => league.sportId))];
-  const liveOnly = summary.selection.type === "system" && summary.selection.id === "live";
-  const todayOnly = summary.selection.type === "system" && summary.selection.id === "today";
-  const candidates = liveOnly ? [] : insightService.getFeaturedInsights({
-    leagueIds,
-    sportIds,
-    limit: 6,
-    includeBettingContext: state.researchMode === "both",
-    ...(todayOnly ? { dateRange: { type: "today" } } : {}),
+function homeDiscoveryTrust(card) {
+  if (card.edgeTrust) return card.edgeTrust;
+  if (card.researchQualityInput) return trustForInsight(card.researchQualityInput);
+  return evaluateEdgeTrust({
+    components: {
+      historical: card.classification === "historical_fact" ? "sample" : "unavailable",
+      agreement: "verified",
+      freshness: card.source?.updatedAt ? "sample" : "unavailable",
+      coverage: card.sampleSize ? 1 : .6,
+      identity: card.entity?.id || card.eventTime ? "verified" : "pending",
+      completeness: card.validationStatus ? 1 : .5,
+    },
+    applicable: ["historical", "agreement", "freshness", "coverage", "identity", "completeness"],
+    sample: true,
+    lastValidation: card.source?.updatedAt,
   });
-  const visible = visibleInsightCandidates(candidates).slice(0, 4);
+}
+
+function renderHomeDiscoveryAction(action) {
+  if (action.type === "profile") {
+    const entityProfile = action.profileSystem === "entity";
+    return `<a class="text-button" href="${escapeHtml(entityProfile ? entityProfileUrl(action.entityId) : profileUrl(action.entityId))}" ${entityProfile ? `data-open-entity="${escapeHtml(action.entityId)}"` : `data-open-athlete="${escapeHtml(action.entityId)}"`}>${escapeHtml(action.label)}</a>`;
+  }
+  if (action.type === "evidence") return `<button type="button" class="text-button" data-view-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
+  if (action.type === "save-story") return `<button type="button" class="text-button" data-save-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
+  if (action.type === "follow-entity") return `<button type="button" class="text-button" data-follow-entity="${escapeHtml(action.entityId)}" aria-pressed="${state.followedEntityIds.includes(action.entityId)}">${state.followedEntityIds.includes(action.entityId) ? "Following" : escapeHtml(action.label)}</button>`;
+  if (action.type === "share-story") return `<button type="button" class="text-button" data-share-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
+  if (action.type === "research-story") return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="research" data-research-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
+  return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="${escapeHtml(action.kind)}">${escapeHtml(action.label)}</button>`;
+}
+
+function renderHomeDiscoveryCard(card, { feature = false } = {}) {
+  const trust = homeDiscoveryTrust(card);
+  return `<article class="home-discovery-card${feature ? " feature" : ""}${card.insightId ? " insight-card" : ""}" data-home-card="${escapeHtml(card.id)}" data-card-kind="${escapeHtml(card.kind)}" data-classification="${escapeHtml(card.classification)}" data-league-id="${escapeHtml(card.leagueId || "")}" data-sport-id="${escapeHtml(card.sportId || "")}"${card.insightId ? ` data-insight-card="${escapeHtml(card.insightId)}"` : ""}>
+    <div class="home-card-kickers"><span>${escapeHtml(card.eyebrow)}</span><span class="validation-label">${escapeHtml((card.validationStatus || "validation unavailable").replaceAll("_", " "))}</span><span class="sample-badge">Sample</span></div>
+    <h3>${escapeHtml(card.title)}</h3>
+    <p>${escapeHtml(card.summary)}</p>
+    <div class="home-card-meta">
+      ${card.leagueId ? `<span>${escapeHtml(card.leagueId.toUpperCase())}</span>` : ""}
+      ${card.sampleSize ? `<span>${card.sampleSize} completed event${card.sampleSize === 1 ? "" : "s"}</span>` : ""}
+      ${card.eventTime ? `<span>${formatDateTime(card.eventTime)}</span>` : ""}
+      <span>${escapeHtml(card.classification.replaceAll("_", " "))}</span>
+    </div>
+    <div class="market-research-quality" title="Research Quality evaluates source evidence and is not betting confidence or probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
+    <div class="home-card-actions" aria-label="Explore ${escapeHtml(card.title)}">
+      ${card.storyId ? `<button type="button" class="text-button" data-view-story="${escapeHtml(card.storyId)}">Open story</button>` : ""}
+      ${card.insightId ? `<button type="button" class="text-button" data-view-insight="${escapeHtml(card.insightId)}">Supporting data</button>` : ""}
+      ${card.actions.map(renderHomeDiscoveryAction).join("")}
+    </div>
+    <small>${escapeHtml(card.source?.source || "Source unavailable")} · ${formatDateTime(card.source?.updatedAt, "timestamp unavailable")} · ${escapeHtml(card.validationStatus || "validation unavailable")}</small>
+    <span class="insight-action-status" role="status" aria-live="polite"></span>
+  </article>`;
+}
+
+function renderHomeSection(section) {
+  return `<section class="home-discovery-section" data-home-section="${escapeHtml(section.id)}" aria-labelledby="home-${escapeHtml(section.id)}-title">
+    <div class="today-board-heading"><div><p class="eyebrow">Deterministic discovery</p><h2 id="home-${escapeHtml(section.id)}-title">${escapeHtml(section.title)}</h2><p>${escapeHtml(section.description)}</p></div><span class="sample-badge">Sample data</span></div>
+    <div class="home-discovery-grid">${section.cards.length ? section.cards.map((card) => renderHomeDiscoveryCard(card)).join("") : `<div class="discovery-empty" role="status">${escapeHtml(section.emptyMessage)}</div>`}</div>
+  </section>`;
+}
+
+function renderHomeDiscovery() {
+  const summary = getSelectionSummary(state.navigationSelection);
+  const model = createHomeDiscoveryModel({
+    selection: summary,
+    visibleLeagues: summary.visibleLeagues,
+    sportsRepository,
+    statsRepository,
+    insightService,
+    storyEngine,
+    researchMode: state.researchMode,
+    currentDate: new Date(),
+  });
+  const sections = new Map(model.sections.map((item) => [item.id, item]));
+  const stories = sections.get("stories");
+  const trending = sections.get("trending");
+  elements.todayPulse.dataset.scope = serializeNavigationSelection(summary.selection);
+  elements.todayPulseSummary.textContent = `${stories.description} ${model.disclaimer}`;
+  elements.todayPulseGrid.innerHTML = stories.cards.length
+    ? stories.cards.map((card, index) => renderHomeDiscoveryCard(card, { feature: index === 0 })).join("")
+    : `<div class="discovery-empty" role="status">${escapeHtml(stories.emptyMessage)}</div>`;
   elements.insightDiscovery.dataset.scope = serializeNavigationSelection(summary.selection);
-  elements.insightDiscoverySummary.textContent = liveOnly
-    ? "The sample historical provider cannot validate live-event insights, so none are shown."
-    : `${visible.length} prioritized sample insight${visible.length === 1 ? "" : "s"} for ${summary.contextLabel}. Today’s Markets remains the primary discovery board.`;
-  elements.insightDiscoveryGrid.innerHTML = visible.length
-    ? visible.map((insight, index) => renderInsightCard(insight, { feature: index === 0 })).join("")
-    : `<div class="discovery-empty" role="status">No fresh, validated sample insight is available for this scope.</div>`;
+  elements.insightDiscoverySummary.textContent = `${trending.description} Scope: ${summary.contextLabel}.`;
+  elements.insightDiscoveryGrid.innerHTML = trending.cards.length
+    ? trending.cards.map((card) => renderHomeDiscoveryCard(card)).join("")
+    : `<div class="discovery-empty" role="status">${escapeHtml(trending.emptyMessage)}</div>`;
+  elements.homeDiscoverySections.dataset.scope = serializeNavigationSelection(summary.selection);
+  elements.homeDiscoverySections.dataset.mode = state.researchMode;
+  elements.homeDiscoverySections.innerHTML = model.sections
+    .filter((item) => !["stories", "trending"].includes(item.id))
+    .map(renderHomeSection).join("");
 }
 
 function renderInsightDialog(insight) {
   const supporting = insightService.getInsightSupportingData(insight.id);
   if (!supporting) return;
   state.activeInsightId = insight.id;
+  elements.insightDialogTitle.textContent = "Insight supporting data";
   elements.insightDialogContent.innerHTML = `
     <article class="share-stat-card" aria-label="${escapeHtml(insight.phrasing.sharingCaption)}">
       <span class="brand">EdgeBoard</span>
@@ -1621,6 +1854,93 @@ function renderInsightDialog(insight) {
     ${supporting.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("")}
   `;
   elements.insightDialog.showModal();
+  elements.closeInsightDialog.focus();
+}
+
+function storyShareUrl(story) {
+  const url = new URL(window.location.href);
+  url.searchParams.set("story", story.id);
+  url.searchParams.delete("insight");
+  return `${url.pathname}${url.search}${url.hash}`;
+}
+
+function setStoryUrl(storyId, { replace = false } = {}) {
+  const url = new URL(window.location.href);
+  if (storyId) {
+    url.searchParams.set("story", storyId);
+    url.searchParams.delete("insight");
+  } else {
+    url.searchParams.delete("story");
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardStory: Boolean(storyId), storyId }, "", url);
+}
+
+function storyWorkspaceCandidate(story) {
+  const view = storyEngine.buildStoryViewModel(story, { presentation: "share", mode: state.researchMode });
+  return {
+    ...currentWorkspaceCandidate(),
+    type: "saved_story",
+    boardId: "board-stats-trends",
+    title: view.headline,
+    description: view.summary,
+    sourceState: {
+      mode: state.researchMode,
+      sportId: story.sportId,
+      leagueId: story.leagueId,
+      queryText: view.headline,
+      structuredQuery: { type: "story", storyId: story.id, claimData: safeSnapshot(story.claimData) },
+    },
+    canonicalReferences: {
+      entityIds: [...story.entityIds],
+      eventIds: [...story.eventIds],
+      marketIds: story.bettingContext?.marketId ? [story.bettingContext.marketId] : [],
+      insightIds: [...story.sourceInsightIds],
+      storyIds: [story.id],
+      queryId: null,
+      visualizationId: null,
+    },
+    researchSnapshot: safeSnapshot({
+      schemaVersion: story.schemaVersion,
+      structuredClaim: story.claimData,
+      renderedText: { headline: view.headline, summary: view.summary, shareCaption: view.shareCaption },
+      sourceIds: story.sources.map((source) => source.id),
+      evidenceIds: story.supportingEvidence.map((item) => item.id),
+      validationStatus: story.validationStatus,
+      freshness: story.freshness,
+      researchQuality: story.researchQuality,
+      snapshotAt: new Date().toISOString(),
+      refreshConfiguration: { storyId: story.id, sportId: story.sportId, leagueId: story.leagueId },
+      sample: story.sample,
+    }),
+    sample: story.sample,
+  };
+}
+
+function renderStoryDetail(story, { updateUrl = true } = {}) {
+  const view = storyEngine.buildStoryViewModel(story, { presentation: "feature", mode: state.researchMode });
+  state.activeStoryId = story.id;
+  elements.insightDialogTitle.textContent = "Story details";
+  elements.insightDialogContent.innerHTML = `
+    <article class="story-detail" data-story-detail="${escapeHtml(story.id)}">
+      <header class="story-detail-header">
+        ${renderAthleteMedia(view.media, { large: true })}
+        <div><p class="eyebrow">${escapeHtml(view.storyType.replaceAll("_", " "))}</p><h3>${escapeHtml(view.headline)}</h3><p>${escapeHtml(view.summary)}</p></div>
+      </header>
+      <div class="story-detail-badges"><span class="validation-label">${escapeHtml(view.validationLabel)}</span><span class="sample-badge">${view.sample ? "Sample data" : "Provider data"}</span><span>${escapeHtml(view.lifecycleState)}</span></div>
+      <section aria-labelledby="storyKeyStats"><h4 id="storyKeyStats">Key statistics and scope</h4><div class="insight-chips">${view.statChips.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}<span>${escapeHtml(view.scopeLabel)}</span></div><p>${escapeHtml(view.expandedExplanation)}</p></section>
+      <section aria-labelledby="storyTrust"><h4 id="storyTrust">Edge Trust and Research Quality</h4><div class="market-research-quality"><span>${escapeHtml(view.edgeTrust.publicStatus)}</span><strong>${escapeHtml(view.researchQuality.label)} · ${view.researchQuality.score}%</strong></div><p>${escapeHtml(view.edgeTrust.summary)}</p></section>
+      <section aria-labelledby="storyEvidence" tabindex="-1" data-story-evidence-panel><h4 id="storyEvidence">Supporting evidence</h4>
+        <div class="stats-table-wrap"><table class="stats-table"><caption>Evidence retained for this structured claim</caption><thead><tr><th scope="col">Evidence</th><th scope="col">Event</th><th scope="col">Date</th><th scope="col">Status</th></tr></thead><tbody>
+          ${view.supportingEvidence.map((item) => `<tr><th scope="row">${escapeHtml(item.label || item.id)}</th><td>${escapeHtml(item.eventId || "Not event-specific")}</td><td>${formatDateTime(item.occurredAt)}</td><td>${escapeHtml(item.status || "validated")}</td></tr>`).join("")}
+        </tbody></table></div>
+      </section>
+      <section aria-labelledby="storyLimits"><h4 id="storyLimits">Known limitations</h4>${view.warnings.length ? view.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("") : "<p>No additional limitation was reported.</p>"}<p>${escapeHtml(storyEngine.phraseStory(story).uncertaintyDisclosure)}</p></section>
+      ${view.market ? `<aside class="related-insight-market"><strong>Optional current betting context</strong><span>${escapeHtml(view.market.line)} · ${formatOdds(view.market.odds)} · ${escapeHtml(view.market.sportsbook)}</span><small>The observed fact is separate from projection, edge, confidence, odds, and Research Quality.</small></aside>` : ""}
+      <div class="story-detail-actions" aria-label="Story research actions">${[view.primaryAction, ...view.secondaryActions].filter(Boolean).map((action) => action.type === "evidence" ? `<button type="button" class="text-button" data-focus-story-evidence>${escapeHtml(action.label)}</button>` : renderHomeDiscoveryAction(action)).join("")}</div>
+      <footer><small>${escapeHtml(view.sourceLabel)} · ${formatDateTime(view.lastUpdated)} · ${escapeHtml(view.freshnessLabel)}</small><span class="insight-dialog-status" role="status" aria-live="polite"></span></footer>
+    </article>`;
+  if (updateUrl) setStoryUrl(story.id);
+  if (!elements.insightDialog.open) elements.insightDialog.showModal();
   elements.closeInsightDialog.focus();
 }
 
@@ -1734,6 +2054,11 @@ function renderProfileOverview(viewModel) {
   const { overview, props } = viewModel;
   const insight = overview.insights[0];
   const next = overview.nextEvent;
+  const insightCounts = viewModel.insights.reduce((counts, item) => {
+    const category = item.type?.includes("milestone") ? "milestones" : item.type?.includes("streak") ? "streaks" : "trends";
+    counts[category] += 1;
+    return counts;
+  }, { trends: 0, milestones: 0, streaks: 0 });
   return `
     <div class="profile-overview-grid">
       <section class="profile-card profile-summary-card" aria-labelledby="seasonSummaryHeading">
@@ -1754,16 +2079,17 @@ function renderProfileOverview(viewModel) {
       <section class="profile-card" aria-labelledby="nextEventHeading">
         <div class="profile-card-heading"><div><p class="eyebrow">Schedule context</p><h2 id="nextEventHeading">Next event</h2></div></div>
         ${next ? `<div class="next-event"><strong>${escapeHtml(next.opponent)}</strong><span>${formatDateTime(next.startsAt)}</span><span>${escapeHtml(next.venue || "Venue unavailable")} · ${escapeHtml(next.homeAway || "Location unavailable")}</span></div>`
-          : `<div class="profile-empty">No upcoming event is supplied by the sample provider.</div>`}
+          : `<div class="profile-empty"><strong>Schedule not supplied</strong><p>The sample provider has no upcoming event for this athlete. Recent form and completed logs are still available.</p><button type="button" class="text-button" data-profile-tab-target="game-logs">Review recent logs</button></div>`}
       </section>
       <section class="profile-card" aria-labelledby="relatedMarketsHeading">
         <div class="profile-card-heading"><div><p class="eyebrow">Betting analysis</p><h2 id="relatedMarketsHeading">Related markets</h2></div><button type="button" class="text-button" data-profile-tab-target="props">View props</button></div>
         ${props.markets.length ? `<p>${props.markets.length} provider-confirmed sample market${props.markets.length === 1 ? "" : "s"}. Historical statistics remain separate from model analysis.</p>`
-          : `<div class="profile-empty">No current market available. Historical rows do not create odds.</div>`}
+          : `<div class="profile-empty"><strong>No current market</strong><p>Historical rows do not create odds. Keep researching observed form or check another active league.</p><button type="button" class="text-button" data-profile-tab-target="trends">Review trends</button></div>`}
       </section>
       ${insight ? `<section class="profile-card profile-insight-card" aria-labelledby="overviewInsightHeading">
-        <div class="profile-card-heading"><div><p class="eyebrow">Deterministic sample insight</p><h2 id="overviewInsightHeading">${escapeHtml(insight.title)}</h2></div></div>
+        <div class="profile-card-heading"><div><p class="eyebrow">What stands out</p><h2 id="overviewInsightHeading">${escapeHtml(insight.title)}</h2></div><button type="button" class="text-button" data-profile-tab-target="insights">All insights</button></div>
         <p>${escapeHtml(insight.label)}</p>
+        <div class="insight-chips"><span>${insightCounts.trends} trend${insightCounts.trends === 1 ? "" : "s"}</span><span>${insightCounts.milestones} milestone${insightCounts.milestones === 1 ? "" : "s"}</span><span>${insightCounts.streaks} streak${insightCounts.streaks === 1 ? "" : "s"}</span></div>
         <button type="button" class="text-button" data-view-insight="${escapeHtml(insight.id)}">View supporting data</button>
       </section>` : ""}
     </div>
@@ -1853,6 +2179,7 @@ function renderProfileProps(viewModel) {
           market.stale ? "Odds are stale — shown for sample context only." : "",
           !market.suspended && !market.stale ? market.dataQualityWarning || "Sample market." : "",
         ].filter(Boolean);
+        const trust = trustForMarket(market);
         return `<article class="bet-card${market.stale ? " stale" : ""}${!market.available ? " unavailable" : ""}">
           <div class="bet-top"><div><p class="bet-title">${escapeHtml(market.marketName)}</p><div class="bet-market">${escapeHtml(market.side)} · ${escapeHtml(market.line)}</div></div><div class="odds">${formatOdds(market.odds)}</div></div>
           <div class="bet-source-row"><span>${escapeHtml(market.sportsbook)}</span><span>Updated ${formatDateTime(market.updatedAt)}</span></div>
@@ -1863,6 +2190,7 @@ function renderProfileProps(viewModel) {
             <div class="prop-metric"><span>Model confidence</span><strong>${Number.isFinite(market.confidence) ? `${market.confidence}% signal` : "Unavailable"}</strong></div>
           </div>
           <p class="data-warning">${escapeHtml(statusWarnings.join(" "))}</p>
+          <div class="market-research-quality" title="Research Quality evaluates source evidence, not model confidence or win probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
           <button class="add-button" type="button" data-profile-add="${escapeHtml(market.id)}" ${actionable ? "" : "disabled"}>${actionable ? "Add to slip" : "Unavailable"}</button>
         </article>`;
       }).join("")}</div>` : `<div class="profile-empty profile-card">${viewModel.props.markets.length ? "No provider markets match these filters." : "No current market available. Historical performance does not create a betting line."}</div>`}
@@ -2080,6 +2408,13 @@ async function loadVisualAnalytics({ focusHeading = false } = {}) {
     if (requestId !== visualRequestSequence || !state.visualRequest) return;
     state.visualLoading = false;
     state.visualResult = result;
+    const visualQuestion = elements.queryInput.value.trim() || result.title || "Visual sports research";
+    synchronizeResearchSession(visualQuestion, {
+      visualizations: [result],
+      researchQuality: result.edgeTrust,
+      source: { source: result.sources?.[0]?.provider || "Unavailable", freshness: result.dataFreshness?.lastUpdatedAt, sample: result.coverage?.sample === true },
+      sample: result.coverage?.sample === true,
+    });
     renderVisualAnalytics();
     if (focusHeading) {
       const heading = elements.visualAnalyticsContent.querySelector("#visualizationTitle");
@@ -2338,24 +2673,106 @@ function renderEventExplorer(result) {
   </article>`;
 }
 
+function edgeLabClassificationLabel(value) {
+  return ({
+    historical_fact: "Historical fact",
+    current_provider_data: "Current provider data",
+    model_output: "Model output",
+    scenario_assumption: "Scenario assumption",
+    future_simulation: "Future simulation",
+  })[value] || String(value || "Unclassified").replaceAll("_", " ");
+}
+
+function renderEdgeLabScenario(scenario) {
+  if (!scenario?.id) return "";
+  const quality = scenario.researchQuality?.researchQuality;
+  const activeClassifications = new Set(
+    (scenario.updatedResearch?.evidence || []).flatMap((item) => [item.edgeLab?.originalClassification, item.classification]).filter(Boolean),
+  );
+  if (scenario.originalData?.markets?.length) activeClassifications.add(scenario.classifications.provider);
+  scenario.modifiedAssumptions.forEach((item) => activeClassifications.add(item.classification));
+  const collectionCounts = [
+    ["Research", scenario.updatedResearch?.evidence?.length || 0],
+    ["Comparisons", scenario.updatedComparisons?.length || 0],
+    ["Visuals", scenario.updatedVisuals?.length || 0],
+    ["Insights", scenario.updatedInsights?.length || 0],
+    ["Markets", scenario.updatedMarkets?.length || 0],
+  ];
+  return `<section class="edge-lab-panel" aria-labelledby="edgeLabTitle">
+    <header class="edge-lab-header">
+      <div><p class="eyebrow">Edge Lab · deterministic research sandbox</p><h3 id="edgeLabTitle">${escapeHtml(scenario.title)}</h3><p>Baseline ${escapeHtml(scenario.sessionId)} · revision ${scenario.sessionRevision} · original data unchanged</p></div>
+      <div class="edge-lab-status-badges"><span class="edge-lab-not-prediction">Not a prediction</span>${scenario.originalData?.sample ? '<span class="sample-badge">Sample baseline</span>' : ""}</div>
+    </header>
+    <div class="edge-lab-classifications" aria-label="Data classifications">
+      ${[...activeClassifications].map((item) => `<span data-classification="${escapeHtml(item)}">${escapeHtml(edgeLabClassificationLabel(item))}</span>`).join("")}
+    </div>
+    <div class="edge-lab-summary">
+      <div><span>Assumptions</span><strong>${scenario.modifiedAssumptions.length}</strong><small>${scenario.rejectedAssumptions.length ? `${scenario.rejectedAssumptions.length} rejected` : "validated controls"}</small></div>
+      <div><span>Differences</span><strong>${scenario.scenarioDifferences.length}</strong><small>original → sandbox</small></div>
+      <div><span>Research Quality</span><strong>${escapeHtml(quality?.label || "Unavailable")}</strong><small>${quality?.score ?? 0}% · not probability</small></div>
+    </div>
+    <div class="edge-lab-updates" aria-label="Scenario research outputs">${collectionCounts.map(([label, count]) => `<span><strong>${count}</strong> ${label}</span>`).join("")}</div>
+    ${scenario.scenarioDifferences.length ? `<div class="edge-lab-differences"><h4>Scenario differences</h4><ul>${scenario.scenarioDifferences.map((item) => `<li><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.field)} · ${escapeHtml(edgeLabClassificationLabel(item.classification))}</small></div><span><del>${escapeHtml(item.before)}</del><b aria-hidden="true">→</b><ins>${escapeHtml(item.after)}</ins></span></li>`).join("")}</ul></div>` : `<div class="edge-lab-empty"><strong>No assumptions yet</strong><span>Add a supported numeric evidence or market assumption. EdgeBoard will preserve the baseline.</span></div>`}
+    ${scenario.rejectedAssumptions.length ? `<div class="edge-lab-rejected" role="status"><strong>Unsupported assumptions were not applied</strong><ul>${scenario.rejectedAssumptions.map((item) => `<li>${escapeHtml(item.error)}</li>`).join("")}</ul></div>` : ""}
+    <details class="edge-lab-counterarguments" ${scenario.scenarioDifferences.length ? "open" : ""}><summary>Counterarguments and uncertainty · ${scenario.counterarguments.length}</summary><ul>${scenario.counterarguments.map((item) => `<li>${escapeHtml(item.text)}</li>`).join("")}</ul></details>
+    <p class="edge-lab-disclaimer">${escapeHtml(scenario.disclaimer)}</p>
+    <div class="edge-lab-actions" aria-label="Edge Lab scenario actions">
+      <button type="button" class="text-button" data-edge-lab-add>Add assumption</button>
+      <button type="button" class="text-button" data-edge-lab-save>Save scenario</button>
+      <button type="button" class="text-button" data-edge-lab-share>Share</button>
+      <button type="button" class="text-button" data-edge-lab-export="markdown">Export .md</button>
+      <button type="button" class="text-button" data-edge-lab-export="csv">Export CSV</button>
+      <button type="button" class="text-button" data-edge-lab-discard>Discard scenario</button>
+    </div>
+  </section>`;
+}
+
 function renderResearchAnswer(answer) {
   if (!answer) return "";
   const completeness = answer.researchCompleteness;
   const source = answer.disclosure;
+  const trust = trustForResearchAnswer(answer);
+  const session = state.researchSession;
   return `
-    <article class="research-answer-card" data-completeness="${escapeHtml(completeness.level.toLowerCase())}">
+    <article class="research-answer-card" data-completeness="${escapeHtml(completeness.level.toLowerCase())}" data-research-quality="${escapeHtml(trust.researchQuality.label.toLowerCase())}">
+      ${session ? `<section class="research-session-shell" aria-labelledby="researchSessionTitle">
+        <header class="research-session-header">
+          <div><p class="eyebrow">Research session · revision ${session.revision}</p><h2 id="researchSessionTitle">${escapeHtml(session.question)}</h2><p>${escapeHtml(session.id)} · ${escapeHtml(session.status)}</p></div>
+          <div class="research-session-actions" aria-label="Research session actions">
+            <button type="button" class="text-button" data-session-new>Start new</button>
+            <button type="button" class="text-button" data-session-save>Save</button>
+            <button type="button" class="text-button" data-session-refresh>Refresh</button>
+            <button type="button" class="text-button" data-session-share>Share</button>
+            <button type="button" class="text-button" data-session-export="markdown">Export .md</button>
+            <button type="button" class="text-button" data-session-export="csv">Export CSV</button>
+            <button type="button" class="text-button" data-session-note>Add note</button>
+            <button type="button" class="text-button" data-edge-lab-open>Open Edge Lab</button>
+          </div>
+        </header>
+        <details class="research-session-workflow" open>
+          <summary>Research workflow · ${session.workflow.filter((item) => item.status === "complete").length} of ${session.workflow.length} steps complete</summary>
+          <ol>${session.workflow.map((item) => `<li data-status="${escapeHtml(item.status)}"><span aria-hidden="true"></span><div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small></div><em>${escapeHtml(item.status.replaceAll("_", " "))}</em></li>`).join("")}</ol>
+        </details>
+        ${session.notes.length ? `<details class="research-session-notes"><summary>Private session notes · ${session.notes.length}</summary><ul>${session.notes.map((note) => `<li>${escapeHtml(note.text)}</li>`).join("")}</ul></details>` : ""}
+        ${state.edgeLabScenario?.sessionId === session.id ? renderEdgeLabScenario(state.edgeLabScenario) : ""}
+      </section>` : ""}
       <header class="research-answer-header">
         <div>
           <p class="eyebrow">EdgeBoard deterministic analyst</p>
           <h2 id="researchAnswerTitle">${escapeHtml(answer.headline)}</h2>
-          <p class="research-answer-summary">${escapeHtml(answer.summary)}</p>
         </div>
-        <div class="research-completeness" aria-label="Research completeness: ${escapeHtml(completeness.level)}">
-          <span>Research completeness</span>
-          <strong>${escapeHtml(completeness.level)}</strong>
-          <small>${completeness.score}/100</small>
-        </div>
+        <button type="button" class="research-completeness research-quality-trigger" data-open-edge-trust aria-label="Research Quality: ${escapeHtml(trust.researchQuality.label)}, ${trust.researchQuality.score} percent. Open Edge Trust details.">
+          <span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)}</strong><small>${trust.researchQuality.score}% · Edge Trust details</small>
+        </button>
       </header>
+
+      <details class="research-plan" open>
+        <summary>Research plan · ${escapeHtml(answer.plan.questionType.replaceAll("_", " "))}</summary>
+        <ol>${answer.plan.stages.map((stage) => `
+          <li data-status="${escapeHtml(stage.status)}"><strong>${escapeHtml(stage.label)}</strong><span>${escapeHtml(stage.detail)}</span></li>
+        `).join("")}</ol>
+        <p>${escapeHtml(answer.languagePolicy)}</p>
+      </details>
 
       <div class="research-disclosure" aria-label="Research transparency">
         <div><span>Source</span><strong>${escapeHtml(source.source)}</strong></div>
@@ -2365,6 +2782,10 @@ function renderResearchAnswer(answer) {
         <div><span>Validation</span><strong>${escapeHtml(source.validation)}</strong></div>
         <div><span>Freshness</span><strong>${formatDateTime(source.freshness, "Unavailable")}</strong></div>
       </div>
+
+      ${trust.details.some((item) => ["Waiting for Confirmation", "Unavailable", "Stale", "Validation Error"].includes(item.status)) ? `<p class="edge-intelligence-uncertainty" role="status">Research quality is reduced because ${escapeHtml(trust.details.filter((item) => ["Waiting for Confirmation", "Unavailable", "Stale", "Validation Error"].includes(item.status)).slice(0, 3).map((item) => `${item.label} is ${item.status.toLowerCase()}`).join(" and "))}. I can strengthen this answer once the remaining information is available.</p>` : ""}
+
+      <section class="research-summary" aria-labelledby="researchSummaryTitle"><p class="eyebrow">Research summary</p><h3 id="researchSummaryTitle">What the evidence supports</h3><p class="research-answer-summary">${escapeHtml(answer.summary)}</p></section>
 
       <section class="research-answer-section" aria-labelledby="researchEvidenceTitle">
         <h3 id="researchEvidenceTitle">Evidence</h3>
@@ -2400,8 +2821,8 @@ function renderResearchAnswer(answer) {
         <section class="research-related" aria-labelledby="researchRelatedEntities">
           <h3 id="researchRelatedEntities">Related athletes and teams</h3>
           <div>${answer.relatedEntities.map((entity) =>
-            entity.entityType === "team"
-              ? `<span class="research-related-chip">${escapeHtml(entity.name)}</span>`
+            ["team", "national-team", "constructor", "manufacturer"].includes(entity.type || entity.entityType)
+              ? `<a class="text-button research-related-chip" href="${escapeHtml(entityProfileUrl(entity.id))}" data-open-entity="${escapeHtml(entity.id)}">${escapeHtml(entity.name)} profile</a>`
               : `<a class="text-button" href="${escapeHtml(profileUrl(entity.id))}" data-open-athlete="${escapeHtml(entity.id)}">${escapeHtml(entity.name)} profile</a>`).join("")}</div>
         </section>
       ` : ""}
@@ -2430,31 +2851,27 @@ function renderResearchAnswer(answer) {
 
       <section class="research-related" aria-labelledby="researchFollowUps">
         <h3 id="researchFollowUps">Related questions</h3>
-        <div>${answer.relatedQuestions.map((item) =>
-          item.type === "profile"
+        <div class="research-recommendations">${answer.relatedQuestions.map((item, index) => {
+          const recommendation = session?.recommendations?.[index];
+          const action = item.type === "profile"
             ? `<a class="text-button" href="${escapeHtml(profileUrl(item.entityId))}" data-open-athlete="${escapeHtml(item.entityId)}">${escapeHtml(item.label)}</a>`
             : item.type === "entity-profile"
               ? `<a class="text-button" href="${escapeHtml(entityProfileUrl(item.entityId))}" data-open-entity="${escapeHtml(item.entityId)}">${escapeHtml(item.label)}</a>`
-            : `<button type="button" class="text-button" data-ai-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div>
+              : `<button type="button" class="text-button" data-ai-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`;
+          return `<article>${action}<small>${recommendation ? `${recommendation.supportingEvidenceIds.length} supporting evidence item${recommendation.supportingEvidenceIds.length === 1 ? "" : "s"} · ${recommendation.counterarguments.length} counterargument${recommendation.counterarguments.length === 1 ? "" : "s"} · Research Quality ${escapeHtml(recommendation.researchQuality?.label || "Unavailable")}` : "Supporting evidence and uncertainty will be reevaluated before answering."}</small></article>`;
+        }).join("")}</div>
       </section>
 
-      <details class="research-plan">
-        <summary>Interpreted research plan · ${escapeHtml(answer.plan.questionType.replaceAll("_", " "))}</summary>
-        <ol>${answer.plan.stages.map((stage) => `
-          <li data-status="${escapeHtml(stage.status)}"><strong>${escapeHtml(stage.label)}</strong><span>${escapeHtml(stage.detail)}</span></li>
-        `).join("")}</ol>
-        <p>${escapeHtml(answer.languagePolicy)}</p>
-      </details>
-
       <div class="research-quality">
-        <strong>Data quality</strong>
+        <strong>Why Research Quality is ${escapeHtml(trust.researchQuality.label)}</strong>
         ${source.warnings.length
           ? `<ul>${source.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>`
           : "<p>No additional provider warning was returned.</p>"}
         ${completeness.reasons.length
           ? `<ul>${completeness.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul>`
           : ""}
-        <p>Research Completeness measures evidence coverage, sample size, freshness, and missing data. It is not betting confidence or win probability.</p>
+        ${trust.limitations.length ? `<ul>${trust.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<p>All applicable trust checks passed.</p>"}
+        <p>Research Quality measures source trust only. It is not betting confidence, historical hit rate, projection, edge, or win probability.</p>
       </div>
     </article>
   `;
@@ -2465,8 +2882,9 @@ function renderStatsAnswer(result) {
     return `<div class="stats-empty"><h3 id="statsResultTitle">Ask a statistical question</h3><p>Use a sample athlete, team, split, comparison, or leaderboard query. Stats mode does not require odds or a betting market.</p></div>`;
   }
   if (["empty", "unsupported", "error"].includes(result.type)) {
+    const actions = getRecoveryActions(result, { leagueName: currentLeague()?.leagueDisplayName || "this league" });
     return `<div class="stats-empty ${escapeHtml(result.type)}"><h3 id="statsResultTitle">${escapeHtml(result.title)}</h3><p>${escapeHtml(result.message)}</p>
-      ${result.suggestions?.length ? `<ul>${result.suggestions.map((suggestion) => `<li>${escapeHtml(suggestion)}</li>`).join("")}</ul>` : ""}</div>`;
+      <p><strong>Here’s what you can do next:</strong></p><div class="recovery-actions">${actions.map((item) => `<button type="button" data-stats-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>`;
   }
   if (result.type === "ambiguous") {
     return `<div class="stats-empty ambiguous"><h3 id="statsResultTitle">${escapeHtml(result.title)}</h3><p>${escapeHtml(result.message)}</p>
@@ -2601,6 +3019,16 @@ function renderResearchMode() {
   elements.statsResults.hidden = !statsVisible;
   elements.statsResults.setAttribute("aria-busy", String(state.statsLoading));
   elements.statsLoading.hidden = !state.statsLoading;
+  if (state.statsLoading) {
+    const progress = getResearchProgressCopy(state.researchPlan || {
+      questionType: "statistical_lookup",
+      resolvedScope: { label: currentLeague()?.leagueDisplayName || "the selected scope" },
+    });
+    elements.statsLoading.querySelector(".stats-loading-copy")?.replaceChildren(
+      Object.assign(document.createElement("strong"), { textContent: progress.label }),
+      Object.assign(document.createElement("span"), { textContent: progress.detail }),
+    );
+  }
   elements.statsInterpretation.innerHTML = statsVisible ? renderInterpretation(state.statsParsedQuery) : "";
   elements.statsResultContent.innerHTML = statsVisible && !state.statsLoading ? renderStatsAnswer(state.statsResult) : "";
   elements.researchAnswer.hidden = !state.researchAnswer || state.statsLoading;
@@ -2774,9 +3202,24 @@ function currentWorkspaceCandidate() {
     researchSnapshot: { summary: queryText || "Current EdgeBoard research context", source: "EdgeBoard sample providers", sample: true },
     sample: true,
   };
+  if (state.edgeLabScenario?.sessionId === state.researchSession?.id) {
+    return {
+      ...base,
+      title: state.edgeLabScenario.title,
+      description: "Saved immutable Edge Lab research scenario",
+      type: "saved_scenario",
+      boardId: "board-edge-lab",
+      researchSnapshot: safeSnapshot(state.edgeLabScenario),
+      sourceState: { ...sourceState, queryText: state.edgeLabScenario.originalData?.question || queryText },
+      canonicalReferences: {
+        ...base.canonicalReferences,
+        marketIds: state.edgeLabScenario.modifiedAssumptions.filter((item) => item.targetType === "market").map((item) => item.targetId),
+      },
+    };
+  }
   if (state.visualResult || state.visualRequest) {
     const entityIds = state.visualRequest?.entityIds || [];
-    return { ...base, type: "saved_visualization", boardId: "board-visuals", title: state.visualResult?.title || "Saved visual analytics", canonicalReferences: { ...base.canonicalReferences, entityIds, visualizationId: state.visualRequest?.visualizationType || null }, researchSnapshot: safeSnapshot(state.visualResult || state.visualRequest) };
+    return { ...base, type: state.researchSession ? "saved_research" : "saved_visualization", boardId: "board-visuals", title: state.researchSession?.question || state.visualResult?.title || "Saved visual analytics", canonicalReferences: { ...base.canonicalReferences, entityIds, visualizationId: state.visualRequest?.visualizationType || null }, researchSnapshot: safeSnapshot(state.researchSession || state.visualResult || state.visualRequest) };
   }
   if (state.profileViewModel?.status === "ready") {
     const profile = state.profileViewModel;
@@ -2790,9 +3233,9 @@ function currentWorkspaceCandidate() {
     const result = state.statsResult;
     const kind = String(result.type || result.kind || state.statsParsedQuery?.intent || "");
     const type = kind.includes("comparison") ? "saved_comparison" : kind.includes("leaderboard") ? "saved_leaderboard" : "saved_query";
-    return { ...base, type, boardId: "board-stats-trends", title: result.title || result.headline || queryText || "Saved statistical research", canonicalReferences: { ...base.canonicalReferences, entityIds: [result.entity?.id, ...(result.entities || []).map((item) => item.id)].filter(Boolean) }, researchSnapshot: safeSnapshot(result) };
+    return { ...base, type: state.researchSession ? "saved_research" : type, boardId: "board-stats-trends", title: state.researchSession?.question || result.title || result.headline || queryText || "Saved statistical research", canonicalReferences: { ...base.canonicalReferences, entityIds: [result.entity?.id, ...(result.entities || []).map((item) => item.id)].filter(Boolean) }, researchSnapshot: safeSnapshot(state.researchSession || result) };
   }
-  if (state.researchAnswer) return { ...base, type: "saved_answer", boardId: "board-betting-research", title: state.researchAnswer.headline || queryText || "Saved research answer", researchSnapshot: safeSnapshot(state.researchAnswer) };
+  if (state.researchAnswer) return { ...base, type: state.researchSession ? "saved_research" : "saved_answer", boardId: "board-betting-research", title: state.researchSession?.question || state.researchAnswer.headline || queryText || "Saved research answer", researchSnapshot: safeSnapshot(state.researchSession || state.researchAnswer) };
   return base;
 }
 
@@ -2842,6 +3285,15 @@ function downloadWorkspaceJson(payload, filename = "edgeboard-workspace.json") {
   URL.revokeObjectURL(url);
 }
 
+function downloadResearchText(content, filename, type = "text/plain;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderAll() {
   const league = currentLeague();
   const status = getLeagueStatusMetadata(league);
@@ -2865,7 +3317,22 @@ function renderAll() {
   renderTimestamp();
   renderDataStatus();
   renderTodayMarketBoard();
-  renderInsightDiscovery();
+  renderHomeDiscovery();
+  if (state.sharedStoryId && !state.sharedStoryOpened) {
+    let sharedStory = storyEngine.getStory(state.sharedStoryId);
+    if (!sharedStory) {
+      storyEngine.generateStoryCandidates({}, {
+        mode: state.researchMode,
+        now: new Date(),
+        visibleLeagues: navigationModel.allLeagues,
+      });
+      sharedStory = storyEngine.getStory(state.sharedStoryId);
+    }
+    if (sharedStory) {
+      state.sharedStoryOpened = true;
+      renderStoryDetail(sharedStory, { updateUrl: false });
+    }
+  }
   renderResearchMode();
   renderAthleteProfile();
   renderEntityProfile();
@@ -3072,12 +3539,12 @@ function renderAthleteSearchResults() {
     "aria-activedescendant",
     state.athleteSearchIndex >= 0 ? `athlete-search-option-${state.athleteSearchIndex}` : "",
   );
-  elements.athleteSearchResults.innerHTML = results.map((entity, index) => `
+  elements.athleteSearchResults.innerHTML = `${results.map((entity, index) => `
     <a id="athlete-search-option-${index}" role="option" aria-selected="${index === state.athleteSearchIndex}" href="${escapeHtml(entity.profileSystem === "athlete" ? profileUrl(entity.id) : entityProfileUrl(entity.id))}" ${entity.profileSystem === "athlete" ? `data-open-athlete="${escapeHtml(entity.id)}"` : `data-open-entity="${escapeHtml(entity.id)}"`}>
       <span>${escapeHtml(entity.name)}${entity.active ? "" : " · Inactive"}</span>
       <small>${escapeHtml(entity.typeLabel)}${entity.context ? ` · ${escapeHtml(entity.context)}` : ""}</small>
     </a>
-  `).join("");
+  `).join("")}${state.athleteSearchGuidance.length ? `<div class="athlete-search-guidance" aria-label="Suggested research paths"><strong>Research next</strong><div>${state.athleteSearchGuidance.map((item) => `<button type="button" data-search-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>` : ""}`;
 }
 
 function updateAthleteSearch(query) {
@@ -3085,6 +3552,7 @@ function updateAthleteSearch(query) {
   if (text.length < 2) {
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
+    state.athleteSearchGuidance = [];
     renderAthleteSearchResults();
     return;
   }
@@ -3094,6 +3562,12 @@ function updateAthleteSearch(query) {
   }, 10);
   const activeMatches = matches.filter((match) => match.active);
   state.athleteSearchResults = (activeMatches.length ? activeMatches : matches).slice(0, 6);
+  const primary = state.athleteSearchResults[0];
+  const canonical = primary ? entityRegistry.getEntity(primary.id) : null;
+  const hasMarkets = primary?.profileSystem === "athlete"
+    ? statsRepository.getAthleteMarkets(canonical.id, sportsRepository).length > 0
+    : Boolean(canonical && sportsRepository.getMarkets(canonical.leagueId).some((market) => market.available));
+  state.athleteSearchGuidance = getEntityResearchActions(primary, { hasMarkets });
   state.athleteSearchIndex = -1;
   renderAthleteSearchResults();
 }
@@ -3433,6 +3907,7 @@ function runBettingResearch(query) {
     currentLeague: currentLeague(),
     availableLeagues: navigationModel.allLeagues,
     providerName: sportsRepository.getMetadata().provider,
+    storyContext: state.storyResearchContext,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: state.leagueId,
       sportId: currentLeague()?.sportId || "",
@@ -3447,6 +3922,7 @@ function runBettingResearch(query) {
     bettingPicks: answerPicks,
     statsProvider: statsRepository,
   });
+  synchronizeResearchSession(query);
   renderAll();
   elements.answerCard.classList.remove("analyzed");
   requestAnimationFrame(() => elements.answerCard.classList.add("analyzed"));
@@ -3462,10 +3938,25 @@ async function runStatsResearch(query) {
   state.statsParsedQuery = parseStatisticalQuery(query, {
     mode: state.researchMode,
     sportsRepository,
-    currentLeagueId: state.leagueId,
-    selectedEntityId: state.selectedEntityId,
+    currentLeagueId: state.storyResearchContext?.leagueId || state.leagueId,
+    selectedEntityId: state.storyResearchContext?.entityIds?.[0] || state.selectedEntityId,
     ignoreExplicitLeague: state.statsContextOverrideDisabled,
   });
+  if (state.storyResearchContext) {
+    state.statsParsedQuery = Object.freeze({
+      ...state.statsParsedQuery,
+      structuredQuery: Object.freeze({
+        ...state.statsParsedQuery.structuredQuery,
+        sportId: state.storyResearchContext.sportId,
+        leagueId: state.storyResearchContext.leagueId,
+        primaryEntityIds: state.storyResearchContext.entityIds,
+        entitySet: state.storyResearchContext.entityIds,
+        entitySetSource: "structured-story-context",
+        contextOverride: false,
+        scopeOverride: true,
+      }),
+    });
+  }
   renderResearchMode();
   await new Promise((resolve) => window.setTimeout(resolve, 140));
   if (requestId !== statsRequestSequence) return null;
@@ -3477,6 +3968,7 @@ async function runStatsResearch(query) {
     currentLeague: sportsRepository.getLeague(parsed.structuredQuery.leagueId) || currentLeague(),
     availableLeagues: navigationModel.allLeagues,
     providerName: sportsRepository.getMetadata().provider,
+    storyContext: state.storyResearchContext,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: parsed.structuredQuery.leagueId || state.leagueId,
       sportId: parsed.structuredQuery.sportId || currentLeague()?.sportId || "",
@@ -3494,6 +3986,7 @@ async function runStatsResearch(query) {
     bettingPicks: [],
     statsProvider: statsRepository,
   });
+  synchronizeResearchSession(query);
   state.statsLoading = false;
   const interpretedLeague = sportsRepository.getLeague(parsed.structuredQuery.leagueId);
   if (parsed.structuredQuery.contextOverride && interpretedLeague?.enabled) {
@@ -3527,6 +4020,7 @@ async function submitResearchQuery() {
     state.statsParsedQuery = null;
     state.researchPlan = null;
     state.researchAnswer = null;
+    state.researchSession = null;
     elements.queryFeedback.textContent = "Enter a sports research question.";
     renderAll();
     return;
@@ -3590,6 +4084,7 @@ async function submitResearchQuery() {
         currentLeague: sportsRepository.getLeague(request.leagueId) || currentLeague(),
         availableLeagues: navigationModel.allLeagues,
         providerName: sportsRepository.getMetadata().provider,
+        storyContext: state.storyResearchContext,
         resolvedEntities: matches,
       });
       elements.queryFeedback.textContent = `Visual request interpreted as ${preliminary.visualizationType.replaceAll("_", " ")}. Provider capability and row validation will run before rendering.`;
@@ -3687,6 +4182,7 @@ elements.queryInput.addEventListener("input", () => {
   state.statsParsedQuery = null;
   state.researchPlan = null;
   state.researchAnswer = null;
+  state.storyResearchContext = null;
   state.selectedEntityId = "";
   state.statsContextOverrideDisabled = false;
   persistResearchState({ updateUrl: false });
@@ -3719,7 +4215,24 @@ elements.queryInput.addEventListener("keydown", (event) => {
   }
 });
 
+elements.athleteSearchResults.addEventListener("click", (event) => {
+  const followUp = event.target.closest("[data-search-followup]");
+  if (!followUp) return;
+  elements.queryInput.value = followUp.dataset.searchFollowup;
+  state.athleteSearchResults = [];
+  state.athleteSearchGuidance = [];
+  renderAthleteSearchResults();
+  document.querySelector("#queryForm").requestSubmit();
+});
+
 elements.statsResults.addEventListener("click", (event) => {
+  const followUp = event.target.closest("[data-stats-followup]");
+  if (followUp) {
+    elements.queryInput.value = followUp.dataset.statsFollowup;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
+    return;
+  }
   const candidate = event.target.closest("[data-entity-candidate]");
   if (candidate) {
     state.selectedEntityId = candidate.dataset.entityCandidate;
@@ -3860,7 +4373,180 @@ elements.statsResults.addEventListener("click", (event) => {
   }
 });
 
+function isNumericScenarioValue(value) {
+  return typeof value === "number" && Number.isFinite(value)
+    || /^[+-]?\d+(?:\.\d+)?(?:\s|$)/.test(String(value ?? "").trim());
+}
+
+function openEdgeLabDialog() {
+  const session = state.researchSession;
+  if (!session?.id) return;
+  const select = elements.edgeLabTarget;
+  select.replaceChildren();
+  const addGroup = (label, items) => {
+    if (!items.length) return;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    items.forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      option.dataset.targetType = item.targetType;
+      option.dataset.targetId = item.targetId;
+      option.dataset.kind = item.kind;
+      group.append(option);
+    });
+    select.append(group);
+  };
+  addGroup("Numeric evidence", session.evidence.filter((item) => isNumericScenarioValue(item.value)).map((item) => ({
+    value: `evidence:${item.id}`,
+    label: `${item.label || item.type || item.id} · original ${item.value}`,
+    targetType: "evidence",
+    targetId: item.id,
+    kind: "evidence_adjustment",
+  })));
+  const marketTargets = [];
+  session.markets.forEach((market) => {
+    const id = String(market.selectionId || market.id || "");
+    if (!id) return;
+    if (isNumericScenarioValue(market.line)) marketTargets.push({
+      value: `market-line:${id}`, label: `${market.name || market.marketName || id} line · original ${market.line}`,
+      targetType: "market", targetId: id, kind: "market_line",
+    });
+    if (isNumericScenarioValue(market.odds)) marketTargets.push({
+      value: `market-odds:${id}`, label: `${market.name || market.marketName || id} odds · original ${market.odds}`,
+      targetType: "market", targetId: id, kind: "market_odds",
+    });
+  });
+  addGroup("Provider-confirmed markets", marketTargets);
+  const form = elements.edgeLabForm;
+  form.reset();
+  form.elements.title.value = state.edgeLabScenario?.title || `Scenario · ${session.question}`;
+  elements.edgeLabStatus.textContent = select.options.length
+    ? "Choose a supported source field. The original value will remain unchanged."
+    : "No numeric evidence or market field is available for a supported scenario assumption.";
+  form.querySelector("button[type=submit]").disabled = select.options.length === 0;
+  elements.edgeLabDialog.showModal();
+  (select.options.length ? select : form.elements.title).focus();
+}
+
+elements.edgeLabDialog.addEventListener("click", (event) => {
+  if (event.target.closest("[data-close-edge-lab]")) elements.edgeLabDialog.close();
+});
+
+elements.edgeLabForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const session = state.researchSession;
+  const option = elements.edgeLabTarget.selectedOptions[0];
+  if (!session?.id || !option) return;
+  const data = new FormData(elements.edgeLabForm);
+  const assumption = {
+    targetType: option.dataset.targetType,
+    targetId: option.dataset.targetId,
+    kind: option.dataset.kind,
+    operation: data.get("operation"),
+    value: data.get("value"),
+    horizon: data.get("horizon"),
+    rationale: data.get("rationale"),
+  };
+  state.edgeLabScenario = state.edgeLabScenario?.sessionId === session.id
+    ? addEdgeLabAssumption(state.edgeLabScenario, assumption)
+    : createEdgeLabScenario({ session, title: data.get("title"), assumptions: [assumption] });
+  elements.edgeLabDialog.close();
+  renderAll();
+  elements.queryFeedback.textContent = state.edgeLabScenario.rejectedAssumptions.length
+    ? "The unsupported assumption was preserved as rejected and did not alter the scenario."
+    : "Scenario recalculated from its immutable research baseline. This is not a prediction.";
+  document.querySelector("#edgeLabTitle")?.focus?.();
+});
+
 elements.researchAnswer.addEventListener("click", (event) => {
+  if (event.target.closest("[data-session-new]")) {
+    statsRequestSequence += 1;
+    state.researchSession = null;
+    state.researchPlan = null;
+    state.researchAnswer = null;
+    state.statsResult = null;
+    state.statsParsedQuery = null;
+    state.edgeLabScenario = null;
+    state.query = "";
+    elements.queryInput.value = "";
+    persistResearchState({ historyMode: "push" });
+    renderAll();
+    elements.queryFeedback.textContent = "New research session ready. Enter a question to begin.";
+    elements.queryInput.focus();
+    return;
+  }
+  if (event.target.closest("[data-edge-lab-open], [data-edge-lab-add]")) {
+    openEdgeLabDialog();
+    return;
+  }
+  if (event.target.closest("[data-edge-lab-discard]")) {
+    state.edgeLabScenario = null;
+    renderAll();
+    elements.queryFeedback.textContent = "Scenario discarded. Original research remains unchanged.";
+    return;
+  }
+  if (event.target.closest("[data-edge-lab-save]")) {
+    openWorkspaceSave(currentWorkspaceCandidate()).catch(reportWorkspaceError);
+    return;
+  }
+  if (event.target.closest("[data-edge-lab-share]")) {
+    state.workspaceShareSnapshot = edgeLabShareSnapshot(state.edgeLabScenario);
+    elements.workspaceSharePreview.textContent = JSON.stringify(state.workspaceShareSnapshot, null, 2);
+    elements.workspaceShareDialog.showModal();
+    elements.workspaceShareDialog.querySelector("[data-copy-share-snapshot]")?.focus();
+    return;
+  }
+  const edgeLabExport = event.target.closest("[data-edge-lab-export]");
+  if (edgeLabExport) {
+    const csv = edgeLabExport.dataset.edgeLabExport === "csv";
+    downloadResearchText(
+      csv ? edgeLabToCsv(state.edgeLabScenario) : edgeLabToMarkdown(state.edgeLabScenario),
+      `edgeboard-edge-lab-${state.edgeLabScenario.id}.${csv ? "csv" : "md"}`,
+      csv ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8",
+    );
+    elements.queryFeedback.textContent = `Edge Lab scenario exported as ${csv ? "CSV" : "Markdown"}.`;
+    return;
+  }
+  if (event.target.closest("[data-session-save]")) {
+    openWorkspaceSave(currentWorkspaceCandidate()).catch(reportWorkspaceError);
+    return;
+  }
+  if (event.target.closest("[data-session-refresh]")) {
+    if (!state.researchSession?.question) return;
+    state.researchSessionRefreshRequested = true;
+    elements.queryInput.value = state.researchSession.question;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
+    return;
+  }
+  if (event.target.closest("[data-session-share]")) {
+    state.workspaceShareSnapshot = researchSessionShareSnapshot(state.researchSession);
+    elements.workspaceSharePreview.textContent = JSON.stringify(state.workspaceShareSnapshot, null, 2);
+    elements.workspaceShareDialog.showModal();
+    elements.workspaceShareDialog.querySelector("[data-copy-share-snapshot]")?.focus();
+    return;
+  }
+  const sessionExport = event.target.closest("[data-session-export]");
+  if (sessionExport) {
+    const csv = sessionExport.dataset.sessionExport === "csv";
+    downloadResearchText(
+      csv ? researchSessionToCsv(state.researchSession) : researchSessionToMarkdown(state.researchSession),
+      `edgeboard-research-session-${state.researchSession.id}.${csv ? "csv" : "md"}`,
+      csv ? "text/csv;charset=utf-8" : "text/markdown;charset=utf-8",
+    );
+    elements.queryFeedback.textContent = `Research session exported as ${csv ? "CSV" : "Markdown"}.`;
+    return;
+  }
+  if (event.target.closest("[data-session-note]")) {
+    openWorkspaceEdit("session-note", state.researchSession?.id || "", "Session note", "");
+    return;
+  }
+  if (event.target.closest("[data-open-edge-trust]")) {
+    openEdgeTrustDetails(trustForResearchAnswer(state.researchAnswer));
+    return;
+  }
   const followUp = event.target.closest("[data-ai-followup]");
   if (followUp) {
     elements.queryInput.value = followUp.dataset.aiFollowup;
@@ -3879,6 +4565,36 @@ elements.researchAnswer.addEventListener("click", (event) => {
   marketAdd.textContent = "Added";
   marketAdd.disabled = true;
 });
+
+function handleHomeDiscoveryQuery(event) {
+  const action = event.target.closest("[data-home-query]");
+  if (!action) return;
+  const story = action.dataset.researchStory ? storyEngine.getStory(action.dataset.researchStory) : null;
+  const storyContext = story ? Object.freeze({
+    storyId: story.id,
+    headline: storyEngine.phraseStory(story).headline,
+    entityIds: story.entityIds,
+    sportId: story.sportId,
+    leagueId: story.leagueId,
+    eventIds: story.eventIds,
+    claimData: story.claimData,
+    supportingEvidence: story.supportingEvidence,
+    dateRange: story.scope.dateRange,
+    sourceIds: story.sources.map((source) => source.id),
+    sources: story.sources,
+    freshness: story.freshness,
+    warnings: story.warnings,
+    validationStatus: story.validationStatus,
+    researchQuality: story.researchQuality,
+  }) : null;
+  elements.queryInput.value = action.dataset.homeQuery;
+  elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+  state.storyResearchContext = storyContext;
+  document.querySelector("#queryForm").requestSubmit();
+}
+
+[elements.todayPulse, elements.insightDiscovery, elements.homeDiscoverySections]
+  .forEach((container) => container.addEventListener("click", handleHomeDiscoveryQuery));
 
 elements.statsResults.addEventListener("keydown", (event) => {
   const tab = event.target.closest("[data-stats-tab]");
@@ -3921,6 +4637,33 @@ function handleAthleteMediaError(image) {
 }
 
 document.addEventListener("click", (event) => {
+  const viewStory = event.target.closest("[data-view-story]");
+  if (viewStory) {
+    const story = storyEngine.getStory(viewStory.dataset.viewStory);
+    if (story) {
+      insightReturnFocus = viewStory;
+      renderStoryDetail(story);
+    }
+    return;
+  }
+  const saveStory = event.target.closest("[data-save-story]");
+  if (saveStory) {
+    const story = storyEngine.getStory(saveStory.dataset.saveStory);
+    if (story) openWorkspaceSave(storyWorkspaceCandidate(story)).catch(reportWorkspaceError);
+    return;
+  }
+  const shareStory = event.target.closest("[data-share-story]");
+  if (shareStory) {
+    const story = storyEngine.getStory(shareStory.dataset.shareStory);
+    if (!story) return;
+    const status = shareStory.closest("[data-story-detail], [data-home-card]")?.querySelector("[role=status]");
+    navigator.clipboard.writeText(storyShareUrl(story)).then(() => {
+      if (status) status.textContent = "Read-only story link copied.";
+    }).catch((error) => {
+      if (status) status.textContent = `Copy unavailable: ${error?.message || "permission denied"}`;
+    });
+    return;
+  }
   const workspaceInsight = event.target.closest("[data-workspace-save-insight]");
   if (workspaceInsight) {
     const insight = insightService.getInsight(workspaceInsight.dataset.workspaceSaveInsight);
@@ -4352,19 +5095,40 @@ elements.followAthlete.addEventListener("click", () => {
 });
 
 elements.closeInsightDialog.addEventListener("click", () => {
-  const fallback = document.querySelector(`[data-view-insight="${CSS.escape(state.activeInsightId)}"]`);
+  const activeId = state.activeStoryId || state.activeInsightId;
+  const fallback = state.activeStoryId
+    ? document.querySelector(`[data-view-story="${CSS.escape(activeId)}"]`)
+    : document.querySelector(`[data-view-insight="${CSS.escape(activeId)}"]`);
   const returnTarget = insightReturnFocus?.isConnected ? insightReturnFocus : fallback;
   elements.insightDialog.close();
+  if (state.activeStoryId) setStoryUrl("", { replace: true });
   returnTarget?.focus({ preventScroll: true });
 });
 elements.insightDialog.addEventListener("close", () => {
-  const fallback = document.querySelector(`[data-view-insight="${CSS.escape(state.activeInsightId)}"]`);
+  const activeId = state.activeStoryId || state.activeInsightId;
+  const fallback = state.activeStoryId
+    ? document.querySelector(`[data-view-story="${CSS.escape(activeId)}"]`)
+    : document.querySelector(`[data-view-insight="${CSS.escape(activeId)}"]`);
   const returnTarget = insightReturnFocus?.isConnected ? insightReturnFocus : fallback;
+  if (state.activeStoryId && new URLSearchParams(window.location.search).has("story")) setStoryUrl("", { replace: true });
   insightReturnFocus = null;
   state.activeInsightId = "";
+  state.activeStoryId = "";
+  state.sharedStoryId = "";
+  state.sharedStoryOpened = false;
   window.setTimeout(() => returnTarget?.focus({ preventScroll: true }), 0);
 });
 elements.insightDialog.addEventListener("click", (event) => {
+  if (event.target.closest("[data-focus-story-evidence]")) {
+    elements.insightDialogContent.querySelector("[data-story-evidence-panel]")?.focus();
+    return;
+  }
+  if (event.target.closest("[data-home-query]")) {
+    event.stopPropagation();
+    handleHomeDiscoveryQuery(event);
+    elements.insightDialog.close();
+    return;
+  }
   const insight = insightService.getInsight(state.activeInsightId);
   if (!insight) return;
   const status = elements.insightDialogContent.querySelector(".insight-dialog-status");
@@ -4516,7 +5280,12 @@ elements.workspaceEditForm.addEventListener("submit", async (event) => {
   const description = String(data.get("description") || "").trim();
   const vm = state.workspaceViewModel;
   try {
-    if (action === "create-board") await workspaceRepository.createBoard({ workspaceId: vm.workspace.id, title, description });
+    if (action === "session-note") {
+      state.researchSession = addResearchSessionNote(state.researchSession, description || title);
+      renderResearchMode();
+      elements.queryFeedback.textContent = "Private note added to the active research session. Save the session to retain it in My EdgeBoard.";
+    }
+    else if (action === "create-board") await workspaceRepository.createBoard({ workspaceId: vm.workspace.id, title, description });
     else if (action === "edit-board") await workspaceRepository.updateBoard(targetId, { title, description });
     else if (action === "rename-workspace") await workspaceRepository.updateWorkspace(vm.workspace.id, { title, description });
     else if (action === "create-watchlist") await workspaceRepository.createWatchlist({ workspaceId: vm.workspace.id, title, description });
@@ -4622,6 +5391,13 @@ async function restoreSavedResearch(itemId) {
     else openEntityProfile(entityId);
     return;
   }
+  if (item.researchSnapshot?.schemaVersion === 1 && item.researchSnapshot?.id?.startsWith("research-session-")) {
+    state.researchSession = item.researchSnapshot;
+  }
+  if (item.type === "saved_scenario" && item.researchSnapshot?.type === "edge_lab_scenario") {
+    state.edgeLabScenario = item.researchSnapshot;
+    state.researchSession = item.researchSnapshot.originalData;
+  }
   state.researchMode = normalizeResearchMode(item.sourceState.mode, "stats");
   elements.queryInput.value = item.sourceState.queryText || "";
   if (item.sourceState.queryText) document.querySelector("#queryForm").requestSubmit();
@@ -4694,6 +5470,40 @@ async function handleWorkspaceClick(event) {
   const refresh = event.target.closest("[data-refresh-saved]");
   if (refresh) {
     const item = workspaceRepository.listSavedResearchObjects().find((record) => record.id === refresh.dataset.refreshSaved);
+    if (item?.researchSnapshot?.id?.startsWith("research-session-")) {
+      state.researchSession = item.researchSnapshot;
+      state.researchSessionRefreshRequested = true;
+      await restoreSavedResearch(item.id);
+      elements.queryFeedback.textContent = "Research session resumed and refreshed. Save it to append the new revision while retaining the original snapshot.";
+      return;
+    }
+    if (item?.type === "saved_story") {
+      const storyId = item.canonicalReferences?.storyIds?.[0] || item.researchSnapshot?.refreshConfiguration?.storyId;
+      const leagueId = item.sourceState?.leagueId || item.researchSnapshot?.refreshConfiguration?.leagueId;
+      const sportId = item.sourceState?.sportId || item.researchSnapshot?.refreshConfiguration?.sportId;
+      const refreshed = storyEngine.refreshStory(storyId, {
+        leagueIds: leagueId ? [leagueId] : [],
+        sportIds: sportId ? [sportId] : [],
+      }, {
+        mode: item.sourceState?.mode || state.researchMode,
+        now: new Date(),
+        visibleLeagues: leagueId ? [sportsRepository.getLeague(leagueId)].filter(Boolean) : navigationModel.allLeagues,
+      });
+      if (!refreshed.current) {
+        elements.workspaceStatus.textContent = "The story no longer has an eligible deterministic candidate. The saved snapshot was not changed.";
+        return;
+      }
+      const nextSnapshot = {
+        ...storyWorkspaceCandidate(refreshed.current).researchSnapshot,
+        refreshedAt: new Date().toISOString(),
+        refreshedFromStoryId: refreshed.previous?.id || storyId,
+      };
+      await workspaceRepository.refreshSavedResearchObject(item.id, nextSnapshot);
+      elements.workspaceStatus.textContent = refreshed.changed
+        ? "Story refreshed from recalculated evidence; the original snapshot remains in history."
+        : "Story evidence was rechecked with no claim change; the original snapshot remains in history.";
+      return loadWorkspace();
+    }
     await workspaceRepository.refreshSavedResearchObject(item.id, { ...item.researchSnapshot, refreshedAt: new Date().toISOString(), sample: true });
     elements.workspaceStatus.textContent = "Sample snapshot refreshed; the original remains in history.";
     return loadWorkspace();
@@ -4983,6 +5793,14 @@ window.addEventListener("popstate", () => {
     state.workspaceRoute = null;
     applyWorkspaceVisibility();
   }
+  const storyId = params.get("story") || "";
+  if (storyId) {
+    state.sharedStoryId = storyId;
+    state.sharedStoryOpened = false;
+    renderAll();
+    return;
+  }
+  if (state.activeStoryId && elements.insightDialog.open) elements.insightDialog.close();
   const visualType = params.get("visual") || "";
   const entityId = params.get("entityProfile") || "";
   const athleteId = params.get("player") || "";
@@ -5146,6 +5964,31 @@ try {
 }
 if (initialResearchState.queryText) elements.queryInput.value = initialResearchState.queryText;
 setTheme(savedTheme);
+
+function initializeOnboarding() {
+  const forceTestOnboarding = new URLSearchParams(window.location.search).get("testOnboarding") === "1";
+  if (!elements.onboarding || (document.referrer.includes("/browser-tests/") && !forceTestOnboarding)) return;
+  let completed = false;
+  try {
+    completed = localStorage.getItem("edgeboard-onboarding-v1.1-complete") === "true";
+  } catch {
+    completed = false;
+  }
+  if (completed) return;
+  elements.onboardingSteps.innerHTML = getOnboardingSteps().map((step) => `<article><strong>${escapeHtml(step.label)}</strong><span>${escapeHtml(step.detail)}</span></article>`).join("");
+  elements.onboarding.hidden = false;
+}
+
+elements.dismissOnboarding?.addEventListener("click", () => {
+  elements.onboarding.hidden = true;
+  try {
+    localStorage.setItem("edgeboard-onboarding-v1.1-complete", "true");
+  } catch {
+    elements.queryFeedback.textContent = "The guide is hidden for this visit, but browser storage is unavailable so the preference cannot be saved.";
+  }
+});
+
+initializeOnboarding();
 persistNavigationSelection();
 renderAll();
 scheduleMarketBoardLoad();

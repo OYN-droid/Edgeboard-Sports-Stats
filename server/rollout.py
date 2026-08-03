@@ -122,11 +122,27 @@ class RolloutService:
         coverage = []
         for row in rollouts:
             league_domains = by_league.get(row["league_id"], [])
+            domain_by_id = {item["id"]: item for item in league_domains}
+            certification_categories = []
+            for category, domain in (
+                ("Schedules", "schedules"), ("Entities", "entities"),
+                ("Historical Statistics", "historical_stats"), ("Standings", "standings"),
+                ("Markets", "markets"), ("Props", "props"), ("Visualizations", "spatial_data"),
+            ):
+                item = domain_by_id.get(domain, {})
+                certification_categories.append({"category": category, "state": public_certification_state(item.get("readiness", "not_started"), item.get("sourceMode", "unavailable"))})
+            historical_state = domain_by_id.get("historical_stats", {}).get("readiness", "not_started")
+            certification_categories.extend([
+                {"category": "Insights", "state": public_certification_state(historical_state, domain_by_id.get("historical_stats", {}).get("sourceMode", "unavailable"))},
+                {"category": "Research", "state": public_certification_state(historical_state, domain_by_id.get("historical_stats", {}).get("sourceMode", "unavailable"))},
+                {"category": "Overall", "state": rollout_public_state(row["rollout_state"])},
+            ])
             coverage.append({
                 "leagueId": row["league_id"], "sportId": row["sport_id"], "displayName": row["display_name"],
                 "rolloutState": row["rollout_state"], "dataMode": aggregate_data_mode(row["rollout_state"], league_domains),
                 "provider": row["provider"] or "Not configured", "selectedCompetition": bool(row["selected_competition"]),
                 "lastUpdatedAt": row["updated_at"], "knownLimitations": json.loads(row["known_limitations_json"]),
+                "certificationCategories": certification_categories,
                 "domains": league_domains,
                 **({"healthScore": row["health_score"], "healthState": row["health_state"], "stateReason": row["state_reason"]} if not public else {}),
             })
@@ -288,3 +304,20 @@ def public_status(source_mode: str, readiness: str) -> str:
     if source_mode in {"fixture", "sample"}: return "Sample"
     if readiness == "not_started": return "Planned"
     return "Unavailable"
+
+
+def rollout_public_state(state: str) -> str:
+    return {
+        "disabled": "Disabled", "fixture_only": "Fixture", "internal_testing": "Fixture",
+        "shadow": "Shadow", "limited_live": "Limited Live", "production": "Certified Live",
+        "degraded": "Degraded", "suspended": "Suspended",
+    }.get(state, "Disabled")
+
+
+def public_certification_state(readiness: str, source_mode: str) -> str:
+    if source_mode == "live_verified" and readiness == "certified": return "Certified Live"
+    if source_mode == "live_partial": return "Limited Live"
+    if source_mode in {"cached_fresh", "cached_stale"}: return "Degraded"
+    if source_mode in {"fixture", "sample"}: return "Fixture"
+    if readiness == "suspended": return "Suspended"
+    return "Disabled"

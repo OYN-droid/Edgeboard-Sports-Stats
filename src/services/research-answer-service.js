@@ -1,5 +1,6 @@
 import { getStatDefinition } from "../config/stat-registry.js";
 import { normalizeResearchMode } from "./research-mode-service.js";
+import { edgeTrustForResearch } from "./edge-trust-service.js";
 
 const unavailable = (value) => value === null
   || value === undefined
@@ -69,6 +70,23 @@ function evidenceRecord(records, input) {
   });
   records.push(record);
   return record;
+}
+
+function collectStoryEvidence(plan) {
+  const story = plan?.storyContext;
+  if (!story) return [];
+  return story.supportingEvidence.map((item) => Object.freeze({
+    type: "story-evidence",
+    label: item.label,
+    value: Object.entries(item.values || {}).map(([key, value]) => `${key}: ${displayValue(value)}`).join(" · ") || "Retained supporting row",
+    entityId: story.entityIds[0] || "",
+    entityName: "",
+    sampleSize: story.supportingEvidence.length,
+    source: item.sourceId || story.sourceIds[0] || "Story source unavailable",
+    validation: story.validationStatus,
+    eventIds: Object.freeze(unique([item.eventId, ...(story.eventIds || [])])),
+    storyEvidenceId: item.id,
+  }));
 }
 
 function collectStatsEvidence(result, source) {
@@ -364,11 +382,14 @@ function buildFollowUps(plan, result, bettingPicks) {
   if (entity) suggestions.push({ label: "Show splits", type: "query", query: `Show ${name}'s home and away splits for ${statLabel}` });
   if (entity) suggestions.push({ label: "Compare to league leaders", type: "query", query: `Who leads this league in ${statLabel}?` });
   if (bettingPicks?.length) suggestions.push({ label: "View current props", type: "query", query: `Show current props for ${name}` });
+  if (entity && ["trends", "game_logs", "splits", "statistical_lookup"].includes(plan.questionType)) {
+    suggestions.push({ label: "Visualize the recent trend", type: "query", query: `Visualize ${name}'s recent ${statLabel} trend` });
+  }
   if (!entity) {
     suggestions.push({ label: "Show league leaders", type: "query", query: `Who leads this league in ${statLabel}?` });
     suggestions.push({ label: "Compare two athletes", type: "query", query: `Compare two players in ${statLabel}` });
   }
-  return suggestions.slice(0, 5);
+  return suggestions.slice(0, 6);
 }
 
 function researchCompleteness({ evidence, source, sampleSize, warnings, plan, bettingPicks }) {
@@ -420,6 +441,9 @@ function warningsFor(result, workflow, picks) {
 
 function buildSummary(plan, result, statsEvidence, bettingPicks) {
   const active = statsResult(result);
+  if (plan.storyContext) {
+    return `EdgeBoard retained the structured claim and ${plan.storyContext.supportingEvidence.length} supporting evidence item${plan.storyContext.supportingEvidence.length === 1 ? "" : "s"} for “${plan.storyContext.headline}.” Follow-up analysis may test or contextualize that claim, but cannot broaden its validation scope.`;
+  }
   if (["sport_discovery", "league_discovery"].includes(plan.questionType) && plan.discovery.leagues.length) {
     const activeLeagues = plan.discovery.leagues.filter((league) =>
       ["live", "active", "upcoming", "futures-only"].includes(league.status));
@@ -428,7 +452,7 @@ function buildSummary(plan, result, statsEvidence, bettingPicks) {
     return `${activeLeagues.length} enabled league scope${activeLeagues.length === 1 ? "" : "s"} currently report live, active, upcoming, or futures availability in the sample registry, with ${liveEvents} live and ${todayEvents} today event${todayEvents === 1 ? "" : "s"} disclosed by the provider.`;
   }
   if (!statsEvidence.length && !bettingPicks.length) {
-    return "EdgeBoard could not produce a supported answer from the available provider data. No fallback statistic, ranking, or market was generated.";
+    return `I checked the interpreted ${plan.resolvedScope.label || "selected"} scope, but the available provider rows do not support this answer yet. No fallback statistic or market was generated. Use one of the scoped follow-ups to keep researching.`;
   }
   if (plan.resolvedEntities?.length && statsEvidence.every((item) => item.type === "canonical-entity")) {
     const entity = plan.resolvedEntities[0];
@@ -466,7 +490,14 @@ export function buildResearchAnswer({
   if (!plan) throw new Error("A structured research plan is required.");
   const safeMode = normalizeResearchMode(mode, plan.mode);
   const defaultSource = resultSource(suppliedStatsResult, statsProvider);
-  const source = ["sport_discovery", "league_discovery"].includes(plan.questionType)
+  const source = plan.storyContext
+    ? {
+      provider: plan.storyContext.sources.map((item) => item.label).join(" + ")
+        || plan.storyContext.sourceIds.join(" + ") || "Story source unavailable",
+      lastUpdated: plan.storyContext.freshness.lastUpdated || null,
+      sample: !plan.storyContext.sources.length || plan.storyContext.sources.every((item) => item.sample),
+    }
+    : ["sport_discovery", "league_discovery"].includes(plan.questionType)
     ? {
       provider: plan.discovery.provider,
       lastUpdated: plan.discovery.leagues.map((league) => league.lastUpdated).filter(Boolean).sort().at(-1) || null,
@@ -480,15 +511,24 @@ export function buildResearchAnswer({
       }
       : defaultSource;
   const freshPicks = (bettingPicks || []).filter((pick) => pick?.available && !pick.stale);
-  const statEvidence = [
+  const collectedStatEvidence = [
+    ...collectStoryEvidence(plan),
     ...collectDiscoveryEvidence(plan),
     ...collectEntityEvidence(plan),
     ...collectStatsEvidence(suppliedStatsResult, source),
   ];
-  const marketEvidence = collectBettingEvidence(freshPicks, bettingWorkflow?.evidence?.provider || "Market provider");
-  const evidence = Object.freeze([...statEvidence, ...marketEvidence]);
-  const sampleSize = resultSampleSize(suppliedStatsResult);
-  const warnings = warningsFor(suppliedStatsResult, bettingWorkflow, bettingPicks);
+  const collectedMarketEvidence = collectBettingEvidence(freshPicks, bettingWorkflow?.evidence?.provider || "Market provider");
+  const evidence = Object.freeze([...collectedStatEvidence, ...collectedMarketEvidence].map((item, index) => Object.freeze({
+    ...item,
+    id: `evidence-${index + 1}`,
+  })));
+  const statEvidence = evidence.slice(0, collectedStatEvidence.length);
+  const marketEvidence = evidence.slice(collectedStatEvidence.length);
+  const sampleSize = plan.storyContext?.supportingEvidence.length || resultSampleSize(suppliedStatsResult);
+  const warnings = unique([
+    ...warningsFor(suppliedStatsResult, bettingWorkflow, bettingPicks),
+    ...(plan.storyContext?.warnings || []),
+  ]);
   const tables = [discoveryTable(plan), statsTable(suppliedStatsResult), bettingTable(freshPicks)].filter(Boolean);
   const completeness = researchCompleteness({
     evidence, source, sampleSize, warnings, plan, bettingPicks,
@@ -503,18 +543,36 @@ export function buildResearchAnswer({
     ...warnings,
     sampleSize > 0 && sampleSize < 5 ? `Only ${sampleSize} completed events support the primary statistical scope.` : "",
     source.sample ? "The dataset is illustrative sample data and does not establish complete career, league, or all-time coverage." : "",
+    plan.storyContext ? `The retained story is ${plan.storyContext.validationStatus.replaceAll("_", " ")}; research text cannot strengthen that status.` : "",
     freshPicks.length ? "Odds, lines, and model fields can change; verify the provider timestamp before use." : "",
   ]);
+  const disclosure = Object.freeze({
+    source: source.provider,
+    sample: source.sample,
+    sampleSize,
+    dateRange: plan.storyContext?.dateRange || resultScope(suppliedStatsResult, plan),
+    coverage: active?.dataCoverage || active?.scope?.coverage || (source.sample ? "Illustrative sample rows only" : "Provider-reported scope"),
+    validation: active?.validationStatus || (evidence.length ? "Calculated from structured engine output" : "No validated finding"),
+    freshness: source.lastUpdated,
+    warnings: Object.freeze(warnings),
+  });
+  const edgeTrust = edgeTrustForResearch({
+    plan, disclosure, completeness, evidence, relatedProps: freshPicks,
+    conflicts: active?.providerConflicts || bettingWorkflow?.providerConflicts || [],
+  });
 
   return Object.freeze({
     version: 1,
     query: String(query || plan.query || "").trim(),
     mode: safeMode,
-    headline: active?.title || bettingWorkflow?.marketLabel
+    headline: plan.storyContext?.headline
+      ? `${plan.storyContext.headline} research`
+      : active?.title || bettingWorkflow?.marketLabel
       ? `${active?.title || bettingWorkflow?.marketLabel} research`
       : "EdgeBoard research answer",
     summary,
     plan,
+    storyContext: plan.storyContext,
     evidence,
     sections: Object.freeze([
       Object.freeze({
@@ -582,16 +640,8 @@ export function buildResearchAnswer({
       validation: insight.validationStatus,
     }))),
     relatedQuestions: Object.freeze(buildFollowUps(plan, suppliedStatsResult, freshPicks)),
-    disclosure: Object.freeze({
-      source: source.provider,
-      sample: source.sample,
-      sampleSize,
-      dateRange: resultScope(suppliedStatsResult, plan),
-      coverage: active?.dataCoverage || active?.scope?.coverage || (source.sample ? "Illustrative sample rows only" : "Provider-reported scope"),
-      validation: active?.validationStatus || (evidence.length ? "Calculated from structured engine output" : "No validated finding"),
-      freshness: source.lastUpdated,
-      warnings: Object.freeze(warnings),
-    }),
+    disclosure,
+    edgeTrust,
     researchCompleteness: completeness,
     factualEvidenceIds: Object.freeze(evidence.map((item) => item.id)),
     languagePolicy: "Explanation text may reference structured evidence IDs only; it is not the factual source.",

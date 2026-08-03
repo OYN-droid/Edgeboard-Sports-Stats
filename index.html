@@ -30,6 +30,14 @@
         </div>
       </header>
 
+      <aside class="onboarding-card" id="edgeboardOnboarding" aria-labelledby="onboardingTitle" hidden>
+        <div class="onboarding-heading">
+          <div><p class="eyebrow">First visit</p><h2 id="onboardingTitle">Make EdgeBoard yours</h2><p>Choose a lane now; you can switch modes at any time without losing your query.</p></div>
+          <button type="button" class="text-button" id="dismissOnboarding" aria-label="Dismiss first-visit guide permanently">Got it</button>
+        </div>
+        <div class="onboarding-steps" id="onboardingSteps"></div>
+      </aside>
+
       <nav class="research-intent-nav" id="researchIntentNav" aria-label="Research by intent">
         <button class="active" type="button" data-intent="markets" aria-pressed="true">Markets</button>
         <button type="button" data-intent="live" aria-pressed="false">Live</button>
@@ -64,42 +72,27 @@
       </aside>
 
       <main>
-        <section class="hero" aria-label="Sports research">
-          <img src="assets/analytics-desk.png" alt="" class="hero-image" />
-          <div class="hero-shade"></div>
-          <div class="hero-content">
-            <div class="hero-copy">
-              <p class="eyebrow">Sports stats for sharper bet research</p>
-              <h1>Ask a sports question. Research stats, markets, or both.</h1>
-            </div>
-            <form class="ask-panel" id="queryForm">
-              <label for="queryInput">Research query</label>
-              <div class="research-mode-control" id="researchModeControl" role="radiogroup" aria-label="Research mode">
-                <button type="button" role="radio" aria-checked="false" data-research-mode="stats">Stats</button>
-                <button type="button" role="radio" aria-checked="true" data-research-mode="betting">Betting</button>
-                <button type="button" role="radio" aria-checked="false" data-research-mode="both">Both</button>
-              </div>
-              <div class="query-row">
-                <div class="athlete-search-shell">
-                  <input
-                    id="queryInput"
-                    type="search"
-                    autocomplete="off"
-                    aria-describedby="queryFeedback"
-                    aria-autocomplete="list"
-                    aria-controls="athleteSearchResults"
-                    aria-expanded="false"
-                    value="Which available markets have the strongest sample signal today?"
-                  />
-                  <div class="athlete-search-results" id="athleteSearchResults" role="listbox" aria-label="Sports entity suggestions" hidden></div>
-                </div>
-                <button class="primary-button" type="submit">Analyze</button>
-              </div>
-              <p class="query-feedback" id="queryFeedback" role="status" aria-live="polite">Betting mode uses available sample markets and model context.</p>
-              <div class="query-support-actions"><div class="quick-prompts" aria-label="Example queries"></div><button class="text-button" id="saveCurrentResearch" type="button">Save current research</button></div>
-            </form>
+        <section class="today-pulse discovery-story-hero" id="todayPulse" aria-labelledby="todayPulseTitle">
+          <div class="today-board-heading">
+            <div><p class="eyebrow">Deterministic sports discovery</p><h1 id="todayPulseTitle">Today’s Stories</h1><p id="todayPulseSummary">Validated stories and current event context for the selected scope.</p></div>
+            <span class="sample-badge">Sample data</span>
           </div>
+          <div class="today-pulse-grid" id="todayPulseGrid" aria-live="polite"></div>
         </section>
+
+        <section class="insight-discovery" id="insightDiscovery" aria-labelledby="insightDiscoveryTitle">
+          <div class="today-board-heading">
+            <div>
+              <p class="eyebrow">Prioritized, not popularity-tracked</p>
+              <h2 id="insightDiscoveryTitle">Trending Research</h2>
+              <p id="insightDiscoverySummary">Deterministic research themes for the selected scope.</p>
+            </div>
+            <span class="sample-badge">Sample data</span>
+          </div>
+          <div class="insight-discovery-grid" id="insightDiscoveryGrid" aria-live="polite"></div>
+        </section>
+
+        <div class="home-discovery-sections" id="homeDiscoverySections" aria-live="polite"></div>
 
         <section class="personal-workspace-view" id="personalWorkspaceView" aria-label="My EdgeBoard personal workspace" aria-live="polite" hidden>
           <div class="profile-loading" id="workspaceLoading" role="status" hidden>
@@ -198,16 +191,32 @@
           <div class="today-market-grid" id="todayMarketGrid" aria-live="polite" aria-busy="true"></div>
         </section>
 
-        <section class="insight-discovery" id="insightDiscovery" aria-labelledby="insightDiscoveryTitle">
-          <div class="today-board-heading">
-            <div>
-              <p class="eyebrow">Calculated before phrasing</p>
-              <h2 id="insightDiscoveryTitle">Sample statistical stories</h2>
-              <p id="insightDiscoverySummary">A small set of evidence-backed insights for the selected scope.</p>
+        <section class="hero edge-intelligence-hero" aria-label="Edge Intelligence research">
+          <img src="assets/analytics-desk.png" alt="" class="hero-image" />
+          <div class="hero-shade"></div>
+          <div class="hero-content">
+            <div class="hero-copy">
+              <p class="eyebrow">Edge Intelligence</p>
+              <h2>Ask a sports question. Research stats, markets, or both.</h2>
             </div>
-            <span class="sample-badge">Sample data</span>
+            <form class="ask-panel" id="queryForm">
+              <label for="queryInput">Research query</label>
+              <div class="research-mode-control" id="researchModeControl" role="radiogroup" aria-label="Research mode">
+                <button type="button" role="radio" aria-checked="false" data-research-mode="stats">Stats</button>
+                <button type="button" role="radio" aria-checked="true" data-research-mode="betting">Betting</button>
+                <button type="button" role="radio" aria-checked="false" data-research-mode="both">Both</button>
+              </div>
+              <div class="query-row">
+                <div class="athlete-search-shell">
+                  <input id="queryInput" type="search" autocomplete="off" aria-describedby="queryFeedback" aria-autocomplete="list" aria-controls="athleteSearchResults" aria-expanded="false" value="Which available markets have the strongest sample signal today?" />
+                  <div class="athlete-search-results" id="athleteSearchResults" role="listbox" aria-label="Sports entity suggestions" hidden></div>
+                </div>
+                <button class="primary-button" type="submit">Analyze</button>
+              </div>
+              <p class="query-feedback" id="queryFeedback" role="status" aria-live="polite">Betting mode uses available sample markets and model context.</p>
+              <div class="query-support-actions"><div class="quick-prompts" aria-label="Example queries"></div><button class="text-button" id="saveCurrentResearch" type="button">Save current research</button></div>
+            </form>
           </div>
-          <div class="insight-discovery-grid" id="insightDiscoveryGrid" aria-live="polite"></div>
         </section>
 
         <section class="workspace" id="researchWorkspace" aria-label="Sports research workspace">
@@ -258,7 +267,7 @@
               <div class="stats-loading" id="statsLoading" hidden>
                 <span class="stats-skeleton wide" aria-hidden="true"></span>
                 <span class="stats-skeleton" aria-hidden="true"></span>
-                <span class="visually-hidden">Loading statistical research result…</span>
+                <span class="stats-loading-copy" role="status"><strong>Preparing research</strong><span>Resolving scope and checking completed source rows.</span></span>
               </div>
               <div class="stats-interpretation" id="statsInterpretation"></div>
               <div id="statsResultContent"></div>
@@ -356,6 +365,33 @@
         <p id="coverageNotice">Loading league coverage…</p>
         <div id="coverageContent" aria-live="polite" aria-busy="true"></div>
       </div>
+    </dialog>
+
+    <dialog class="workspace-dialog edge-trust-dialog" id="edgeTrustDialog" aria-labelledby="edgeTrustDialogTitle">
+      <div class="workspace-share-preview">
+        <div class="dialog-heading"><div><p class="eyebrow">Edge Trust</p><h2 id="edgeTrustDialogTitle">Research Quality details</h2></div><button type="button" id="closeEdgeTrustDialog">Close</button></div>
+        <div id="edgeTrustDialogContent"></div>
+      </div>
+    </dialog>
+
+    <dialog class="workspace-dialog edge-lab-dialog" id="edgeLabDialog" aria-labelledby="edgeLabDialogTitle">
+      <form id="edgeLabForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">Deterministic research sandbox</p><h2 id="edgeLabDialogTitle">Add an Edge Lab assumption</h2></div>
+          <button type="button" data-close-edge-lab>Close</button>
+        </div>
+        <p class="edge-lab-dialog-disclaimer">Scenario assumptions do not alter historical facts or current provider data and are never presented as predictions.</p>
+        <label>Scenario title<input name="title" maxlength="240" required /></label>
+        <label>Evidence or market target<select name="target" id="edgeLabTarget" required></select></label>
+        <div class="edge-lab-form-grid">
+          <label>Operation<select name="operation"><option value="set">Set to</option><option value="add">Add</option><option value="percent">Change by percent</option></select></label>
+          <label>Assumed value<input name="value" type="number" step="any" required /></label>
+          <label>Time horizon<select name="horizon"><option value="current">Current sandbox</option><option value="future">Future simulation</option></select></label>
+        </div>
+        <label>Rationale<textarea name="rationale" rows="3" maxlength="2000" required placeholder="Explain why this assumption is worth testing."></textarea></label>
+        <p id="edgeLabStatus" class="form-feedback" role="status"></p>
+        <div class="dialog-actions"><button type="submit">Apply to scenario</button><button type="button" data-close-edge-lab>Cancel</button></div>
+      </form>
     </dialog>
 
     <dialog class="workspace-dialog" id="workspaceSaveDialog" aria-labelledby="workspaceSaveDialogTitle">

@@ -25,6 +25,7 @@ from .corrections import CorrectionService
 from .rollout import RolloutService
 from .shadow import ShadowService
 from .usage import ProviderUsageMonitor
+from .edge_trust import EdgeTrustService
 
 
 @dataclass
@@ -51,6 +52,7 @@ class Runtime:
     shadow: ShadowService
     corrections: CorrectionService
     usage: ProviderUsageMonitor
+    edge_trust: EdgeTrustService
 
     @property
     def live_provider_verified(self) -> bool:
@@ -106,9 +108,10 @@ def build_runtime(config: ProviderConfig | None = None) -> Runtime:
         database, settings.name if settings.live_configured else "", dict(settings.league_rollout_states),
     )
     certification = CertificationService(database)
+    edge_trust = EdgeTrustService(database)
     corrections = CorrectionService(database, cache)
     ingestion = IngestionRunner(database, provider_manager, cache, corrections, rollout)
-    return Runtime(
+    runtime = Runtime(
         config=settings,
         database=database,
         gateway=gateway,
@@ -135,4 +138,8 @@ def build_runtime(config: ProviderConfig | None = None) -> Runtime:
             "retriesPerHour": settings.provider_retry_warning_per_hour,
             "expensiveRequestsPerHour": settings.provider_expensive_warning_per_hour,
         }),
+        edge_trust=edge_trust,
     )
+    for league in rollout.list_coverage(public=False):
+        edge_trust.evaluate_league(league, trigger="runtime_initialized", record=True)
+    return runtime

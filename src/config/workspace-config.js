@@ -5,7 +5,7 @@ export const WORKSPACE_SYNC_STATUS = "local_only";
 export const SAVED_OBJECT_TYPES = Object.freeze([
   "saved_research", "saved_query", "saved_answer", "saved_comparison",
   "saved_leaderboard", "saved_visualization", "saved_insight", "saved_entity",
-  "tracked_market", "tracked_research_idea", "note",
+  "saved_story", "saved_scenario", "tracked_market", "tracked_research_idea", "note",
 ]);
 
 export const WATCH_TARGET_TYPES = Object.freeze([
@@ -33,7 +33,8 @@ export const DEFAULT_BOARD_TEMPLATES = Object.freeze([
   { id: "board-betting-research", title: "Betting Research", marker: "B", sortOrder: 2 },
   { id: "board-stats-trends", title: "Stats and Trends", marker: "S", sortOrder: 3 },
   { id: "board-visuals", title: "Visuals", marker: "V", sortOrder: 4 },
-  { id: "board-archived", title: "Archived", marker: "A", sortOrder: 5, isArchived: true },
+  { id: "board-edge-lab", title: "Edge Lab", marker: "L", sortOrder: 5 },
+  { id: "board-archived", title: "Archived", marker: "A", sortOrder: 6, isArchived: true },
 ]);
 
 const moduleDefinition = (id, label, supportedEmphases = ["balanced", "stats", "betting"]) =>
@@ -41,8 +42,9 @@ const moduleDefinition = (id, label, supportedEmphases = ["balanced", "stats", "
 
 export const DASHBOARD_MODULES = Object.freeze([
   moduleDefinition("continue-research", "Continue Research"),
+  moduleDefinition("today-insights", "Today’s Insights"),
   moduleDefinition("saved-boards", "Saved Boards"),
-  moduleDefinition("watchlist-updates", "Watchlist Updates"),
+  moduleDefinition("watchlist-updates", "Watchlist"),
   moduleDefinition("alert-center", "Alert Center"),
   moduleDefinition("followed-entities", "Followed Entities"),
   moduleDefinition("upcoming-events", "Upcoming Events"),
@@ -57,7 +59,7 @@ export const DASHBOARD_MODULES = Object.freeze([
 
 const ids = (...values) => Object.freeze(values);
 export const DASHBOARD_PRESETS = Object.freeze({
-  balanced: ids("continue-research", "saved-boards", "watchlist-updates", "alert-center", "saved-visuals", "tracked-ideas", "recently-viewed", "data-status"),
+  balanced: ids("continue-research", "today-insights", "saved-boards", "tracked-ideas", "watchlist-updates", "upcoming-events", "data-status"),
   stats: ids("continue-research", "saved-boards", "watchlist-updates", "milestones", "active-streaks", "saved-visuals", "journal-summary", "data-status"),
   betting: ids("continue-research", "tracked-ideas", "alert-center", "watchlist-updates", "saved-boards", "journal-summary", "data-status"),
   combat: ids("watchlist-updates", "upcoming-events", "active-streaks", "saved-boards", "saved-visuals", "data-status"),

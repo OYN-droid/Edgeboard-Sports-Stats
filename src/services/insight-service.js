@@ -66,10 +66,11 @@ function qualifiesEquivalentClaim(candidate, evaluated) {
   return true;
 }
 
-function marketView(market, selection) {
+function marketView(market, selection, entityId) {
   return Object.freeze({
     marketId: market.id,
     selectionId: selection.id,
+    entityId,
     eventId: market.eventId,
     canonicalMarketId: market.canonicalMarketId,
     line: selection.line,
@@ -312,7 +313,7 @@ export class DeterministicInsightService {
         && market.eventId === upcomingEventId);
     const fresh = matches.find(({ market, selection }) =>
       market.available && selection.available && !selection.stale && market.status === "open");
-    return fresh ? marketView(fresh.market, fresh.selection) : null;
+    return fresh ? marketView(fresh.market, fresh.selection, candidate.entity.id) : null;
   }
 
   validateInsightCandidate(candidate) {

@@ -10,3 +10,6 @@ __pycache__/
 *.sqlite
 *.sqlite3
 data/
+!src/data/
+src/data/*
+!src/data/mock-story-fixtures.js

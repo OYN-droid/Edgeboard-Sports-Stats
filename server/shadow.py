@@ -95,6 +95,30 @@ class ShadowService:
         rows = self.database.execute(f"SELECT league_id,domain,category,COUNT(*) count FROM shadow_discrepancies {clause} GROUP BY league_id,domain,category", parameters)
         return {"leagueId": league_id or None, "total": sum(row["count"] for row in rows), "groups": rows}
 
+    def active_conflicts(self, league_id: str, limit: int = 10) -> list[dict[str, Any]]:
+        safe_limit = max(1, min(50, int(limit)))
+        rows = self.database.execute(
+            """SELECT category,record_id,primary_provider,comparison_provider,details_json
+               FROM shadow_discrepancies
+               WHERE resolved_at IS NULL AND league_id=?
+               ORDER BY detected_at DESC LIMIT ?""",
+            (league_id, safe_limit),
+        )
+        conflicts = []
+        for row in rows:
+            details = json.loads(row["details_json"] or "{}")
+            primary = details.get("primary", "Missing from primary source" if row["category"] == "missing_primary" else "Conflict recorded")
+            secondary = details.get("secondary", "Missing from comparison source" if row["category"] == "missing_secondary" else "Conflict recorded")
+            conflicts.append({
+                "category": row["category"],
+                "recordId": row["record_id"],
+                "sources": [
+                    {"provider": row["primary_provider"], "value": _public_conflict_value(primary)},
+                    {"provider": row["comparison_provider"], "value": _public_conflict_value(secondary)},
+                ],
+            })
+        return conflicts
+
 
 def _items(value: Any) -> list[dict[str, Any]]:
     items = value.get("items", []) if isinstance(value, dict) else value if isinstance(value, list) else []
@@ -112,3 +136,13 @@ def _participants(item: dict[str, Any]) -> tuple[str, ...]:
 
 def _discrepancy(category: str, record_id: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {"category": category, "recordId": record_id, "details": details or {}}
+
+
+def _public_conflict_value(value: Any) -> str:
+    if isinstance(value, str):
+        text = value
+    elif value is None:
+        text = "Not supplied"
+    else:
+        text = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return text[:240]

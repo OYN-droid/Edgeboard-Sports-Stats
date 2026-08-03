@@ -8,6 +8,7 @@ import { buildResearchAnswer } from "../src/services/research-answer-service.js"
 import { createResearchPlan } from "../src/services/research-planner-service.js";
 import { createSportsRepository } from "../src/services/sports-repository.js";
 import { createStatsRepository } from "../src/services/stats-provider.js";
+import { getEntityResearchActions } from "../src/services/ux-guidance-service.js";
 
 const failures = [];
 const checks = [];
@@ -54,6 +55,11 @@ check(registry.search("Sample Fighter")[0]?.profileSystem === "athlete",
   "10 fighters reuse the athlete profile system");
 check(registry.search("Max Verstappen")[0]?.profileSystem === "athlete",
   "11 drivers reuse the athlete profile system");
+const lakersActions = getEntityResearchActions(registry.search("Lakers")[0], { hasMarkets: true });
+check(lakersActions.some((item) => item.label === "Roster and players")
+  && lakersActions.some((item) => item.label === "Upcoming schedule")
+  && lakersActions.some((item) => item.label === "Available markets"),
+"11a team search guidance covers roster, schedule, and supported markets");
 
 const profileCases = [
   ["LAL", "team"],
@@ -134,6 +140,8 @@ check(suggestions.some((item) => item.textContent.includes("Constructor")),
   "43 autocomplete displays entity type");
 check(suggestions.every((item) => item.querySelector("small")?.textContent.trim()),
   "44 autocomplete displays entity context");
+check(app.querySelectorAll("#athleteSearchResults [data-search-followup]").length > 0,
+  "44a autocomplete offers entity-specific research paths");
 query.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
 check(query.getAttribute("aria-activedescendant") === "athlete-search-option-0",
   "45 keyboard navigation exposes the active autocomplete option");
