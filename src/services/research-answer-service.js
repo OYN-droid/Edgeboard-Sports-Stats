@@ -89,6 +89,22 @@ function collectStoryEvidence(plan) {
   }));
 }
 
+function collectDiscoveryContextEvidence(plan) {
+  const discovery = plan?.discoveryContext;
+  if (!discovery) return [];
+  return discovery.sourceSignals.map((signal) => Object.freeze({
+    type: "discovery-signal",
+    label: signal.label || String(signal.type || "discovery signal").replaceAll("_", " "),
+    value: signal.value ?? signal.weight ?? "retained",
+    entityId: discovery.entityIds[0] || "",
+    entityName: "",
+    sampleSize: null,
+    source: discovery.sources[0]?.label || "Discovery source unavailable",
+    validation: discovery.validationStatus,
+    eventIds: discovery.eventIds,
+  }));
+}
+
 function collectStatsEvidence(result, source) {
   const active = statsResult(result);
   const records = [];
@@ -444,6 +460,9 @@ function buildSummary(plan, result, statsEvidence, bettingPicks) {
   if (plan.storyContext) {
     return `EdgeBoard retained the structured claim and ${plan.storyContext.supportingEvidence.length} supporting evidence item${plan.storyContext.supportingEvidence.length === 1 ? "" : "s"} for “${plan.storyContext.headline}.” Follow-up analysis may test or contextualize that claim, but cannot broaden its validation scope.`;
   }
+  if (plan.discoveryContext) {
+    return `EdgeBoard retained ${plan.discoveryContext.sourceSignals.length} deterministic discovery signal${plan.discoveryContext.sourceSignals.length === 1 ? "" : "s"} for “${plan.discoveryContext.title}.” Relevance identifies a research path, not public popularity, prediction, or outcome probability.`;
+  }
   if (["sport_discovery", "league_discovery"].includes(plan.questionType) && plan.discovery.leagues.length) {
     const activeLeagues = plan.discovery.leagues.filter((league) =>
       ["live", "active", "upcoming", "futures-only"].includes(league.status));
@@ -497,7 +516,13 @@ export function buildResearchAnswer({
       lastUpdated: plan.storyContext.freshness.lastUpdated || null,
       sample: !plan.storyContext.sources.length || plan.storyContext.sources.every((item) => item.sample),
     }
-    : ["sport_discovery", "league_discovery"].includes(plan.questionType)
+    : plan.discoveryContext
+      ? {
+        provider: plan.discoveryContext.sources.map((item) => item.label).join(" + ") || "Discovery source unavailable",
+        lastUpdated: plan.discoveryContext.freshness.lastUpdated || null,
+        sample: !plan.discoveryContext.sources.length || plan.discoveryContext.sources.every((item) => item.sample),
+      }
+      : ["sport_discovery", "league_discovery"].includes(plan.questionType)
     ? {
       provider: plan.discovery.provider,
       lastUpdated: plan.discovery.leagues.map((league) => league.lastUpdated).filter(Boolean).sort().at(-1) || null,
@@ -513,6 +538,7 @@ export function buildResearchAnswer({
   const freshPicks = (bettingPicks || []).filter((pick) => pick?.available && !pick.stale);
   const collectedStatEvidence = [
     ...collectStoryEvidence(plan),
+    ...collectDiscoveryContextEvidence(plan),
     ...collectDiscoveryEvidence(plan),
     ...collectEntityEvidence(plan),
     ...collectStatsEvidence(suppliedStatsResult, source),
@@ -524,10 +550,11 @@ export function buildResearchAnswer({
   })));
   const statEvidence = evidence.slice(0, collectedStatEvidence.length);
   const marketEvidence = evidence.slice(collectedStatEvidence.length);
-  const sampleSize = plan.storyContext?.supportingEvidence.length || resultSampleSize(suppliedStatsResult);
+  const sampleSize = plan.storyContext?.supportingEvidence.length || plan.discoveryContext?.sourceSignals.length || resultSampleSize(suppliedStatsResult);
   const warnings = unique([
     ...warningsFor(suppliedStatsResult, bettingWorkflow, bettingPicks),
     ...(plan.storyContext?.warnings || []),
+    ...(plan.discoveryContext?.warnings || []),
   ]);
   const tables = [discoveryTable(plan), statsTable(suppliedStatsResult), bettingTable(freshPicks)].filter(Boolean);
   const completeness = researchCompleteness({
@@ -544,13 +571,14 @@ export function buildResearchAnswer({
     sampleSize > 0 && sampleSize < 5 ? `Only ${sampleSize} completed events support the primary statistical scope.` : "",
     source.sample ? "The dataset is illustrative sample data and does not establish complete career, league, or all-time coverage." : "",
     plan.storyContext ? `The retained story is ${plan.storyContext.validationStatus.replaceAll("_", " ")}; research text cannot strengthen that status.` : "",
+    plan.discoveryContext ? "Discovery relevance is not measured public popularity and does not strengthen the underlying evidence." : "",
     freshPicks.length ? "Odds, lines, and model fields can change; verify the provider timestamp before use." : "",
   ]);
   const disclosure = Object.freeze({
     source: source.provider,
     sample: source.sample,
     sampleSize,
-    dateRange: plan.storyContext?.dateRange || resultScope(suppliedStatsResult, plan),
+    dateRange: plan.storyContext?.dateRange || plan.discoveryContext?.queryTemplate?.dateRange || resultScope(suppliedStatsResult, plan),
     coverage: active?.dataCoverage || active?.scope?.coverage || (source.sample ? "Illustrative sample rows only" : "Provider-reported scope"),
     validation: active?.validationStatus || (evidence.length ? "Calculated from structured engine output" : "No validated finding"),
     freshness: source.lastUpdated,
@@ -567,12 +595,15 @@ export function buildResearchAnswer({
     mode: safeMode,
     headline: plan.storyContext?.headline
       ? `${plan.storyContext.headline} research`
+      : plan.discoveryContext?.title
+        ? `${plan.discoveryContext.title} research`
       : active?.title || bettingWorkflow?.marketLabel
       ? `${active?.title || bettingWorkflow?.marketLabel} research`
       : "EdgeBoard research answer",
     summary,
     plan,
     storyContext: plan.storyContext,
+    discoveryContext: plan.discoveryContext,
     evidence,
     sections: Object.freeze([
       Object.freeze({

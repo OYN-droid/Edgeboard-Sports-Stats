@@ -89,6 +89,23 @@ function normalizeStoryContext(context) {
   });
 }
 
+function normalizeDiscoveryContext(context) {
+  if (!context?.itemId || !context?.title || (!context?.queryTemplate?.query && !context?.sourceSignals?.length)) return null;
+  return Object.freeze({
+    itemId: String(context.itemId), type: String(context.type || "research_topic"), title: String(context.title),
+    entityIds: Object.freeze([...new Set(context.entityIds || [])]), eventIds: Object.freeze([...new Set(context.eventIds || [])]),
+    storyIds: Object.freeze([...new Set(context.storyIds || [])]), statIds: Object.freeze([...new Set(context.statIds || [])]),
+    marketIds: Object.freeze([...new Set(context.marketIds || [])]), sportId: String(context.sportId || ""), leagueId: String(context.leagueId || ""),
+    queryTemplate: Object.freeze({ ...(context.queryTemplate || {}) }),
+    sourceSignals: Object.freeze((context.sourceSignals || []).map((signal) => Object.freeze({ ...signal }))),
+    sources: Object.freeze((context.sources || []).map((source) => Object.freeze({ id: source.id, label: source.label, sample: source.sample !== false }))),
+    freshness: Object.freeze({ ...(context.freshness || {}) }), validationStatus: String(context.validationStatus || "unvalidated"),
+    edgeTrust: context.edgeTrust ? Object.freeze({ ...context.edgeTrust }) : null,
+    researchQuality: context.researchQuality ? Object.freeze({ ...context.researchQuality }) : null,
+    warnings: Object.freeze([...(context.warnings || [])].map(String)),
+  });
+}
+
 export function createResearchPlan({
   query = "",
   mode = "stats",
@@ -99,11 +116,13 @@ export function createResearchPlan({
   providerName = "",
   resolvedEntities = [],
   storyContext = null,
+  discoveryContext = null,
 } = {}) {
   const safeQuery = String(query || "").trim();
   const safeMode = normalizeResearchMode(mode, "stats");
   const classification = classifyResearchQuery(safeQuery, safeMode);
   const normalizedStoryContext = normalizeStoryContext(storyContext);
+  const normalizedDiscoveryContext = normalizeDiscoveryContext(discoveryContext);
   const structuredQuery = parsedStats?.structuredQuery || null;
   const questionType = determineQuestionType(safeQuery, classification.intent, structuredQuery);
   const entityIds = [...new Set([
@@ -115,14 +134,16 @@ export function createResearchPlan({
       ] : []),
     ...resolvedEntities.map((entity) => entity.id),
     ...(normalizedStoryContext?.entityIds || []),
+    ...(normalizedDiscoveryContext?.entityIds || []),
   ])];
-  const statIds = structuredQuery?.statIds || [];
+  const statIds = structuredQuery?.statIds?.length ? structuredQuery.statIds : normalizedDiscoveryContext?.statIds || [];
   const marketIds = [
     structuredQuery?.rankingMetric && safeMode !== "stats" ? structuredQuery.rankingMetric : "",
     bettingWorkflow?.marketId || "",
+    ...(normalizedDiscoveryContext?.marketIds || []),
   ].filter(Boolean);
-  const resolvedLeagueId = structuredQuery?.leagueId || normalizedStoryContext?.leagueId || bettingWorkflow?.leagueId || currentLeague?.leagueId || "";
-  const resolvedSportId = structuredQuery?.sportId || normalizedStoryContext?.sportId || currentLeague?.sportId || "";
+  const resolvedLeagueId = normalizedStoryContext?.leagueId || normalizedDiscoveryContext?.leagueId || structuredQuery?.leagueId || bettingWorkflow?.leagueId || currentLeague?.leagueId || "";
+  const resolvedSportId = normalizedStoryContext?.sportId || normalizedDiscoveryContext?.sportId || structuredQuery?.sportId || currentLeague?.sportId || "";
   const scopeLabel = [
     currentLeague?.sportDisplayName || resolvedSportId,
     currentLeague?.leagueDisplayName || resolvedLeagueId,
@@ -174,6 +195,7 @@ export function createResearchPlan({
     statIds: Object.freeze([...statIds]),
     marketIds: Object.freeze(marketIds),
     storyContext: normalizedStoryContext,
+    discoveryContext: normalizedDiscoveryContext,
     discovery: Object.freeze({
       provider: providerName || bettingWorkflow?.evidence?.provider || "Normalized sports registry",
       leagues: Object.freeze(discoveryLeagues),
@@ -186,6 +208,7 @@ export function createResearchPlan({
       supportingEvidence: Object.freeze([
         ...evidenceNeeds(questionType, safeMode),
         ...(normalizedStoryContext ? ["retained structured story claim and supporting rows"] : []),
+        ...(normalizedDiscoveryContext ? ["retained discovery signals, canonical references, and trust metadata"] : []),
       ]),
     }),
     stages: Object.freeze([
@@ -205,7 +228,9 @@ export function createResearchPlan({
       needsBetting ? "ready" : "skipped"),
       stage("evidence", "Determine supporting evidence", normalizedStoryContext
         ? `${evidenceNeeds(questionType, safeMode).join(", ")}; retain ${normalizedStoryContext.supportingEvidence.length} structured story evidence item${normalizedStoryContext.supportingEvidence.length === 1 ? "" : "s"} without broadening the claim.`
-        : evidenceNeeds(questionType, safeMode).join(", "), "ready"),
+        : normalizedDiscoveryContext
+          ? `${evidenceNeeds(questionType, safeMode).join(", ")}; retain ${normalizedDiscoveryContext.sourceSignals.length} deterministic discovery signal${normalizedDiscoveryContext.sourceSignals.length === 1 ? "" : "s"} without treating relevance as popularity.`
+          : evidenceNeeds(questionType, safeMode).join(", "), "ready"),
       stage("comparisons", "Determine related comparisons", questionType === "comparison"
         ? "Apply identical filters to every resolved entity."
         : "Related comparisons are optional and cannot change the primary finding.",

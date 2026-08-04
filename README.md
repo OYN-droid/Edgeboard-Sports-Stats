@@ -171,3 +171,9 @@ scope, mode-aware actions, empty states, and current provider limitations.
 See [Deterministic Story Engine](docs/deterministic-story-engine.md) for Version
 1.4 Sprint 2 candidate contracts, eligibility, scoring, deduplication, phrasing,
 Edge Trust, lifecycle, workspace snapshots, detail routing, and fixture limits.
+
+See [Deterministic Sports Discovery and Exploration Engine](docs/discovery-engine.md)
+for Version 1.4 Sprint 3 canonical discovery items, sport-aware taxonomies,
+deterministic ranking and diversity, guided paths, local personalization and
+privacy controls, grouped search, Edge Intelligence context, routing, caching,
+fixture limits, and the Sprint 4 recommendation.

@@ -164,8 +164,9 @@ async function run() {
   assert(journal.resolved === 1 && journal.smallSample, "journal warns on small tracked sample");
 
   await repository.updatePreferences(workspace.id, { preferredResearchMode: "stats", preferredConfidenceThreshold: 42, reduceMotion: true, privacyMode: true });
-  await repository.appendActivity({ workspaceId: workspace.id, action: "ran_query", targetType: "query", targetId: "q1", label: "Query", queryText: "private query" });
+  await repository.appendActivity({ workspaceId: workspace.id, action: "ran_query", targetType: "query", targetId: "q1", label: "Query", queryText: "private query", route: "/?q=private%20query" });
   assert(repository.getActivity(workspace.id)[0].queryText === "", "privacy mode excludes typed query text");
+  assert(repository.getActivity(workspace.id)[0].route === "", "privacy mode excludes query-bearing activity routes");
   await repository.updateDashboardLayout(workspace.id, { preset: "combat" });
   assert(buildWorkspaceViewModel(repository.snapshot(), workspace.id, { view: "home" }).dashboard.preset === "combat", "dashboard preset persists");
 

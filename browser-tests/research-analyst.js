@@ -73,8 +73,8 @@ const discoveryModel = createHomeDiscoveryModel({
   currentDate: discoveryDate,
 });
 check(discoveryModel.sections.map((section) => section.id).join(",")
-  === "stories,trending,facts,on-this-day,milestones,streaks,leaders,games",
-  "0a home discovery exposes all eight deterministic sections in the required order");
+  === "stories,trending,continue,changed,explore,facts,on-this-day,milestones,streaks,leaders,games",
+  "0a home discovery exposes all deterministic discovery sections in the required order");
 check(discoveryModel.sections.flatMap((section) => section.cards).every((card) =>
   card.source?.source && card.classification && card.actions.length > 0),
 "0b every discovery card retains source classification and a supported destination");
@@ -408,7 +408,7 @@ const homeSectionTitles = [
   app.querySelector("#insightDiscoveryTitle")?.textContent,
   ...[...app.querySelectorAll("#homeDiscoverySections .home-discovery-section h2")].map((item) => item.textContent),
 ];
-check(homeSectionTitles.join("|") === "Today’s Stories|Trending Research|Did You Know?|On This Day|Upcoming Milestones|Active Streaks|Current Leaders|Today’s Games",
+check(homeSectionTitles.join("|") === "Today’s Stories|Trending Research|Continue Exploring|Recently Changed|Explore Sports|Did You Know?|On This Day|Upcoming Milestones|Active Streaks|Current Leaders|Today’s Games",
   "46a home discovery renders all required sections in order");
 check(app.querySelector("main > .discovery-story-hero")?.querySelector("h1")
   && app.querySelector(".discovery-story-hero").compareDocumentPosition(app.querySelector(".hero")) & view.Node.DOCUMENT_POSITION_FOLLOWING,

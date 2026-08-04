@@ -84,6 +84,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
   dashboardPreset: "balanced",
   activityPaused: false,
   privacyMode: false,
+  personalizedDiscoveryEnabled: true,
   financialSimulationVisible: false,
 });
 

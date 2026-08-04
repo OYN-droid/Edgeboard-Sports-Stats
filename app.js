@@ -62,6 +62,7 @@ import {
 } from "./src/services/edge-lab-service.js";
 import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js";
 import { createStoryEngine } from "./src/services/story-engine.js";
+import { createDiscoveryService } from "./src/services/discovery-service.js";
 
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
@@ -73,6 +74,7 @@ const insightService = createInsightService(statsRepository, sportsRepository);
 const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository, insightService);
 const entityRegistry = createEntityRegistry();
 const storyEngine = createStoryEngine({ insightService, sportsRepository, statsRepository, entityRegistry });
+const discoveryService = createDiscoveryService({ sportsRepository, statsRepository, insightService, storyEngine, entityRegistry });
 const entityProfileRepository = createEntityProfileRepository(
   entityRegistry,
   sportsRepository,
@@ -132,6 +134,9 @@ function recordWorkspaceActivity(action, targetType, targetId, label, queryText 
       label,
       queryText,
       route: `${window.location.pathname}${window.location.search}`,
+    }).then((result) => {
+      if (result && !state.workspaceActive) renderHomeDiscovery();
+      return result;
     });
   }).catch(() => {});
 }
@@ -215,6 +220,21 @@ function loadInsightState() {
   }
 }
 
+function parseDiscoveryRoute(params = new URLSearchParams(window.location.search)) {
+  const explore = cleanRouteValue(params.get("explore"));
+  const [sportId = "", leagueId = ""] = explore.split(":");
+  if (params.get("path")) return { type: "path", id: cleanRouteValue(params.get("path")), sportId, leagueId };
+  if (params.get("topic")) return { type: "topic", id: cleanRouteValue(params.get("topic")), sportId, leagueId };
+  if (params.get("changes") === "1") return { type: "changes", id: cleanRouteValue(params.get("discovery")) || "changes", sportId, leagueId };
+  if (params.get("discovery")) return { type: "item", id: cleanRouteValue(params.get("discovery")), sportId, leagueId };
+  if (explore) return { type: "explore", id: explore, sportId, leagueId };
+  return null;
+}
+
+function cleanRouteValue(value) {
+  return String(value || "").trim().slice(0, 240);
+}
+
 function getSelectionSummary(selection) {
   return getVisibleMarketSummaries({
     selection,
@@ -234,7 +254,10 @@ function researchLeagueForSelection(selection, preferredLeagueId = "") {
     || defaultLeague;
 }
 
-const initialNavigationSelection = loadNavigationSelection();
+const initialDiscoveryRoute = parseDiscoveryRoute();
+const initialNavigationSelection = initialDiscoveryRoute?.leagueId && sportsRepository.getLeague(initialDiscoveryRoute.leagueId)
+  ? normalizeNavigationSelection({ type: "league", id: initialDiscoveryRoute.leagueId }, navigationModel.allLeagues, defaultLeague?.leagueId)
+  : loadNavigationSelection();
 const initialResearchLeague = researchLeagueForSelection(initialNavigationSelection);
 const initialResearchState = loadResearchState();
 const initialInsightState = loadInsightState();
@@ -340,6 +363,10 @@ const state = {
   sharedStoryId: initialResearchState.storyId,
   sharedStoryOpened: false,
   storyResearchContext: null,
+  discoveryResearchContext: null,
+  discoveryRoute: initialDiscoveryRoute,
+  discoverySearch: null,
+  discoveryCategory: "",
   workspaceActive: Boolean(initialWorkspaceRoute),
   workspaceRoute: initialWorkspaceRoute,
   workspaceViewModel: null,
@@ -454,6 +481,11 @@ const elements = {
   todayPulseSummary: document.querySelector("#todayPulseSummary"),
   todayPulseGrid: document.querySelector("#todayPulseGrid"),
   homeDiscoverySections: document.querySelector("#homeDiscoverySections"),
+  discoveryExplorer: document.querySelector("#discoveryExplorer"),
+  discoveryExplorerTitle: document.querySelector("#discoveryExplorerTitle"),
+  discoveryExplorerSummary: document.querySelector("#discoveryExplorerSummary"),
+  discoveryExplorerContent: document.querySelector("#discoveryExplorerContent"),
+  closeDiscoveryExplorer: document.querySelector("#closeDiscoveryExplorer"),
   insightDialog: document.querySelector("#insightDialog"),
   insightDialogTitle: document.querySelector("#insightDialogTitle"),
   insightDialogContent: document.querySelector("#insightDialogContent"),
@@ -490,6 +522,7 @@ const elements = {
 };
 
 let renderedPicks = new Map();
+let discoverySearchTimer = null;
 let marketBoardLoadTimer = 0;
 let discoveryReturnFocus = null;
 let statsRequestSequence = 0;
@@ -507,6 +540,21 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+async function writeClipboardWithTimeout(value, timeoutMs = 1500) {
+  if (!navigator.clipboard?.writeText) throw new Error("Clipboard access is unavailable.");
+  let timeoutId;
+  try {
+    await Promise.race([
+      navigator.clipboard.writeText(String(value)),
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(() => reject(new Error("Clipboard permission did not respond.")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 function formatOdds(odds) {
@@ -1751,19 +1799,23 @@ function renderHomeDiscoveryAction(action) {
   if (action.type === "follow-entity") return `<button type="button" class="text-button" data-follow-entity="${escapeHtml(action.entityId)}" aria-pressed="${state.followedEntityIds.includes(action.entityId)}">${state.followedEntityIds.includes(action.entityId) ? "Following" : escapeHtml(action.label)}</button>`;
   if (action.type === "share-story") return `<button type="button" class="text-button" data-share-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
   if (action.type === "research-story") return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="research" data-research-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
+  if (action.type === "route") return `<a class="text-button" href="${escapeHtml(action.href)}" data-discovery-route="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`;
+  if (action.type === "research") return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="research" data-discovery-research="${escapeHtml(action.context?.itemId || "")}">${escapeHtml(action.label)}</button>`;
   return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="${escapeHtml(action.kind)}">${escapeHtml(action.label)}</button>`;
 }
 
 function renderHomeDiscoveryCard(card, { feature = false } = {}) {
   const trust = homeDiscoveryTrust(card);
   return `<article class="home-discovery-card${feature ? " feature" : ""}${card.insightId ? " insight-card" : ""}" data-home-card="${escapeHtml(card.id)}" data-card-kind="${escapeHtml(card.kind)}" data-classification="${escapeHtml(card.classification)}" data-league-id="${escapeHtml(card.leagueId || "")}" data-sport-id="${escapeHtml(card.sportId || "")}"${card.insightId ? ` data-insight-card="${escapeHtml(card.insightId)}"` : ""}>
-    <div class="home-card-kickers"><span>${escapeHtml(card.eyebrow)}</span><span class="validation-label">${escapeHtml((card.validationStatus || "validation unavailable").replaceAll("_", " "))}</span><span class="sample-badge">Sample</span></div>
+    <div class="home-card-kickers"><span>${escapeHtml(card.eyebrow)}</span><span class="validation-label">${escapeHtml((card.validationStatus || "validation unavailable").replaceAll("_", " "))}</span><span class="sample-badge">${card.localOnly ? "Local only" : "Sample"}</span></div>
     <h3>${escapeHtml(card.title)}</h3>
     <p>${escapeHtml(card.summary)}</p>
+    ${card.whyNotable ? `<p class="discovery-why"><strong>Why notable:</strong> ${escapeHtml(card.whyNotable)}</p>` : ""}
     <div class="home-card-meta">
       ${card.leagueId ? `<span>${escapeHtml(card.leagueId.toUpperCase())}</span>` : ""}
       ${card.sampleSize ? `<span>${card.sampleSize} completed event${card.sampleSize === 1 ? "" : "s"}</span>` : ""}
       ${card.eventTime ? `<span>${formatDateTime(card.eventTime)}</span>` : ""}
+      ${card.change ? `<span>${escapeHtml(String(card.change.oldValue))} → ${escapeHtml(String(card.change.newValue))}</span>` : ""}
       <span>${escapeHtml(card.classification.replaceAll("_", " "))}</span>
     </div>
     <div class="market-research-quality" title="Research Quality evaluates source evidence and is not betting confidence or probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
@@ -1784,6 +1836,112 @@ function renderHomeSection(section) {
   </section>`;
 }
 
+function currentDiscoveryWorkspaceState() {
+  try {
+    return workspaceRepository?.snapshot?.() || null;
+  } catch {
+    return null;
+  }
+}
+
+function discoveryScopeAndOptions() {
+  const summary = getSelectionSummary(state.navigationSelection);
+  const workspaceState = currentDiscoveryWorkspaceState();
+  const workspaceId = workspaceState?.workspaces?.find((item) => !item.isArchived)?.id;
+  const preferences = workspaceState?.preferences?.find((item) => item.workspaceId === workspaceId) || {};
+  return {
+    summary,
+    scope: {
+      leagueIds: summary.visibleLeagues.map((league) => league.leagueId),
+      sportIds: [...new Set(summary.visibleLeagues.map((league) => league.sportId))],
+      liveOnly: summary.selection.type === "system" && summary.selection.id === "live",
+      todayOnly: summary.selection.type === "system" && summary.selection.id === "today",
+    },
+    options: { mode: state.researchMode, now: new Date(), visibleLeagues: summary.visibleLeagues, preferences, workspaceState },
+  };
+}
+
+function renderDiscoveryViewCard(item) {
+  return `<article class="discovery-engine-card" data-discovery-item="${escapeHtml(item.id)}">
+    <div class="home-card-kickers"><span>${escapeHtml(item.label)}</span><span class="validation-label">${escapeHtml(item.status)}</span><span class="sample-badge">${item.localOnly ? "Local only" : item.sampleMode ? "Sample data" : "Provider data"}</span></div>
+    <h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.summary)}</p>
+    <p class="discovery-why"><strong>Why notable:</strong> ${escapeHtml(item.whyNotable)}</p>
+    <div class="home-card-meta"><span>${escapeHtml(item.leagueId.toUpperCase())}</span><span>${escapeHtml(item.type.replaceAll("_", " "))}</span><span>Score ${item.discoveryScore}</span></div>
+    <div class="market-research-quality"><span>Research Quality</span><strong>${escapeHtml(item.researchQuality.label)} · ${item.researchQuality.score}%</strong></div>
+    <div class="home-card-actions">${item.actions.map(renderHomeDiscoveryAction).join("")}</div>
+    <small>${escapeHtml(item.sourceLabel)} · ${formatDateTime(item.freshness.lastUpdated)} · ${escapeHtml(item.status)}</small>
+  </article>`;
+}
+
+function setDiscoveryRoute(route, { replace = false, focus = true } = {}) {
+  state.discoveryRoute = route;
+  const url = new URL(window.location.href);
+  ["explore", "topic", "discovery", "path", "changes"].forEach((key) => url.searchParams.delete(key));
+  if (route?.href) {
+    const target = new URL(route.href, window.location.origin);
+    ["explore", "topic", "discovery", "path", "changes"].forEach((key) => {
+      if (target.searchParams.has(key)) url.searchParams.set(key, target.searchParams.get(key));
+    });
+    state.discoveryRoute = parseDiscoveryRoute(url.searchParams);
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardDiscovery: Boolean(state.discoveryRoute) }, "", url);
+  renderDiscoveryExplorer({ focus });
+}
+
+function renderDiscoveryExplorer({ focus = false } = {}) {
+  const route = state.discoveryRoute;
+  elements.discoveryExplorer.hidden = !route;
+  if (!route) {
+    elements.discoveryExplorerContent.innerHTML = "";
+    return;
+  }
+  const { scope, options, summary } = discoveryScopeAndOptions();
+  discoveryService.getDiscoveryItems(scope, options);
+  const paths = discoveryService.getExplorationPaths(scope, { ...options, limit: 18 });
+  let title = "Explore";
+  let summaryText = `Progressive discovery for ${summary.contextLabel}.`;
+  let content = "";
+  if (route.type === "path") {
+    const path = paths.find((item) => item.id === route.id);
+    if (path) {
+      title = path.title;
+      summaryText = path.disclosure;
+      content = `<ol class="exploration-path" aria-label="${escapeHtml(path.title)}">${path.steps.map((step) => `<li><button type="button" data-home-query="${escapeHtml(step.queryTemplate.query)}" data-discovery-path-step="${escapeHtml(step.id)}"><strong>${escapeHtml(step.label)}</strong><span>${escapeHtml(step.type.replaceAll("_", " "))}</span></button></li>`).join("")}</ol>`;
+    } else content = '<div class="discovery-empty" role="status"><h3>Exploration path unavailable</h3><p>The path ID is invalid or no longer has supported evidence in this scope.</p></div>';
+  } else if (route.type === "changes") {
+    title = "Recently Changed";
+    const changed = discoveryService.getRecentlyChanged(scope, { ...options, limit: 18 });
+    content = changed.length ? `<div class="discovery-engine-grid">${changed.map(renderDiscoveryViewCard).join("")}</div>` : '<div class="discovery-empty" role="status">No meaningful validated change is available for this scope.</div>';
+  } else if (route.type === "item" || route.type === "topic") {
+    const itemId = route.type === "topic" ? `topic-${route.id}` : route.id;
+    const item = discoveryService.getItem(itemId);
+    if (item) {
+      const view = discoveryService.buildDiscoveryViewModel(item, options);
+      const related = discoveryService.getRelatedDiscovery(item, options);
+      title = view.title;
+      summaryText = view.summary;
+      content = `${renderDiscoveryViewCard(view)}<section aria-labelledby="relatedDiscoveryTitle"><h3 id="relatedDiscoveryTitle">Related Research</h3>${related.length ? `<div class="discovery-engine-grid">${related.map(renderDiscoveryViewCard).join("")}</div>` : '<div class="discovery-empty">No directly related supported item is available.</div>'}</section>`;
+    } else content = '<div class="discovery-empty" role="status"><h3>Discovery item unavailable</h3><p>The stable ID is invalid or outside the selected scope.</p></div>';
+  } else {
+    const league = route.leagueId ? sportsRepository.getLeague(route.leagueId) : summary.visibleLeagues[0];
+    const sportId = route.sportId || league?.sportId || scope.sportIds[0];
+    const leagueId = route.leagueId || league?.leagueId || scope.leagueIds[0];
+    const categories = discoveryService.getExploreCategories({ sportId, leagueId, mode: state.researchMode });
+    const topics = discoveryService.getExploreTopics({ sportId, leagueId, mode: state.researchMode });
+    const selectedItems = state.discoveryCategory
+      ? discoveryService.getExploreCategoryItems(state.discoveryCategory, { sportIds: [sportId], leagueIds: [leagueId] }, { ...options, visibleLeagues: league ? [league] : options.visibleLeagues })
+      : topics;
+    title = league ? `Explore ${league.leagueDisplayName}` : "Explore Sports";
+    content = `<nav class="explore-category-list" aria-label="Supported discovery categories">${categories.map((category) => `<button type="button" aria-pressed="${state.discoveryCategory === category.id}" data-explore-category="${escapeHtml(category.id)}">${escapeHtml(category.label)}</button>`).join("")}</nav>
+      ${selectedItems.length ? `<div class="discovery-engine-grid">${selectedItems.map(renderDiscoveryViewCard).join("")}</div>` : '<div class="discovery-empty" role="status">No supported discovery items are available in this category for the selected league.</div>'}
+      <section aria-labelledby="guidedPathsTitle"><h3 id="guidedPathsTitle">Suggested Paths</h3><div class="exploration-path-links">${paths.filter((path) => !leagueId || path.leagueId === leagueId).slice(0, 6).map((path) => `<a href="${escapeHtml(path.route.href)}" data-discovery-route="${escapeHtml(path.route.href)}">${escapeHtml(path.title)}</a>`).join("") || "No supported path is available."}</div></section>`;
+  }
+  elements.discoveryExplorerTitle.textContent = title;
+  elements.discoveryExplorerSummary.textContent = summaryText;
+  elements.discoveryExplorerContent.innerHTML = content;
+  if (focus) elements.discoveryExplorer.focus({ preventScroll: true });
+}
+
 function renderHomeDiscovery() {
   const summary = getSelectionSummary(state.navigationSelection);
   const model = createHomeDiscoveryModel({
@@ -1793,6 +1951,9 @@ function renderHomeDiscovery() {
     statsRepository,
     insightService,
     storyEngine,
+    discoveryService,
+    workspaceState: currentDiscoveryWorkspaceState(),
+    preferences: discoveryScopeAndOptions().options.preferences,
     researchMode: state.researchMode,
     currentDate: new Date(),
   });
@@ -1814,6 +1975,7 @@ function renderHomeDiscovery() {
   elements.homeDiscoverySections.innerHTML = model.sections
     .filter((item) => !["stories", "trending"].includes(item.id))
     .map(renderHomeSection).join("");
+  renderDiscoveryExplorer();
 }
 
 function renderInsightDialog(insight) {
@@ -3533,8 +3695,9 @@ function openSearchResult(result) {
 
 function renderAthleteSearchResults() {
   const results = state.athleteSearchResults;
-  elements.athleteSearchResults.hidden = results.length === 0;
-  elements.queryInput.setAttribute("aria-expanded", String(results.length > 0));
+  const discoveryGroups = state.discoverySearch?.groups || [];
+  elements.athleteSearchResults.hidden = results.length === 0 && discoveryGroups.length === 0;
+  elements.queryInput.setAttribute("aria-expanded", String(results.length > 0 || discoveryGroups.length > 0));
   elements.queryInput.setAttribute(
     "aria-activedescendant",
     state.athleteSearchIndex >= 0 ? `athlete-search-option-${state.athleteSearchIndex}` : "",
@@ -3544,15 +3707,20 @@ function renderAthleteSearchResults() {
       <span>${escapeHtml(entity.name)}${entity.active ? "" : " · Inactive"}</span>
       <small>${escapeHtml(entity.typeLabel)}${entity.context ? ` · ${escapeHtml(entity.context)}` : ""}</small>
     </a>
-  `).join("")}${state.athleteSearchGuidance.length ? `<div class="athlete-search-guidance" aria-label="Suggested research paths"><strong>Research next</strong><div>${state.athleteSearchGuidance.map((item) => `<button type="button" data-search-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>` : ""}`;
+  `).join("")}${state.athleteSearchGuidance.length ? `<div class="athlete-search-guidance" aria-label="Suggested research paths"><strong>Research next</strong><div>${state.athleteSearchGuidance.map((item) => `<button type="button" data-search-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>` : ""}
+  ${discoveryGroups.filter((group) => group.id !== "direct").map((group) => `<section class="discovery-search-group" role="group" aria-labelledby="discovery-search-${escapeHtml(group.id)}"><strong id="discovery-search-${escapeHtml(group.id)}">${escapeHtml(group.label)}</strong><div>${group.items.slice(0, 4).map((item) => item.route?.href
+    ? `<a href="${escapeHtml(item.route.href)}" data-discovery-route="${escapeHtml(item.route.href)}">${escapeHtml(item.title)}</a>`
+    : `<button type="button" data-discovery-search-query="${escapeHtml(item.queryTemplate?.query || item.query || item.title)}">${escapeHtml(item.title || item.label)}</button>`).join("")}</div></section>`).join("")}`;
 }
 
 function updateAthleteSearch(query) {
   const text = String(query || "").trim();
   if (text.length < 2) {
+    window.clearTimeout(discoverySearchTimer);
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
     state.athleteSearchGuidance = [];
+    state.discoverySearch = null;
     renderAthleteSearchResults();
     return;
   }
@@ -3570,6 +3738,12 @@ function updateAthleteSearch(query) {
   state.athleteSearchGuidance = getEntityResearchActions(primary, { hasMarkets });
   state.athleteSearchIndex = -1;
   renderAthleteSearchResults();
+  window.clearTimeout(discoverySearchTimer);
+  discoverySearchTimer = window.setTimeout(() => {
+    const { scope, options } = discoveryScopeAndOptions();
+    state.discoverySearch = discoveryService.searchDiscovery(text, scope, { ...options, includeDirectMatches: false });
+    renderAthleteSearchResults();
+  }, 180);
 }
 
 function persistNavigationSelection() {
@@ -3832,7 +4006,7 @@ elements.slipList.addEventListener("keydown", (event) => {
 });
 
 function runBettingResearch(query) {
-  const parsed = parseResearchQuery(query, sportsRepository, state.leagueId, state.market);
+  const parsed = parseResearchQuery(query, sportsRepository, state.discoveryResearchContext?.leagueId || state.leagueId, state.market);
   const priorSportId = currentLeague()?.sportId;
   const priorCanonicalMarketId = state.canonicalMarketId;
   state.query = query;
@@ -3908,6 +4082,7 @@ function runBettingResearch(query) {
     availableLeagues: navigationModel.allLeagues,
     providerName: sportsRepository.getMetadata().provider,
     storyContext: state.storyResearchContext,
+    discoveryContext: state.discoveryResearchContext,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: state.leagueId,
       sportId: currentLeague()?.sportId || "",
@@ -3938,8 +4113,8 @@ async function runStatsResearch(query) {
   state.statsParsedQuery = parseStatisticalQuery(query, {
     mode: state.researchMode,
     sportsRepository,
-    currentLeagueId: state.storyResearchContext?.leagueId || state.leagueId,
-    selectedEntityId: state.storyResearchContext?.entityIds?.[0] || state.selectedEntityId,
+    currentLeagueId: state.storyResearchContext?.leagueId || state.discoveryResearchContext?.leagueId || state.leagueId,
+    selectedEntityId: state.storyResearchContext?.entityIds?.[0] || state.discoveryResearchContext?.entityIds?.[0] || state.selectedEntityId,
     ignoreExplicitLeague: state.statsContextOverrideDisabled,
   });
   if (state.storyResearchContext) {
@@ -3952,6 +4127,22 @@ async function runStatsResearch(query) {
         primaryEntityIds: state.storyResearchContext.entityIds,
         entitySet: state.storyResearchContext.entityIds,
         entitySetSource: "structured-story-context",
+        contextOverride: false,
+        scopeOverride: true,
+      }),
+    });
+  } else if (state.discoveryResearchContext) {
+    state.statsParsedQuery = Object.freeze({
+      ...state.statsParsedQuery,
+      structuredQuery: Object.freeze({
+        ...state.statsParsedQuery.structuredQuery,
+        sportId: state.discoveryResearchContext.sportId,
+        leagueId: state.discoveryResearchContext.leagueId,
+        statIds: state.discoveryResearchContext.statIds.length
+          ? state.discoveryResearchContext.statIds : state.statsParsedQuery.structuredQuery.statIds,
+        primaryEntityIds: state.discoveryResearchContext.entityIds,
+        entitySet: state.discoveryResearchContext.entityIds,
+        entitySetSource: "structured-discovery-context",
         contextOverride: false,
         scopeOverride: true,
       }),
@@ -3969,6 +4160,7 @@ async function runStatsResearch(query) {
     availableLeagues: navigationModel.allLeagues,
     providerName: sportsRepository.getMetadata().provider,
     storyContext: state.storyResearchContext,
+    discoveryContext: state.discoveryResearchContext,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: parsed.structuredQuery.leagueId || state.leagueId,
       sportId: parsed.structuredQuery.sportId || currentLeague()?.sportId || "",
@@ -4085,6 +4277,7 @@ async function submitResearchQuery() {
         availableLeagues: navigationModel.allLeagues,
         providerName: sportsRepository.getMetadata().provider,
         storyContext: state.storyResearchContext,
+        discoveryContext: state.discoveryResearchContext,
         resolvedEntities: matches,
       });
       elements.queryFeedback.textContent = `Visual request interpreted as ${preliminary.visualizationType.replaceAll("_", " ")}. Provider capability and row validation will run before rendering.`;
@@ -4183,6 +4376,7 @@ elements.queryInput.addEventListener("input", () => {
   state.researchPlan = null;
   state.researchAnswer = null;
   state.storyResearchContext = null;
+  state.discoveryResearchContext = null;
   state.selectedEntityId = "";
   state.statsContextOverrideDisabled = false;
   persistResearchState({ updateUrl: false });
@@ -4216,6 +4410,22 @@ elements.queryInput.addEventListener("keydown", (event) => {
 });
 
 elements.athleteSearchResults.addEventListener("click", (event) => {
+  const discoveryRoute = event.target.closest("[data-discovery-route]");
+  if (discoveryRoute) {
+    event.preventDefault();
+    state.athleteSearchResults = [];
+    state.discoverySearch = null;
+    renderAthleteSearchResults();
+    setDiscoveryRoute({ href: discoveryRoute.dataset.discoveryRoute });
+    return;
+  }
+  const discoveryQuery = event.target.closest("[data-discovery-search-query]");
+  if (discoveryQuery) {
+    elements.queryInput.value = discoveryQuery.dataset.discoverySearchQuery;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
+    return;
+  }
   const followUp = event.target.closest("[data-search-followup]");
   if (!followUp) return;
   elements.queryInput.value = followUp.dataset.searchFollowup;
@@ -4570,6 +4780,7 @@ function handleHomeDiscoveryQuery(event) {
   const action = event.target.closest("[data-home-query]");
   if (!action) return;
   const story = action.dataset.researchStory ? storyEngine.getStory(action.dataset.researchStory) : null;
+  const discoveryItem = action.dataset.discoveryResearch ? discoveryService.getItem(action.dataset.discoveryResearch) : null;
   const storyContext = story ? Object.freeze({
     storyId: story.id,
     headline: storyEngine.phraseStory(story).headline,
@@ -4587,14 +4798,63 @@ function handleHomeDiscoveryQuery(event) {
     validationStatus: story.validationStatus,
     researchQuality: story.researchQuality,
   }) : null;
+  const discoveryContext = discoveryItem ? Object.freeze({
+    itemId: discoveryItem.id,
+    type: discoveryItem.type,
+    title: discoveryItem.title,
+    entityIds: discoveryItem.entityIds,
+    eventIds: discoveryItem.eventIds,
+    storyIds: discoveryItem.storyIds,
+    statIds: discoveryItem.statIds,
+    marketIds: discoveryItem.marketIds,
+    sportId: discoveryItem.sportId,
+    leagueId: discoveryItem.leagueId,
+    queryTemplate: discoveryItem.queryTemplate,
+    sourceSignals: discoveryItem.sourceSignals,
+    sources: discoveryItem.sources,
+    freshness: discoveryItem.freshness,
+    validationStatus: discoveryItem.validationStatus,
+    edgeTrust: discoveryItem.edgeTrust,
+    researchQuality: discoveryItem.researchQuality,
+    warnings: discoveryItem.warnings,
+  }) : null;
   elements.queryInput.value = action.dataset.homeQuery;
   elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
   state.storyResearchContext = storyContext;
+  state.discoveryResearchContext = discoveryContext;
   document.querySelector("#queryForm").requestSubmit();
 }
 
-[elements.todayPulse, elements.insightDiscovery, elements.homeDiscoverySections]
+[elements.todayPulse, elements.insightDiscovery, elements.homeDiscoverySections, elements.discoveryExplorer]
   .forEach((container) => container.addEventListener("click", handleHomeDiscoveryQuery));
+
+document.addEventListener("click", (event) => {
+  const routeLink = event.target.closest("[data-discovery-route]");
+  if (routeLink) {
+    event.preventDefault();
+    const href = routeLink.dataset.discoveryRoute;
+    const parsed = parseDiscoveryRoute(new URL(href, window.location.origin).searchParams);
+    if (parsed?.leagueId && sportsRepository.getLeague(parsed.leagueId)) {
+      activateNavigationSelection({ type: "league", id: parsed.leagueId }, { closeMenu: true, restoreFocus: false, resetResearch: false });
+    } else if (parsed?.sportId) {
+      activateNavigationSelection({ type: "sport", id: parsed.sportId }, { closeMenu: true, restoreFocus: false, resetResearch: false });
+    }
+    setDiscoveryRoute({ href });
+    recordWorkspaceActivity("opened", "discovery", parsed?.id || href, routeLink.textContent.trim());
+    return;
+  }
+  const category = event.target.closest("[data-explore-category]");
+  if (category) {
+    state.discoveryCategory = category.dataset.exploreCategory;
+    renderDiscoveryExplorer();
+    elements.discoveryExplorerSummary.textContent = `${category.textContent.trim()} selected. Results remain scoped to ${getSelectionSummary(state.navigationSelection).contextLabel}.`;
+  }
+});
+
+elements.closeDiscoveryExplorer.addEventListener("click", () => {
+  setDiscoveryRoute(null, { focus: false });
+  document.querySelector("[data-discovery-route]")?.focus({ preventScroll: true });
+});
 
 elements.statsResults.addEventListener("keydown", (event) => {
   const tab = event.target.closest("[data-stats-tab]");
@@ -4860,13 +5120,16 @@ elements.visualAnalyticsContent.addEventListener("click", async (event) => {
   }
   try {
     if (event.target.closest("[data-copy-visual-summary]")) {
-      await navigator.clipboard.writeText(state.visualResult.accessibleSummary);
+      if (status) status.textContent = "Copying accessible summary…";
+      await writeClipboardWithTimeout(state.visualResult.accessibleSummary);
       if (status) status.textContent = "Accessible summary copied.";
     } else if (event.target.closest("[data-copy-visual-data]")) {
-      await navigator.clipboard.writeText(visualizationServiceModule.visualizationTableToTsv(state.visualResult));
+      if (status) status.textContent = "Copying visible data…";
+      await writeClipboardWithTimeout(visualizationServiceModule.visualizationTableToTsv(state.visualResult));
       if (status) status.textContent = "Visible data copied as TSV.";
     } else if (event.target.closest("[data-copy-visual-link]")) {
-      await navigator.clipboard.writeText(window.location.href);
+      if (status) status.textContent = "Copying visualization link…";
+      await writeClipboardWithTimeout(window.location.href);
       if (status) status.textContent = "Visualization link copied.";
     } else if (event.target.closest("[data-download-visual-csv]")) {
       const blob = new Blob([visualizationServiceModule.visualizationTableToCsv(state.visualResult)], { type: "text/csv;charset=utf-8" });
@@ -5732,6 +5995,7 @@ async function handleWorkspaceSubmit(event) {
     reduceMotion: data.has("reduceMotion"),
     privacyMode: data.has("privacyMode"),
     activityPaused: data.has("activityPaused"),
+    personalizedDiscoveryEnabled: data.has("personalizedDiscoveryEnabled"),
     financialSimulationVisible: data.has("financialSimulationVisible"),
   });
   elements.workspaceStatus.textContent = "Personalization saved locally.";
@@ -5781,6 +6045,15 @@ elements.workspaceShareDialog.addEventListener("click", async (event) => {
 
 window.addEventListener("popstate", () => {
   const params = new URLSearchParams(window.location.search);
+  const discoveryRoute = parseDiscoveryRoute(params);
+  state.discoveryRoute = discoveryRoute;
+  if (discoveryRoute?.leagueId && sportsRepository.getLeague(discoveryRoute.leagueId)) {
+    state.navigationSelection = { type: "league", id: discoveryRoute.leagueId };
+    state.leagueId = discoveryRoute.leagueId;
+  } else if (discoveryRoute?.sportId) {
+    state.navigationSelection = { type: "sport", id: discoveryRoute.sportId };
+    state.leagueId = researchLeagueForSelection(state.navigationSelection, state.leagueId)?.leagueId || state.leagueId;
+  }
   const workspaceRoute = parseWorkspaceRoute(params);
   if (workspaceRoute) {
     state.workspaceActive = true;
@@ -5992,6 +6265,9 @@ initializeOnboarding();
 persistNavigationSelection();
 renderAll();
 scheduleMarketBoardLoad();
+window.setTimeout(() => {
+  loadWorkspaceModules().then(() => renderHomeDiscovery()).catch(() => {});
+}, 0);
 if (new URLSearchParams(window.location.search).get("coverage") === "1") {
   window.setTimeout(() => {
     openCoverageView().catch((error) => {

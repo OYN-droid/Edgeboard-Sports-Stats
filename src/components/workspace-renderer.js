@@ -213,6 +213,7 @@ function settingsView(viewModel) {
         <label><input name="reduceMotion" type="checkbox" ${preferences.reduceMotion ? "checked" : ""} /> Reduce motion</label>
         <label><input name="privacyMode" type="checkbox" ${preferences.privacyMode ? "checked" : ""} /> Privacy mode: do not retain query text in activity</label>
         <label><input name="activityPaused" type="checkbox" ${preferences.activityPaused ? "checked" : ""} /> Pause activity history</label>
+        <label><input name="personalizedDiscoveryEnabled" type="checkbox" ${preferences.personalizedDiscoveryEnabled !== false ? "checked" : ""} /> Use local workspace activity for personalized discovery</label>
         <label><input name="financialSimulationVisible" type="checkbox" ${preferences.financialSimulationVisible ? "checked" : ""} /> Show optional hypothetical simulation fields</label>
         <button type="submit">Save preferences</button><button type="button" data-reset-preferences>Reset personalization</button>
       </form>

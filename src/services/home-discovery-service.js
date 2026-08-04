@@ -130,6 +130,30 @@ function historicalEventCard(row, entity, mode, contextLabel) {
   });
 }
 
+function discoveryCard(item, kind = "discovery") {
+  return Object.freeze({
+    id: item.id,
+    kind,
+    title: item.title,
+    summary: item.summary,
+    eyebrow: item.label,
+    leagueId: item.leagueId,
+    sportId: item.sportId,
+    sampleSize: null,
+    classification: item.localOnly ? "local_activity" : item.type === "market_topic" ? "current_provider_data" : "historical_fact",
+    validationStatus: item.status,
+    source: sourceMeta(item.sourceLabel, item.freshness?.lastUpdated, item.sampleMode),
+    edgeTrust: item.edgeTrust,
+    researchQuality: item.researchQuality,
+    entity: item.primaryEntity,
+    discoveryId: item.id,
+    actions: item.actions,
+    localOnly: item.localOnly,
+    change: item.change,
+    whyNotable: item.whyNotable,
+  });
+}
+
 function section(id, title, description, cards, emptyMessage) {
   return Object.freeze({ id, title, description, cards: Object.freeze(cards), emptyMessage });
 }
@@ -155,6 +179,9 @@ export function createHomeDiscoveryModel({
   statsRepository,
   insightService,
   storyEngine = null,
+  discoveryService = null,
+  workspaceState = null,
+  preferences = {},
   researchMode = "stats",
   currentDate = new Date(),
 } = {}) {
@@ -229,8 +256,12 @@ export function createHomeDiscoveryModel({
     ...storyInsights.map((item) => insightCard(item, researchMode, contextLabel, "story")),
     ...storyEvents.slice(0, Math.max(0, 3 - storyInsights.length)).map(({ event, league }) => eventCard(event, league, researchMode, "story-game")),
   ];
-  const trending = takeInsights((item) => !item.type.includes("milestone"), 4)
-    .map((item) => insightCard(item, researchMode, contextLabel, "trending"));
+  const discoveryScope = { leagueIds, sportIds, liveOnly, todayOnly };
+  const discoveryOptions = { mode: researchMode, now: currentDate, visibleLeagues, preferences };
+  const trending = discoveryService
+    ? discoveryService.getTrendingResearch(discoveryScope, { ...discoveryOptions, limit: 6 }).map((item) => discoveryCard(item, "trending"))
+    : takeInsights((item) => !item.type.includes("milestone"), 4)
+      .map((item) => insightCard(item, researchMode, contextLabel, "trending"));
   const facts = takeInsights((item) => !item.type.includes("streak") && !item.type.includes("milestone"), 4)
     .map((item) => insightCard(item, researchMode, contextLabel, "fact"));
   const milestones = takeInsights((item) => item.type.startsWith("milestone"), 4)
@@ -254,6 +285,23 @@ export function createHomeDiscoveryModel({
     return result ? [leaderCard(result.board.entries[0], league, result.definition, result.board.metadata, researchMode)] : [];
   }).slice(0, 6);
   const games = scopedTodayEvents.slice(0, 8).map(({ event, league }) => eventCard(event, league, researchMode));
+  const continueExploring = discoveryService
+    ? discoveryService.getContinueExploring(workspaceState, discoveryScope, {
+      ...discoveryOptions,
+      defaultSportId: sportIds[0] || "multi-sport",
+      defaultLeagueId: leagueIds[0] || "all",
+      limit: 4,
+    }).map((item) => discoveryCard(item, "continue"))
+    : [];
+  const changed = discoveryService
+    ? discoveryService.getRecentlyChanged(discoveryScope, { ...discoveryOptions, limit: 5 }).map((item) => discoveryCard(item, "change"))
+    : [];
+  const explore = discoveryService
+    ? discoveryService.getDiscoveryItems(discoveryScope, discoveryOptions)
+      .filter((item) => ["research_topic", "market_topic"].includes(item.type))
+      .slice(0, 6)
+      .map((item) => discoveryCard(discoveryService.buildDiscoveryViewModel(item, discoveryOptions), "explore"))
+    : [];
 
   return Object.freeze({
     schemaVersion: HOME_DISCOVERY_SCHEMA_VERSION,
@@ -267,6 +315,9 @@ export function createHomeDiscoveryModel({
         : todayOnly ? "No validated story or scheduled event is available for today in this scope."
           : "No fresh deterministic story is available for this scope."),
       section("trending", "Trending Research", "Prioritized by deterministic insight relevance, validation, and sample quality—not popularity tracking.", trending, "No additional validated research trend is available."),
+      section("continue", "Continue Exploring", "Local-device activity and saved research only. Personalization never changes explicit search results.", continueExploring, "Research a player, team, story, or statistic and it will appear here."),
+      section("changed", "Recently Changed", "Meaningful fixture-backed changes with old and new values retained; routine refreshes are excluded.", changed, "No meaningful validated change is available for this scope."),
+      section("explore", "Explore Sports", "Progressive sport-aware topics backed by currently available normalized data.", explore, "No verified discovery topics are available for this league right now."),
       section("facts", "Did You Know?", "Calculated facts from completed source rows.", facts, "No distinct calculated fact passed the current scope rules."),
       section("on-this-day", "On This Day", `Completed sample events matching ${currentDate.toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`, onThisDay, "No completed event in the available sample matches this local calendar date."),
       section("milestones", "Upcoming Milestones", "Only eligible, nearby dataset-scoped milestones are shown.", milestones, "No nearby milestone passed the configured distance and sample rules."),

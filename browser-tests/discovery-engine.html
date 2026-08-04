@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>EdgeBoard deterministic Discovery Engine browser tests</title>
+  <link rel="icon" href="data:," />
+  <body>
+    <h1>EdgeBoard deterministic Discovery Engine browser tests</h1>
+    <pre id="results">Running…</pre>
+    <script>
+      window.testErrors = [];
+      window.addEventListener("error", (event) => window.testErrors.push(`${event.message} (${event.filename || "unknown"}:${event.lineno || 0})`));
+      window.addEventListener("unhandledrejection", (event) => window.testErrors.push(String(event.reason)));
+      window.setTimeout(() => {
+        if (document.querySelector("#results")?.textContent === "Running…") {
+          document.querySelector("#results").textContent = `ERROR\n${window.testErrors.join("\n") || "Harness did not complete."}`;
+        }
+      }, 30000);
+    </script>
+    <iframe id="app" src="/?mode=stats&amp;scope=league:wnba&amp;q=&amp;testFixtureTimestamp=2026-07-30T12%3A30%3A00.000Z" title="EdgeBoard Discovery Engine app under test" style="width:390px;height:900px;border:0"></iframe>
+    <script type="module" src="./discovery-engine.js"></script>
+  </body>
+</html>

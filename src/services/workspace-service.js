@@ -944,7 +944,8 @@ export class WorkspaceRepository {
     if (this.state.meta.activityPaused || preferences?.activityPaused) return null;
     return this.mutate((state) => {
       const timestamp = isoNow(this.clock);
-      const queryText = (state.meta.privacyMode || preferences?.privacyMode) ? "" : cleanText(input.queryText, 1000);
+      const privacyMode = state.meta.privacyMode || preferences?.privacyMode;
+      const queryText = privacyMode ? "" : cleanText(input.queryText, 1000);
       const latest = state.activity.at(-1);
       if (latest && latest.action === input.action && latest.targetId === input.targetId
         && this.clock() - new Date(latest.createdAt).getTime() < 10_000) return latest;
@@ -956,7 +957,7 @@ export class WorkspaceRepository {
         targetId: cleanText(input.targetId, 160),
         label: cleanText(input.label, 240),
         queryText,
-        route: cleanText(input.route, 1000),
+        route: privacyMode ? "" : cleanText(input.route, 1000),
         createdAt: timestamp,
         localOnly: true,
       };
