@@ -21,11 +21,15 @@
           <span class="data-status-dot" aria-hidden="true"></span>
           <span><strong>Sample data</strong><small>EdgeBoard Mock</small></span>
         </button>
-        <button class="workspace-entry" id="openWorkspace" type="button" aria-label="Open My EdgeBoard local workspace">
-          My EdgeBoard <span id="workspaceSavedCount" aria-label="0 saved items">0</span>
+        <button class="workspace-entry" id="openWorkspace" type="button" aria-label="Open local Workspace">
+          Workspace <span id="workspaceSavedCount" aria-label="0 saved items">0</span>
           <span id="workspaceAlertCount" aria-label="0 unread alerts">0</span>
         </button>
         <a class="workspace-entry history-entry" id="openHistory" href="/history" aria-label="Open Historical Explorer">History</a>
+        <a class="workspace-entry markets-entry" id="openMarkets" href="/markets" aria-label="Open Edge Markets research hub">Edge Markets</a>
+        <button class="command-palette-trigger" id="openCommandPalette" type="button" aria-haspopup="dialog" aria-controls="commandPalette" aria-label="Search EdgeBoard and open commands">
+          Search <kbd aria-hidden="true">⌘K</kbd>
+        </button>
         <div class="theme-switch" role="group" aria-label="Color theme">
           <button class="theme-option active" type="button" data-theme-option="dark">Dark</button>
           <button class="theme-option" type="button" data-theme-option="light">Light</button>
@@ -121,9 +125,35 @@
           <p id="historicalActionStatus" role="status" aria-live="polite"></p>
         </section>
 
+        <section class="market-research-view" id="marketResearchView" aria-labelledby="marketResearchTitle" tabindex="-1" hidden>
+          <div class="profile-view-toolbar">
+            <a class="text-button profile-back" id="closeMarketResearch" href="/">← Back to sports discovery</a>
+            <div class="profile-toolbar-actions">
+              <button class="text-button" id="saveMarketResearch" type="button">Save</button>
+              <button class="text-button" id="shareMarketResearch" type="button">Copy link</button>
+            </div>
+          </div>
+          <div class="today-board-heading">
+            <div><p class="eyebrow">Deterministic market intelligence</p><h1 id="marketResearchTitle">Edge Markets</h1><p id="marketResearchSummary">Research normalized markets with source, movement, historical context, and counterarguments.</p></div>
+            <span class="sample-badge">Sample markets</span>
+          </div>
+          <nav class="market-research-nav" id="marketResearchNav" aria-label="Edge Markets sections">
+            <a href="/markets" data-market-route="hub">Market hub</a>
+            <a href="/markets/screener" data-market-route="screener">Market screener</a>
+            <a href="/markets/parlay-builder" data-market-route="parlay-builder">Parlay Builder</a>
+            <a href="/markets/movement" data-market-route="movement">Movement explorer</a>
+          </nav>
+          <div class="profile-loading" id="marketResearchLoading" role="status" hidden>
+            <span class="stats-skeleton wide" aria-hidden="true"></span><span class="stats-skeleton" aria-hidden="true"></span>
+            <span>Building verified market research…</span>
+          </div>
+          <div id="marketResearchContent" aria-live="polite"></div>
+          <p id="marketResearchStatus" role="status" aria-live="polite"></p>
+        </section>
+
         <div class="home-discovery-sections" id="homeDiscoverySections" aria-live="polite"></div>
 
-        <section class="personal-workspace-view" id="personalWorkspaceView" aria-label="My EdgeBoard personal workspace" aria-live="polite" hidden>
+        <section class="personal-workspace-view" id="personalWorkspaceView" aria-label="Personal Workspace" aria-live="polite" hidden>
           <div class="profile-loading" id="workspaceLoading" role="status" hidden>
             <span class="stats-skeleton wide" aria-hidden="true"></span>
             <span class="stats-skeleton" aria-hidden="true"></span>
@@ -148,8 +178,8 @@
             <span>Validating and transforming sample visualization data…</span>
           </div>
           <div id="visualAnalyticsContent"></div>
-          <aside class="profile-slip-panel" id="visualSlipPanel" aria-label="Visual analytics bet slip" hidden>
-            <div class="panel-heading"><h2>Bet Slip</h2><button class="text-button" id="closeVisualSlip" type="button">Close</button></div>
+          <aside class="profile-slip-panel" id="visualSlipPanel" aria-label="Visual analytics research slip" hidden>
+            <div class="panel-heading"><h2>Research Slip</h2><button class="text-button" id="closeVisualSlip" type="button">Close</button></div>
             <div id="visualSlipList" class="slip-list empty">Add legs from provider-confirmed markets.</div>
           </aside>
         </section>
@@ -175,8 +205,8 @@
             <p>The canonical entity ID is unknown or no longer available from the sample provider.</p>
           </div>
           <div id="entityProfileContent"></div>
-          <aside class="profile-slip-panel" id="entityProfileSlipPanel" aria-label="Entity profile bet slip" hidden>
-            <div class="panel-heading"><h2>Bet Slip</h2><button class="text-button" id="closeEntityProfileSlip" type="button">Close</button></div>
+          <aside class="profile-slip-panel" id="entityProfileSlipPanel" aria-label="Entity profile research slip" hidden>
+            <div class="panel-heading"><h2>Research Slip</h2><button class="text-button" id="closeEntityProfileSlip" type="button">Close</button></div>
             <div id="entityProfileSlipList" class="slip-list empty">Add legs from a provider-confirmed entity market.</div>
           </aside>
         </section>
@@ -202,8 +232,8 @@
             <p>The saved athlete ID is unknown or no longer available from the sample provider.</p>
           </div>
           <div id="athleteProfileContent"></div>
-          <aside class="profile-slip-panel" id="profileSlipPanel" aria-label="Profile bet slip" hidden>
-            <div class="panel-heading"><h2>Bet Slip</h2><button class="text-button" id="closeProfileSlip" type="button">Close</button></div>
+          <aside class="profile-slip-panel" id="profileSlipPanel" aria-label="Profile research slip" hidden>
+            <div class="panel-heading"><h2>Research Slip</h2><button class="text-button" id="closeProfileSlip" type="button">Close</button></div>
             <div id="profileSlipList" class="slip-list empty">Add legs from a provider-confirmed profile market.</div>
           </aside>
         </section>
@@ -329,9 +359,9 @@
             <div class="bet-grid" id="betGrid"></div>
           </section>
 
-          <aside class="slip" id="betSlip" aria-label="Parlay builder">
+          <aside class="slip" id="betSlip" aria-label="Research slip">
             <div class="panel-heading">
-              <h2>Bet Slip</h2>
+              <h2>Research Slip</h2>
               <div class="slip-heading-actions">
                 <button class="info-button" type="button" aria-label="About correlation" title="Correlation means two legs may depend on the same game outcome. Correlated legs can increase risk.">i</button>
                 <button class="text-button" id="clearSlip" type="button">Clear</button>
@@ -365,7 +395,7 @@
         </section>
       </main>
       <button class="mobile-slip-toggle" id="mobileSlipToggle" type="button" aria-controls="betSlip" aria-expanded="false">
-        Bet Slip <span id="mobileLegCount">0</span>
+        Research Slip <span id="mobileLegCount">0</span>
       </button>
     </div>
 
@@ -375,6 +405,22 @@
         <button class="text-button" id="closeInsightDialog" type="button">Close</button>
       </div>
       <div id="insightDialogContent"></div>
+    </dialog>
+
+    <dialog class="command-palette" id="commandPalette" aria-labelledby="commandPaletteTitle">
+      <div class="command-palette-shell">
+        <div class="command-palette-heading">
+          <div><p class="eyebrow">Navigate and research</p><h2 id="commandPaletteTitle">Search EdgeBoard</h2></div>
+          <button class="text-button" id="closeCommandPalette" type="button" aria-label="Close command palette">Close</button>
+        </div>
+        <label class="command-palette-search" for="commandPaletteInput">
+          <span class="sr-only">Search players, teams, stories, history, markets, Workspace, comparisons, and commands</span>
+          <input id="commandPaletteInput" type="search" autocomplete="off" placeholder="Search EdgeBoard or type a command…" aria-controls="commandPaletteResults" aria-describedby="commandPaletteHint commandPaletteStatus" />
+        </label>
+        <p id="commandPaletteHint">Exact entity matches appear first. Use ↑ and ↓ to move, Enter to open, and Escape to close.</p>
+        <div id="commandPaletteResults" class="command-palette-results" role="listbox" aria-label="EdgeBoard search results"></div>
+        <p id="commandPaletteStatus" class="form-feedback" role="status" aria-live="polite"></p>
+      </div>
     </dialog>
 
     <dialog class="workspace-dialog" id="dataStatusDialog" aria-labelledby="dataStatusDialogTitle">

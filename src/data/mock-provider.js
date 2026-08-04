@@ -151,6 +151,10 @@ const offer = ({
   confirmed = true,
   available = true,
   canonicalId = "",
+  priceHistory = [],
+  bookPrices = [],
+  marketEvents = [],
+  researchHistory = [],
 }) => ({
   offer_id: id,
   league_key: league,
@@ -189,6 +193,10 @@ const offer = ({
       prop_type: propType,
       confirmed,
       available,
+      price_history: priceHistory,
+      book_prices: bookPrices,
+      market_events: marketEvents,
+      research_history: researchHistory,
     },
   ],
 });
@@ -383,14 +391,38 @@ const leagueStatuses = [
 }));
 
 const offers = [
-  offer({ id: "maxey-points", league: "nba", eventId: "PHI-CHI", name: "Tyrese Maxey", line: "Over 24.5 points", odds: -112, confidence: 68, hitRate: "7 of last 10", matchup: "vs CHI", trend: "+3.8 projected edge", note: "Usage rises when opponent allows early-clock guard drives.", team: "PHI", opponent: "CHI", propType: "points" }),
-  offer({ id: "lavine-points", league: "nba", eventId: "PHI-CHI", name: "Zach LaVine", line: "Over 21.5 points", odds: -106, confidence: 61, hitRate: "6 of last 9", matchup: "vs PHI", trend: "+2.1 projected edge", note: "Shot volume is stable when Chicago trails by one possession or more.", team: "CHI", opponent: "PHI", propType: "points" }),
+  offer({ id: "maxey-points", league: "nba", eventId: "PHI-CHI", name: "Tyrese Maxey", line: "Over 24.5 points", odds: -112, confidence: 68, hitRate: "7 of last 10", matchup: "vs CHI", trend: "+3.8 projected edge", note: "Usage rises when opponent allows early-clock guard drives.", team: "PHI", opponent: "CHI", propType: "points", priceHistory: [
+    { observed_at: "2026-07-28T12:00:00.000Z", change_type: "opening", line: 23.5, line_display: "Over 23.5 points", american_odds: -108, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+    { observed_at: "2026-07-28T14:00:00.000Z", change_type: "movement", line: 24, line_display: "Over 24.0 points", american_odds: -110, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+    { observed_at: "2026-07-28T15:20:00.000Z", change_type: "current", line: 24.5, line_display: "Over 24.5 points", american_odds: -112, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+  ], bookPrices: [
+    { sportsbook: "Sample Sportsbook", line: 24.5, line_display: "Over 24.5 points", american_odds: -112, observed_at: "2026-07-28T15:20:00.000Z", source: "EdgeBoard Mock", verification: "verified" },
+    { sportsbook: "Sample Book Two", line: 24.5, line_display: "Over 24.5 points", american_odds: -108, observed_at: "2026-07-28T15:18:00.000Z", source: "EdgeBoard Mock", verification: "verified" },
+    { sportsbook: "Sample Book Three", line: 24.5, line_display: "Over 24.5 points", american_odds: -115, observed_at: "2026-07-28T15:16:00.000Z", source: "EdgeBoard Mock", verification: "verified" },
+  ] }),
+  offer({ id: "lavine-points", league: "nba", eventId: "PHI-CHI", name: "Zach LaVine", line: "Over 21.5 points", odds: -106, confidence: 61, hitRate: "6 of last 9", matchup: "vs PHI", trend: "+2.1 projected edge", note: "Shot volume is stable when Chicago trails by one possession or more.", team: "CHI", opponent: "PHI", propType: "points", priceHistory: [
+    { observed_at: "2026-07-28T12:00:00.000Z", change_type: "opening", line: 20.5, line_display: "Over 20.5 points", american_odds: -110, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+    { observed_at: "2026-07-28T14:20:00.000Z", change_type: "movement", line: 21.5, line_display: "Over 21.5 points", american_odds: -106, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+    { observed_at: "2026-07-28T14:30:00.000Z", change_type: "suspended", line: 21.5, line_display: "Over 21.5 points", sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+    { observed_at: "2026-07-28T14:55:00.000Z", change_type: "reopened", line: 21.5, line_display: "Over 21.5 points", american_odds: -108, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+    { observed_at: "2026-07-28T15:20:00.000Z", change_type: "current", line: 21.5, line_display: "Over 21.5 points", american_odds: -106, sportsbook: "Sample Sportsbook", source: "EdgeBoard Mock", verification: "provider-reported" },
+  ], marketEvents: [
+    { event_id: "sample-lineup-lavine-confirmed", event_type: "lineup", occurred_at: "2026-07-28T14:50:00.000Z", provider: "EdgeBoard Mock Lineups", verification: "verified", causal_relationship: "verified-cause", summary: "Sample provider attributed the market reopening to confirmation of Zach LaVine in the starting lineup.", entity_id: "nba-zach-lavine" },
+  ], researchHistory: [
+    { observed_at: "2026-07-28T12:00:00.000Z", projection: 20.8, research_quality: 54, provider: "EdgeBoard Mock Models", verification: "verified" },
+    { observed_at: "2026-07-28T15:20:00.000Z", projection: 23.6, research_quality: 68, provider: "EdgeBoard Mock Models", verification: "verified" },
+  ], bookPrices: [
+    { sportsbook: "Sample Sportsbook", line: 21.5, line_display: "Over 21.5 points", american_odds: -106, observed_at: "2026-07-28T15:20:00.000Z", source: "EdgeBoard Mock", verification: "verified" },
+    { sportsbook: "Sample Book Two", line: 21.5, line_display: "Over 21.5 points", american_odds: -102, observed_at: "2026-07-28T15:17:00.000Z", source: "EdgeBoard Mock", verification: "verified" },
+  ] }),
   offer({ id: "embiid-points", league: "nba", eventId: "PHI-CHI", name: "Joel Embiid", line: "Over 29.5 points", odds: -115, confidence: 65, hitRate: "64% season hit", matchup: "at CHI", trend: "+3.0 projected edge", note: "Post touches project well against a thinner interior rotation.", team: "PHI", opponent: "CHI", propType: "points", confirmed: false }),
   offer({ id: "fox-assists", league: "nba", eventId: "SAC-DAL", name: "De'Aaron Fox", line: "Over 6.5 assists", odds: 104, confidence: 62, hitRate: "61% season hit", matchup: "at DAL", trend: "Pace-up spot", note: "Assist chances climb against switching-heavy defenses.", team: "SAC", opponent: "DAL", propType: "assists" }),
   offer({ id: "fox-points", league: "nba", eventId: "SAC-DAL", name: "De'Aaron Fox", line: "Over 25.5 points", odds: -110, confidence: 64, hitRate: "7 of last 11", matchup: "at DAL", trend: "+2.6 projected edge", note: "Dallas allows strong rim frequency to downhill guards.", team: "SAC", opponent: "DAL", propType: "points" }),
   offer({ id: "doncic-points", league: "nba", eventId: "SAC-DAL", name: "Luka Doncic", line: "Over 30.5 points", odds: -120, confidence: 67, hitRate: "8 of last 12", matchup: "vs SAC", trend: "+3.4 projected edge", note: "Usage and free-throw rate both stay elite in pace-up games.", team: "DAL", opponent: "SAC", propType: "points" }),
   offer({ id: "knicks-spread", league: "nba", eventId: "NYK-BOS", group: "spreads", type: "spread", name: "New York Knicks", line: "+3.5 spread", odds: -108, confidence: 59, hitRate: "8-4 ATS away", matchup: "at BOS", trend: "Rest edge +1 day", note: "Half-court profile keeps blowout risk moderate.", team: "NYK", opponent: "BOS", propType: "spread" }),
-  offer({ id: "brunson-points", league: "nba", eventId: "NYK-BOS", name: "Jalen Brunson", line: "Over 26.5 points", odds: -108, confidence: 63, hitRate: "62% road hit", matchup: "at BOS", trend: "+2.4 projected edge", note: "Pull-up volume gives him a clean path even in slower games.", team: "NYK", opponent: "BOS", propType: "points" }),
+  offer({ id: "brunson-points", league: "nba", eventId: "NYK-BOS", name: "Jalen Brunson", line: "Over 26.5 points", odds: -108, confidence: 63, hitRate: "62% road hit", matchup: "at BOS", trend: "+2.4 projected edge", note: "Pull-up volume gives him a clean path even in slower games.", team: "NYK", opponent: "BOS", propType: "points", marketEvents: [
+    { event_id: "sample-injury-brunson-probable", event_type: "injury", occurred_at: "2026-07-28T13:40:00.000Z", provider: "EdgeBoard Mock Injuries", verification: "verified", summary: "Sample injury provider changed Jalen Brunson to probable.", entity_id: "nba-jalen-brunson" },
+  ] }),
   offer({ id: "tatum-points", league: "nba", eventId: "NYK-BOS", name: "Jayson Tatum", line: "Over 27.5 points", odds: 102, confidence: 60, hitRate: "5 of last 8", matchup: "vs NYK", trend: "Plus-money edge", note: "Wing isolation usage rises against New York's switch coverage.", team: "BOS", opponent: "NYK", propType: "points" }),
   offer({ id: "wolves-total", league: "nba", eventId: "MIN-DEN", group: "totals", type: "total", name: "MIN at DEN", line: "Under 219.5", odds: -105, confidence: 64, hitRate: "5 straight unders", matchup: "late window", trend: "Slowest combined pace", note: "Both teams project to rank top eight in half-court frequency.", team: "MIN", opponent: "DEN", propType: "total", available: false }),
   offer({ id: "edwards-points", league: "nba", eventId: "MIN-DEN", name: "Anthony Edwards", line: "Over 26.5 points", odds: -104, confidence: 62, hitRate: "6 of last 10", matchup: "at DEN", trend: "+2.0 projected edge", note: "Minnesota leans on his creation when half-court possessions tighten.", team: "MIN", opponent: "DEN", propType: "points" }),

@@ -384,7 +384,7 @@ export class WorkspaceRepository {
   async createWorkspace(input = {}) {
     return this.mutate((state) => {
       const record = baseRecord({
-        title: cleanText(input.title || "My EdgeBoard", 160),
+        title: cleanText(input.title || "Workspace", 160),
         description: cleanText(input.description, 1000),
         visibility: "private",
         ownerId: null,

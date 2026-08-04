@@ -11,12 +11,6 @@ function localDateKey(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function monthDayKey(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getMonth() + 1}-${date.getDate()}`;
-}
-
 function eventTitle(event) {
   return clean(event?.display?.title)
     || (event?.participants || []).map((item) => clean(item.name)).filter(Boolean).join(" vs ")
@@ -111,22 +105,25 @@ function leaderCard(entry, league, statDefinition, metadata, mode) {
   });
 }
 
-function historicalEventCard(row, entity, mode, contextLabel) {
+function anniversaryCard(item) {
   return Object.freeze({
-    id: `home-on-this-day-${row.row_id}`,
+    id: item.id,
     kind: "on-this-day",
-    title: row.event_name || row.event_id,
-    summary: `${entity?.name || "Entity unavailable"} · completed sample event`,
-    eyebrow: "On this day · available dataset",
-    leagueId: row.league_id,
-    sportId: row.sport_id,
-    eventTime: row.event_date,
+    title: item.title,
+    summary: item.summary,
+    eyebrow: `${item.originalYear} · ${item.yearsAgo} year${item.yearsAgo === 1 ? "" : "s"} ago · ${item.category}`,
+    leagueId: item.leagueId,
+    sportId: item.sportId,
+    eventTime: item.date,
     sampleSize: 1,
     classification: "historical_fact",
-    validationStatus: "completed_sample_row",
-    source: sourceMeta("EdgeBoard sample historical provider", row.updated_at),
-    entity: entity || null,
-    actions: entityActions(entity, mode, contextLabel, "game log"),
+    validationStatus: item.validationLabel,
+    source: sourceMeta(item.sources[0]?.label, item.freshness?.lastUpdated, item.sample),
+    entity: item.primaryEntity || null,
+    edgeTrust: item.edgeTrust,
+    researchQuality: item.researchQuality,
+    anniversaryId: item.id,
+    actions: item.actions,
   });
 }
 
@@ -180,6 +177,7 @@ export function createHomeDiscoveryModel({
   insightService,
   storyEngine = null,
   discoveryService = null,
+  anniversaryService = null,
   workspaceState = null,
   preferences = {},
   researchMode = "stats",
@@ -274,11 +272,14 @@ export function createHomeDiscoveryModel({
       return insightCard(item, researchMode, contextLabel, "streak");
     });
 
-  const historicalRows = (liveOnly ? [] : statsRepository.rows).filter((row) => row.status === "completed"
-    && leagueIds.includes(row.league_id)
-    && monthDayKey(row.event_date) === monthDayKey(currentDate));
-  const onThisDay = [...new Map(historicalRows.map((row) => [row.event_id, row])).values()].slice(0, 4).map((row) =>
-    historicalEventCard(row, statsRepository.entities.find((item) => item.id === row.entity_id), researchMode, contextLabel));
+  const anniversaryResult = !liveOnly && anniversaryService ? anniversaryService.getAnniversaries({
+    date: currentDate,
+    sportId: sportIds.length === 1 ? sportIds[0] : "",
+    leagueId: leagueIds.length === 1 ? leagueIds[0] : "",
+    limit: 4,
+    mode: researchMode,
+  }) : null;
+  const onThisDay = (anniversaryResult?.items || []).map(anniversaryCard);
 
   const leaders = (liveOnly ? [] : visibleLeagues).slice(0, 6).flatMap((league) => {
     const result = firstLeaderboard(statsRepository, league);
@@ -319,7 +320,7 @@ export function createHomeDiscoveryModel({
       section("changed", "Recently Changed", "Meaningful fixture-backed changes with old and new values retained; routine refreshes are excluded.", changed, "No meaningful validated change is available for this scope."),
       section("explore", "Explore Sports", "Progressive sport-aware topics backed by currently available normalized data.", explore, "No verified discovery topics are available for this league right now."),
       section("facts", "Did You Know?", "Calculated facts from completed source rows.", facts, "No distinct calculated fact passed the current scope rules."),
-      section("on-this-day", "On This Day", `Completed sample events matching ${currentDate.toLocaleDateString(undefined, { month: "long", day: "numeric" })}.`, onThisDay, "No completed event in the available sample matches this local calendar date."),
+      section("on-this-day", "On This Day", `Validated anniversaries matching ${currentDate.toLocaleDateString(undefined, { month: "long", day: "numeric" })}; years-ago values use the local calendar.`, onThisDay, anniversaryService ? "No validated historical event in this selected scope matches the local calendar date." : "Historical anniversaries are loading without blocking current markets."),
       section("milestones", "Upcoming Milestones", "Only eligible, nearby dataset-scoped milestones are shown.", milestones, "No nearby milestone passed the configured distance and sample rules."),
       section("streaks", "Active Streaks", "Active sequences calculated from chronologically ordered completed events.", streaks, "No active streak passed the configured validation and sample rules."),
       section("leaders", "Current Leaders", "Qualified leaders from the available current-season sample.", leaders, "No qualified leaderboard entry is available for this scope."),

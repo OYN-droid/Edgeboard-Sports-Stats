@@ -74,10 +74,12 @@ export function getResearchProgressCopy(plan) {
 
 export function getOnboardingSteps() {
   return Object.freeze([
-    { id: "stats", label: "Stats", detail: "Ask for logs, splits, trends, comparisons, and rankings from completed sample rows." },
-    { id: "betting", label: "Betting", detail: "Explore only provider-confirmed sample markets, lines, and odds." },
-    { id: "both", label: "Both", detail: "Pair compatible current markets with observed statistics without blending the two." },
-    { id: "analyst", label: "Analyst", detail: "Use follow-up questions and the research plan to move from a broad question to evidence." },
-    { id: "workspace", label: "My EdgeBoard", detail: "Save research, watch entities, and track ideas locally in this browser." },
+    { id: "edge-intelligence", label: "Edge Intelligence", detail: "Turn a question into a transparent research plan, evidence, counterarguments, and next steps." },
+    { id: "edge-trust", label: "Edge Trust", detail: "Open Research Quality details to understand freshness, coverage, agreement, and uncertainty." },
+    { id: "stories", label: "Stories", detail: "Explore deterministic claims that always retain their supporting evidence and scope." },
+    { id: "discovery", label: "Discovery", detail: "Move between related profiles, comparisons, visuals, history, and current research." },
+    { id: "markets", label: "Edge Markets", detail: "Research provider-confirmed markets and movement without treating them as recommendations." },
+    { id: "history", label: "Historical Explorer", detail: "Browse evidence-backed history with visible dataset coverage and validation limits." },
+    { id: "workspace", label: "Workspace", detail: "Save research, watch entities, and track ideas locally in this browser." },
   ]);
 }

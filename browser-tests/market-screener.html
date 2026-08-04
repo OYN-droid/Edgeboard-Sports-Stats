@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Market screener tests</title><link rel="icon" href="data:,"></head><body>
+<pre id="results">Running…</pre>
+<iframe id="app" title="Market Screener app" src="/markets/screener?scope=system%3Aall&amp;testFixtureTimestamp=2026-07-28T15%3A20%3A00.000Z" style="width:1280px;height:1100px;border:0"></iframe>
+<script>window.testErrors=[];addEventListener("error",e=>testErrors.push(e.message));addEventListener("unhandledrejection",e=>testErrors.push(String(e.reason)));setTimeout(()=>{const r=document.querySelector("#results");if(r.textContent==="Running…")r.textContent=`ERROR\n${testErrors.join("\n")||"Harness did not complete."}`},35000);</script>
+<script type="module" src="./market-screener.js"></script>
+</body></html>

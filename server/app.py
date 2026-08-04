@@ -41,7 +41,12 @@ def create_handler(runtime: Runtime):
             ):
                 self.send_error(404)
                 return
-            if decoded_path == "/history" or decoded_path.startswith("/history/"):
+            if (
+                decoded_path == "/history"
+                or decoded_path.startswith("/history/")
+                or decoded_path == "/markets"
+                or decoded_path.startswith("/markets/")
+            ):
                 self.path = "/index.html"
             super().do_GET()
 

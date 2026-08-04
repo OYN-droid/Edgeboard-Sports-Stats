@@ -26,6 +26,56 @@ function normalizeTimestamp(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
+function normalizePriceSnapshot(raw, fallback = {}) {
+  const odds = normalizeOdds(raw?.american_odds);
+  const observedAt = normalizeTimestamp(raw?.observed_at || raw?.last_updated_at);
+  const changeType = fallbackText(raw?.change_type, "movement").toLowerCase();
+  return Object.freeze({
+    sportsbook: fallbackText(raw?.sportsbook, fallback.sportsbook || "Source unavailable"),
+    line: normalizeNumericLine(raw?.line, raw?.line_display),
+    lineDisplay: fallbackText(raw?.line_display, fallback.line || "Line unavailable"),
+    odds,
+    observedAt,
+    provider: fallbackText(raw?.source, fallback.source || "Source unavailable"),
+    sourceMode: fallbackText(raw?.source_mode, fallback.sourceMode || "sample"),
+    changeType: ["opening", "movement", "current", "suspended", "reopened"].includes(changeType) ? changeType : "movement",
+    verification: fallbackText(raw?.verification, "provider-reported").toLowerCase(),
+    status: fallbackText(raw?.status, changeType === "suspended" ? "suspended" : "open").toLowerCase(),
+    stale: isStale(observedAt),
+    valid: Boolean(observedAt) && (odds !== null || changeType === "suspended"),
+  });
+}
+
+function normalizeMarketEvent(raw) {
+  const occurredAt = normalizeTimestamp(raw?.occurred_at || raw?.updated_at);
+  const type = fallbackText(raw?.event_type, "unknown").toLowerCase();
+  const verification = fallbackText(raw?.verification, "unverified").toLowerCase();
+  return Object.freeze({
+    id: fallbackText(raw?.event_id, ""), type, occurredAt,
+    provider: fallbackText(raw?.provider, "Provider unavailable"),
+    verification,
+    verified: verification === "verified",
+    causalRelationship: fallbackText(raw?.causal_relationship, "related").toLowerCase(),
+    summary: fallbackText(raw?.summary, "Event summary unavailable"),
+    entityId: fallbackText(raw?.entity_id, ""),
+    valid: Boolean(occurredAt) && ["lineup", "injury", "weather", "schedule", "opponent_change", "provider_correction"].includes(type),
+  });
+}
+
+function normalizeResearchSnapshot(raw) {
+  const observedAt = normalizeTimestamp(raw?.observed_at || raw?.updated_at);
+  const projection = Number(raw?.projection);
+  const researchQuality = Number(raw?.research_quality);
+  return Object.freeze({
+    observedAt,
+    projection: Number.isFinite(projection) ? projection : null,
+    researchQuality: Number.isFinite(researchQuality) ? Math.min(100, Math.max(0, researchQuality)) : null,
+    provider: fallbackText(raw?.provider, "Provider unavailable"),
+    verification: fallbackText(raw?.verification, "unverified").toLowerCase(),
+    valid: Boolean(observedAt),
+  });
+}
+
 function isStale(value) {
   const timestamp = normalizeTimestamp(value);
   return !timestamp || Date.now() - new Date(timestamp).getTime() > STALE_AFTER_MS;
@@ -134,6 +184,26 @@ function normalizeMarket(raw, eventMap, leagueMap) {
     const participantName = fallbackText(selection?.participant?.name, fallbackText(selection?.label, "Unknown participant"));
     const lastUpdatedAt = normalizeTimestamp(selection?.last_updated_at);
     const stale = isStale(selection?.last_updated_at);
+    const priceHistory = (Array.isArray(selection?.price_history) ? selection.price_history : [])
+      .map((snapshot) => normalizePriceSnapshot(snapshot, {
+        sportsbook: selection?.sportsbook,
+        line: selection?.line_display,
+        source: selection?.source || raw?.source,
+        sourceMode: selection?.source_mode || raw?.source_mode,
+      })).filter((snapshot) => snapshot.valid)
+      .sort((left, right) => new Date(left.observedAt) - new Date(right.observedAt));
+    const bookPrices = (Array.isArray(selection?.book_prices) ? selection.book_prices : [])
+      .map((snapshot) => normalizePriceSnapshot(snapshot, {
+        sportsbook: selection?.sportsbook, line: selection?.line_display,
+        source: selection?.source || raw?.source, sourceMode: selection?.source_mode || raw?.source_mode,
+      })).filter((snapshot) => snapshot.valid && snapshot.odds !== null)
+      .sort((left, right) => left.sportsbook.localeCompare(right.sportsbook));
+    const marketEvents = (Array.isArray(selection?.market_events) ? selection.market_events : [])
+      .map(normalizeMarketEvent).filter((item) => item.valid)
+      .sort((left, right) => new Date(left.occurredAt) - new Date(right.occurredAt));
+    const researchHistory = (Array.isArray(selection?.research_history) ? selection.research_history : [])
+      .map(normalizeResearchSnapshot).filter((item) => item.valid)
+      .sort((left, right) => new Date(left.observedAt) - new Date(right.observedAt));
     return Object.freeze({
       id: fallbackText(selection?.selection_id, `${raw?.offer_id || "unknown"}-${index}`),
       participant: selection?.participant ? {
@@ -172,6 +242,10 @@ function normalizeMarket(raw, eventMap, leagueMap) {
       confirmed: selection?.confirmed === true,
       available: raw?.status === "open" && selection?.available !== false && odds !== null,
       suspended: raw?.status === "suspended" || selection?.suspended === true,
+      priceHistory: Object.freeze(priceHistory),
+      bookPrices: Object.freeze(bookPrices),
+      marketEvents: Object.freeze(marketEvents),
+      researchHistory: Object.freeze(researchHistory),
     });
   });
 

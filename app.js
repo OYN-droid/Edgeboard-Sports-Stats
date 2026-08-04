@@ -63,6 +63,24 @@ import {
 import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js";
 import { createStoryEngine } from "./src/services/story-engine.js";
 import { createDiscoveryService } from "./src/services/discovery-service.js";
+import { createKnowledgeGraphService } from "./src/services/knowledge-graph-service.js";
+import { classifyMarketExplainerQuery, createMarketResearchService } from "./src/services/market-research-service.js";
+import {
+  createMarketScreenerService,
+  normalizeScreenerFilters,
+  parseScreenerFilters,
+  serializeScreenerFilters,
+} from "./src/services/market-screener-service.js";
+import {
+  MARKET_SCREENER_ARRAY_FILTERS,
+  MARKET_SCREENER_BOOLEAN_FILTERS,
+  MARKET_SCREENER_GROUPS,
+  MARKET_SCREENER_NUMERIC_FILTERS,
+  MARKET_SCREENER_SORTS,
+  MARKET_SCREENER_WINDOW_SIZE,
+} from "./src/config/market-screener-config.js";
+import { createParlayBuilderService, normalizeParlayConstraints, parseParlayConstraints, serializeParlayConstraints } from "./src/services/parlay-builder-service.js";
+import { PARLAY_BOOLEAN_CONSTRAINTS, PARLAY_REFINEMENTS } from "./src/config/parlay-builder-config.js";
 
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
@@ -75,20 +93,31 @@ const athleteProfileRepository = createAthleteProfileRepository(statsRepository,
 const entityRegistry = createEntityRegistry();
 const storyEngine = createStoryEngine({ insightService, sportsRepository, statsRepository, entityRegistry });
 const discoveryService = createDiscoveryService({ sportsRepository, statsRepository, insightService, storyEngine, entityRegistry });
+const knowledgeGraphService = createKnowledgeGraphService({ entityRegistry, sportsRepository, statsRepository, insightService, storyEngine });
+const marketResearchService = createMarketResearchService({ sportsRepository, statsRepository, entityRegistry, insightService, storyEngine });
+const marketScreenerService = createMarketScreenerService({ marketResearchService, clock: () => new Date(testFixtureTimestamp || Date.now()) });
+const parlayBuilderService = createParlayBuilderService({ marketScreenerService, clock: () => new Date(testFixtureTimestamp || Date.now()) });
 let historicalModulesPromise = null;
 let historicalService = null;
 let historicalQueryParser = null;
+let anniversaryService = null;
+let anniversaryQueryParser = null;
 function loadHistoricalModules() {
   if (!historicalModulesPromise) {
     historicalModulesPromise = Promise.all([
       import("./src/services/historical-service.js"),
       import("./src/services/historical-query-service.js"),
-    ]).then(([serviceModule, queryModule]) => {
+      import("./src/services/anniversary-service.js"),
+    ]).then(([serviceModule, queryModule, anniversaryModule]) => {
       historicalService ||= serviceModule.createHistoricalExplorerService({ sportsRepository, statsRepository, entityRegistry });
       historicalQueryParser = queryModule.parseHistoricalQuery;
+      anniversaryService ||= anniversaryModule.createAnniversaryService({ historicalService, sportsRepository, statsRepository, entityRegistry });
+      anniversaryQueryParser = anniversaryModule.parseAnniversaryQuery;
+      knowledgeGraphService.connectHistorical({ historicalService, anniversaryService });
+      marketResearchService.connectHistorical(historicalService);
       discoveryService.historicalService = historicalService;
       discoveryService.clearCache();
-      return { historicalService, parseHistoricalQuery: historicalQueryParser };
+      return { historicalService, parseHistoricalQuery: historicalQueryParser, anniversaryService, parseAnniversaryQuery: anniversaryQueryParser };
     });
   }
   return historicalModulesPromise;
@@ -111,6 +140,7 @@ function loadVisualizationModules() {
       import("./src/components/visualization-renderer.js"),
     ]).then(([service, query, renderer]) => {
       visualizationRepository ||= service.createVisualizationRepository();
+      knowledgeGraphService.connectVisualizations(visualizationRepository);
       visualizationServiceModule = service;
       visualizationRenderer = renderer;
       return { service, query, renderer };
@@ -256,6 +286,12 @@ function cleanRouteValue(value) {
 function parseHistoricalRoute(location = window.location) {
   const parts = location.pathname.split("/").filter(Boolean).map((part) => decodeURIComponent(part));
   if (parts[0] !== "history") return null;
+  const params = new URLSearchParams(location.search);
+  if (parts[1] === "anniversaries" && parts[2]) return { type: "anniversary", anniversaryId: cleanRouteValue(parts[2]) };
+  if (parts[1] === "on-this-day") return {
+    type: "anniversaries", date: cleanRouteValue(params.get("date")), year: cleanRouteValue(params.get("year")),
+    category: cleanRouteValue(params.get("category")), sportId: cleanRouteValue(params.get("sport")), leagueId: cleanRouteValue(params.get("league")),
+  };
   if (parts[1] === "items" && parts[2]) return { type: "item", itemId: cleanRouteValue(parts[2]) };
   if (parts[1] === "rivalries" && parts[2]) return { type: "rivalry", rivalryId: cleanRouteValue(parts[2]) };
   if (["records", "performances", "rivalries", "championships"].includes(parts[1])) return { type: parts[1] };
@@ -263,6 +299,27 @@ function parseHistoricalRoute(location = window.location) {
   if (parts[1] && parts[2]) return { type: "league", sportId: cleanRouteValue(parts[1]), leagueId: cleanRouteValue(parts[2]) };
   if (parts[1]) return { type: "sport", sportId: cleanRouteValue(parts[1]) };
   return { type: "home" };
+}
+
+function parseMarketRoute(location = window.location) {
+  const parts = location.pathname.split("/").filter(Boolean).map((part) => decodeURIComponent(part));
+  if (parts[0] !== "markets") return null;
+  if (parts[1] === "parlay-builder") {
+    const params = new URLSearchParams(location.search);
+    return { type: "parlay-builder", constraints: parseParlayConstraints(params.get("constraints") || "") };
+  }
+  if (parts[1] === "screener") {
+    const params = new URLSearchParams(location.search);
+    return {
+      type: "screener",
+      filters: parseScreenerFilters(params.get("filters") || ""),
+      sortBy: cleanRouteValue(params.get("sort") || "highest_research_quality"),
+      groupBy: cleanRouteValue(params.get("group") || "none"),
+    };
+  }
+  if (parts[1] === "movement") return { type: "movement" };
+  if (parts[1] && parts[2]) return { type: "detail", leagueId: cleanRouteValue(parts[1]), selectionId: cleanRouteValue(parts.at(-1)) };
+  return { type: "hub" };
 }
 
 function getSelectionSummary(selection) {
@@ -286,7 +343,8 @@ function researchLeagueForSelection(selection, preferredLeagueId = "") {
 
 const initialDiscoveryRoute = parseDiscoveryRoute();
 const initialHistoricalRoute = parseHistoricalRoute();
-const routeLeagueId = initialHistoricalRoute?.leagueId || initialDiscoveryRoute?.leagueId;
+const initialMarketRoute = parseMarketRoute();
+const routeLeagueId = initialMarketRoute?.leagueId || initialHistoricalRoute?.leagueId || initialDiscoveryRoute?.leagueId;
 const initialNavigationSelection = routeLeagueId && sportsRepository.getLeague(routeLeagueId)
   ? normalizeNavigationSelection({ type: "league", id: routeLeagueId }, navigationModel.allLeagues, defaultLeague?.leagueId)
   : loadNavigationSelection();
@@ -304,6 +362,11 @@ const initialWorkspaceRoute = initialWorkspaceParams.has("workspace") ? {
   watchlistId: initialWorkspaceParams.get("watchlist") || "",
   query: "",
 } : null;
+
+function loadFavoriteParlayLegs() {
+  try { const value = JSON.parse(localStorage.getItem("edgeboard-parlay-favorite-legs-v1") || "[]"); return Array.isArray(value) ? value.filter((item) => typeof item === "string").slice(0, 100) : []; }
+  catch { return []; }
+}
 
 const state = {
   navigationSelection: initialNavigationSelection,
@@ -329,6 +392,7 @@ const state = {
   analystWorkflow: null,
   researchPlan: null,
   researchAnswer: null,
+  graphResearchEntityId: "",
   researchSession: null,
   researchSessionRefreshRequested: false,
   edgeLabScenario: null,
@@ -399,6 +463,26 @@ const state = {
   discoveryRoute: initialDiscoveryRoute,
   discoverySearch: null,
   discoveryCategory: "",
+  marketResearchActive: Boolean(initialMarketRoute),
+  marketResearchRoute: initialMarketRoute,
+  marketResearchModel: null,
+  marketResearchLoading: Boolean(initialMarketRoute),
+  marketResearchRequestSequence: 0,
+  marketSearchResults: [],
+  marketSearchIntent: null,
+  marketResearchContext: null,
+  marketScreenerFilters: initialMarketRoute?.type === "screener" ? initialMarketRoute.filters : Object.freeze({}),
+  marketScreenerSort: initialMarketRoute?.type === "screener" ? initialMarketRoute.sortBy : "highest_research_quality",
+  marketScreenerGroup: initialMarketRoute?.type === "screener" ? initialMarketRoute.groupBy : "none",
+  marketScreenerResult: null,
+  marketScreenerSelectedIds: [],
+  marketScreenerOffset: 0,
+  marketScreenerAbortController: null,
+  parlayConstraints: initialMarketRoute?.type === "parlay-builder" ? initialMarketRoute.constraints : normalizeParlayConstraints(),
+  parlayBuilderResult: null,
+  parlayBuilderAbortController: null,
+  parlayFavoriteSelectionIds: loadFavoriteParlayLegs(),
+  parlayVersions: [],
   historyActive: Boolean(initialHistoricalRoute),
   historyRoute: initialHistoricalRoute,
   historicalResult: null,
@@ -525,6 +609,17 @@ const elements = {
   discoveryExplorerContent: document.querySelector("#discoveryExplorerContent"),
   closeDiscoveryExplorer: document.querySelector("#closeDiscoveryExplorer"),
   openHistory: document.querySelector("#openHistory"),
+  openMarkets: document.querySelector("#openMarkets"),
+  marketResearchView: document.querySelector("#marketResearchView"),
+  marketResearchTitle: document.querySelector("#marketResearchTitle"),
+  marketResearchSummary: document.querySelector("#marketResearchSummary"),
+  marketResearchNav: document.querySelector("#marketResearchNav"),
+  marketResearchLoading: document.querySelector("#marketResearchLoading"),
+  marketResearchContent: document.querySelector("#marketResearchContent"),
+  marketResearchStatus: document.querySelector("#marketResearchStatus"),
+  closeMarketResearch: document.querySelector("#closeMarketResearch"),
+  saveMarketResearch: document.querySelector("#saveMarketResearch"),
+  shareMarketResearch: document.querySelector("#shareMarketResearch"),
   historicalExplorer: document.querySelector("#historicalExplorer"),
   historicalExplorerTitle: document.querySelector("#historicalExplorerTitle"),
   historicalExplorerSummary: document.querySelector("#historicalExplorerSummary"),
@@ -569,6 +664,12 @@ const elements = {
   onboarding: document.querySelector("#edgeboardOnboarding"),
   onboardingSteps: document.querySelector("#onboardingSteps"),
   dismissOnboarding: document.querySelector("#dismissOnboarding"),
+  commandPalette: document.querySelector("#commandPalette"),
+  openCommandPalette: document.querySelector("#openCommandPalette"),
+  closeCommandPalette: document.querySelector("#closeCommandPalette"),
+  commandPaletteInput: document.querySelector("#commandPaletteInput"),
+  commandPaletteResults: document.querySelector("#commandPaletteResults"),
+  commandPaletteStatus: document.querySelector("#commandPaletteStatus"),
 };
 
 let renderedPicks = new Map();
@@ -582,6 +683,11 @@ let entityProfileAbortController = null;
 let visualRequestSequence = 0;
 let visualAbortController = null;
 let visualReturnFocus = null;
+let commandPaletteReturnFocus = null;
+let commandPaletteRequestSequence = 0;
+let commandPaletteTimer = 0;
+let commandPaletteItems = [];
+let commandPaletteIndex = -1;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -590,6 +696,140 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+const RECENT_SEARCHES_KEY = "edgeboard-recent-searches-v1";
+const COMMAND_TOPICS = Object.freeze([
+  "Today’s verified stories",
+  "Current league leaders",
+  "Recent line movement",
+  "Upcoming milestones",
+]);
+
+function loadRecentSearches() {
+  try {
+    const values = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || "[]");
+    return Array.isArray(values) ? values.filter((value) => typeof value === "string").slice(0, 6) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberRecentSearch(query) {
+  const text = String(query || "").trim();
+  if (!text) return;
+  try {
+    if (workspaceRepository?.snapshot?.().meta?.privacyMode) return;
+    const next = [text, ...loadRecentSearches().filter((value) => value.toLowerCase() !== text.toLowerCase())].slice(0, 6);
+    localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(next));
+  } catch {
+    elements.commandPaletteStatus.textContent = "Recent searches could not be saved in this browser. Your search still works.";
+  }
+}
+
+function commandDefinitions() {
+  return [
+    { id: "command-home", group: "Commands", label: "Go to sports discovery", detail: "Home", action: () => { window.location.href = "/"; } },
+    { id: "command-intelligence", group: "Commands", label: "Ask Edge Intelligence", detail: "Start or continue a Research Session", action: () => { elements.queryInput.focus(); elements.queryInput.select(); } },
+    { id: "command-markets", group: "Commands", label: "Open Edge Markets", detail: "Market research", action: () => setMarketResearchRoute({ type: "hub" }) },
+    { id: "command-screener", group: "Commands", label: "Open Market Screener", detail: "Deterministic research filters", action: () => setMarketResearchRoute({ type: "screener" }) },
+    { id: "command-parlay", group: "Commands", label: "Open Parlay Builder", detail: "Research tool — not a placed wager", action: () => setMarketResearchRoute({ type: "parlay-builder" }) },
+    { id: "command-history", group: "Commands", label: "Open Historical Explorer", detail: "Evidence-backed history", action: () => elements.openHistory.click() },
+    { id: "command-workspace", group: "Commands", label: "Open Workspace", detail: "Saved research, watchlists, alerts, and tracking", action: () => openWorkspace() },
+    { id: "command-comparison", group: "Commands", label: "Start a comparison", detail: "Use identical filters for both entities", query: "Compare two players using the same date and split filters" },
+  ];
+}
+
+function commandPaletteMarkup(items) {
+  if (!items.length) return `<div class="command-palette-empty" role="status"><strong>No supported match yet</strong><p>Try an exact player, team, fighter, driver, story, historical topic, or market. You can also ask Edge Intelligence.</p><button type="button" data-command-query="Show current leaders for the selected scope">Ask Edge Intelligence</button></div>`;
+  let group = "";
+  return items.map((item, index) => {
+    const heading = item.group !== group ? `<h3>${escapeHtml(item.group)}</h3>` : "";
+    group = item.group;
+    return `${heading}<button id="command-palette-option-${index}" type="button" role="option" aria-selected="${index === commandPaletteIndex}" data-command-index="${index}"><span>${escapeHtml(item.label)}</span><small>${escapeHtml(item.detail || "Open")}</small></button>`;
+  }).join("");
+}
+
+function renderCommandPalette(items, status = "") {
+  commandPaletteItems = items;
+  if (commandPaletteIndex >= items.length) commandPaletteIndex = items.length ? 0 : -1;
+  elements.commandPaletteResults.innerHTML = commandPaletteMarkup(items);
+  elements.commandPaletteInput.setAttribute("aria-activedescendant", commandPaletteIndex >= 0 ? `command-palette-option-${commandPaletteIndex}` : "");
+  elements.commandPaletteStatus.textContent = status || `${items.length} supported result${items.length === 1 ? "" : "s"}.`;
+}
+
+async function searchCommandPalette(query, requestId) {
+  const text = String(query || "").trim();
+  if (!text) {
+    const recent = loadRecentSearches().map((label, index) => ({ id: `recent-${index}`, group: "Recent searches", label, detail: "Run this research again", query: label }));
+    const topics = COMMAND_TOPICS.map((label, index) => ({ id: `topic-${index}`, group: "Explore now", label, detail: "Deterministic topic — not global popularity", query: label }));
+    renderCommandPalette([...recent, ...topics, ...commandDefinitions()], "Recent searches stay on this device and are disabled by Workspace privacy mode.");
+    return;
+  }
+  const lower = text.toLowerCase();
+  const entities = entityRegistry.search(text, {}, 8).map((entity) => ({
+    id: `entity-${entity.id}`, group: "Profiles", label: entity.name, detail: `${entity.typeLabel}${entity.context ? ` · ${entity.context}` : ""}`, entity,
+  }));
+  const stories = storyEngine.searchStories(text, { limit: 5 }).map((view) => ({
+    id: `story-${view.id}`, group: "Stories", label: view.headline, detail: `${view.scopeLabel} · ${view.validationLabel}`, storyId: view.id,
+  }));
+  const markets = marketResearchService.search(text, {}, 5).map((model) => ({
+    id: `market-${model.selectionId}`, group: "Markets", label: `${model.participantName} · ${model.marketName}`, detail: `${model.leagueName} · ${model.status}`, market: model,
+  }));
+  const commands = commandDefinitions().filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(lower));
+  renderCommandPalette([...entities, ...stories, ...markets, ...commands], "Searching profiles, stories, markets, history, and local Workspace…");
+  try {
+    const [{ repository }, historical] = await Promise.all([loadWorkspaceModules(), loadHistoricalModules()]);
+    if (requestId !== commandPaletteRequestSequence || elements.commandPaletteInput.value.trim() !== text) return;
+    const history = historical.historicalService.searchHistoricalItems({ query: text, pageSize: 5 }).items.map((item) => ({
+      id: `history-${item.id}`, group: "History", label: item.title || item.label, detail: item.coverageLabel || "Historical Explorer", href: item.route,
+    }));
+    const snapshot = repository.snapshot();
+    const saved = (snapshot.savedObjects || []).filter((item) => `${item.title || ""} ${item.description || ""}`.toLowerCase().includes(lower)).slice(0, 5).map((item) => ({
+      id: `workspace-${item.id}`, group: "Workspace", label: item.title || "Saved research", detail: `${String(item.type || "research").replaceAll("_", " ")} · local device`, workspaceItem: item,
+    }));
+    renderCommandPalette([...entities, ...stories, ...markets, ...history, ...saved, ...commands]);
+  } catch {
+    if (requestId === commandPaletteRequestSequence) renderCommandPalette([...entities, ...stories, ...markets, ...commands], "Current results are available. History or local Workspace search could not be loaded; try again or open that section directly.");
+  }
+}
+
+function scheduleCommandPaletteSearch() {
+  window.clearTimeout(commandPaletteTimer);
+  const requestId = ++commandPaletteRequestSequence;
+  elements.commandPaletteStatus.textContent = "Searching canonical EdgeBoard sources…";
+  commandPaletteTimer = window.setTimeout(() => searchCommandPalette(elements.commandPaletteInput.value, requestId), 120);
+}
+
+function openCommandPalette() {
+  commandPaletteReturnFocus = document.activeElement;
+  commandPaletteIndex = -1;
+  if (!elements.commandPalette.open) elements.commandPalette.showModal();
+  elements.commandPaletteInput.value = "";
+  searchCommandPalette("", ++commandPaletteRequestSequence);
+  elements.commandPaletteInput.focus();
+}
+
+function closeCommandPalette() {
+  if (elements.commandPalette.open) elements.commandPalette.close();
+  (commandPaletteReturnFocus instanceof HTMLElement ? commandPaletteReturnFocus : elements.openCommandPalette)?.focus({ preventScroll: true });
+}
+
+function executeCommandPaletteItem(item) {
+  if (!item) return;
+  rememberRecentSearch(elements.commandPaletteInput.value || item.query || item.label);
+  closeCommandPalette();
+  if (item.action) return item.action();
+  if (item.entity) return openSearchResult(item.entity);
+  if (item.storyId) return renderStoryDetail(storyEngine.getStory(item.storyId));
+  if (item.market) return setMarketResearchRoute({ type: "detail", leagueId: item.market.leagueId, marketId: item.market.marketId, selectionId: item.market.selectionId });
+  if (item.href) { window.history.pushState({}, "", item.href); window.dispatchEvent(new PopStateEvent("popstate")); return; }
+  if (item.workspaceItem) return openWorkspace({ workspaceId: item.workspaceItem.workspaceId || "workspace-local-default", view: "item", itemId: item.workspaceItem.id });
+  if (item.query) {
+    elements.queryInput.value = item.query;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
+  }
 }
 
 async function writeClipboardWithTimeout(value, timeoutMs = 1500) {
@@ -1148,6 +1388,7 @@ function renderPicks() {
       <div class="market-research-quality" title="Research Quality evaluates source evidence, not model confidence or win probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
       <div class="card-actions">
         <button class="add-button" type="button" data-add="${escapeHtml(pick.id)}" ${actionable ? "" : "disabled"}>${actionable ? "Add to slip" : "Unavailable"}</button>
+        <a class="text-button" href="${escapeHtml(marketResearchHref({ type: "detail", leagueId: pick.leagueId || state.leagueId, marketId: pick.marketId || pick.canonicalMarketId, selectionId: pick.id }))}" data-open-market="${escapeHtml(pick.id)}" data-market-league="${escapeHtml(pick.leagueId || state.leagueId)}">Research market</a>
         ${athleteId ? `<a class="text-button" href="${escapeHtml(profileUrl(athleteId))}" data-open-athlete="${escapeHtml(athleteId)}">View profile</a>` : ""}
         <span class="tag">${escapeHtml(pick.competitorStatus)}</span>
       </div>
@@ -1848,6 +2089,7 @@ function renderHomeDiscoveryAction(action) {
   if (action.type === "save-story") return `<button type="button" class="text-button" data-save-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
   if (action.type === "follow-entity") return `<button type="button" class="text-button" data-follow-entity="${escapeHtml(action.entityId)}" aria-pressed="${state.followedEntityIds.includes(action.entityId)}">${state.followedEntityIds.includes(action.entityId) ? "Following" : escapeHtml(action.label)}</button>`;
   if (action.type === "share-story") return `<button type="button" class="text-button" data-share-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
+  if (action.type === "share-anniversary") return `<button type="button" class="text-button" data-share-anniversary="${escapeHtml(action.anniversaryId)}">${escapeHtml(action.label)}</button>`;
   if (action.type === "research-story") return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="research" data-research-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
   if (action.type === "route") return action.href.startsWith("/history")
     ? `<a class="text-button" href="${escapeHtml(action.href)}" data-history-route>${escapeHtml(action.label)}</a>`
@@ -1879,6 +2121,35 @@ function renderHomeDiscoveryCard(card, { feature = false } = {}) {
     <small>${escapeHtml(card.source?.source || "Source unavailable")} · ${formatDateTime(card.source?.updatedAt, "timestamp unavailable")} · ${escapeHtml(card.validationStatus || "validation unavailable")}</small>
     <span class="insight-action-status" role="status" aria-live="polite"></span>
   </article>`;
+}
+
+function renderKnowledgeGraphAction(item) {
+  const action = item.action || {};
+  if (action.type === "profile") {
+    const entityProfile = action.profileSystem !== "athlete";
+    return `<a class="text-button" href="${escapeHtml(entityProfile ? entityProfileUrl(action.entityId) : profileUrl(action.entityId))}" ${entityProfile ? `data-open-entity="${escapeHtml(action.entityId)}"` : `data-open-athlete="${escapeHtml(action.entityId)}"`}>Open</a>`;
+  }
+  if (action.type === "story") return `<button type="button" class="text-button" data-view-story="${escapeHtml(action.storyId)}">Open story</button>`;
+  if (action.type === "insight") return `<button type="button" class="text-button" data-view-insight="${escapeHtml(action.insightId)}">Supporting data</button>`;
+  if (action.type === "route") return `<a class="text-button" href="${escapeHtml(action.href)}" data-history-route>Open</a>`;
+  if (action.type === "visual") {
+    const entity = entityRegistry.getEntity(action.entityId);
+    return `<button type="button" class="text-button" data-open-visual="${escapeHtml(defaultVisualizationType(entity))}" data-visual-entity="${escapeHtml(action.entityId)}">Open visuals</button>`;
+  }
+  if (action.type === "workspace") return `<button type="button" class="text-button" data-graph-workspace="${escapeHtml(action.entityId)}">Save</button>`;
+  return `<button type="button" class="text-button" data-graph-query="${escapeHtml(action.query || item.description)}">Research</button>`;
+}
+
+function renderKnowledgeGraph(entityId, { context = "page", limit = 30 } = {}) {
+  const graph = knowledgeGraphService.getEntityGraph(entityId, { mode: state.researchMode, currentDate: new Date(), limit });
+  if (graph.status !== "ready") return `<section class="knowledge-graph" aria-labelledby="knowledgeGraphTitle"><div class="discovery-empty" role="status">No verified connected research graph is available for this canonical entity.</div></section>`;
+  const headingId = `knowledgeGraphTitle-${context.replaceAll(/[^a-z0-9-]/gi, "-")}`;
+  return `<section class="knowledge-graph" data-knowledge-graph="${escapeHtml(graph.center.id)}" aria-labelledby="${escapeHtml(headingId)}">
+    <header class="knowledge-graph-header"><div><p class="eyebrow">Connected sports knowledge graph</p><h2 id="${escapeHtml(headingId)}">What should I research next?</h2><p>${escapeHtml(graph.center.displayName)} is connected only through canonical IDs and supported EdgeBoard evidence.</p></div><span class="sample-badge">Deterministic sample graph</span></header>
+    <div class="knowledge-graph-center"><span>${escapeHtml(graph.center.displayName)}</span><small>${escapeHtml(getSelectionSummary(state.navigationSelection).contextLabel)} · ${graph.nodes.length} verified path${graph.nodes.length === 1 ? "" : "s"}</small></div>
+    <div class="knowledge-graph-sections">${graph.sections.map((section) => `<section aria-labelledby="${escapeHtml(`${headingId}-${section.id}`)}"><h3 id="${escapeHtml(`${headingId}-${section.id}`)}">${escapeHtml(section.label)}</h3><ul>${section.items.map((item) => `<li data-graph-node="${escapeHtml(item.id)}" data-graph-type="${escapeHtml(item.type)}"><div><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.description)}</span><small>${escapeHtml(item.reason)}</small></div>${renderKnowledgeGraphAction(item)}</li>`).join("")}</ul></section>`).join("")}</div>
+    <details class="knowledge-graph-method"><summary>How these connections were selected</summary><p>${escapeHtml(graph.warnings[0])}</p><p>Sources: ${escapeHtml(graph.generatedFrom.join(" · "))}. Betting confidence and probability are not graph-scoring inputs.</p></details>
+  </section>`;
 }
 
 function renderHomeSection(section) {
@@ -1994,18 +2265,412 @@ function renderDiscoveryExplorer({ focus = false } = {}) {
   if (focus) elements.discoveryExplorer.focus({ preventScroll: true });
 }
 
+function marketResearchHref(modelOrRoute) {
+  if (!modelOrRoute || modelOrRoute.type === "hub") return "/markets";
+  if (modelOrRoute.type === "movement") return "/markets/movement";
+  if (modelOrRoute.type === "parlay-builder") {
+    const constraints = normalizeParlayConstraints(modelOrRoute.constraints || state.parlayConstraints);
+    return `/markets/parlay-builder?constraints=${encodeURIComponent(serializeParlayConstraints(constraints))}`;
+  }
+  if (modelOrRoute.type === "screener") {
+    const params = new URLSearchParams();
+    const filters = normalizeScreenerFilters(modelOrRoute.filters || state.marketScreenerFilters);
+    if (Object.keys(filters).length) params.set("filters", serializeScreenerFilters(filters));
+    if ((modelOrRoute.sortBy || state.marketScreenerSort) !== "highest_research_quality") params.set("sort", modelOrRoute.sortBy || state.marketScreenerSort);
+    if ((modelOrRoute.groupBy || state.marketScreenerGroup) !== "none") params.set("group", modelOrRoute.groupBy || state.marketScreenerGroup);
+    return `/markets/screener${params.size ? `?${params}` : ""}`;
+  }
+  const leagueId = modelOrRoute.leagueId || "unknown";
+  const marketId = modelOrRoute.marketId || "market";
+  const selectionId = modelOrRoute.selectionId || "";
+  return `/markets/${encodeURIComponent(leagueId)}/${encodeURIComponent(marketId)}/${encodeURIComponent(selectionId)}`;
+}
+
+function marketResearchContextFor(model, intent = "explain_market", screener = null) {
+  if (!model) return null;
+  return Object.freeze({
+    id: model.id, selectionId: model.selectionId, marketId: model.marketId,
+    canonicalMarketId: model.canonicalMarketId, intent,
+    sportId: model.sportId, leagueId: model.leagueId,
+    entityIds: Object.freeze(model.entity ? [model.entity.id] : []),
+    eventIds: Object.freeze(model.event?.id ? [model.event.id] : []),
+    participantName: model.participantName, marketName: model.marketName,
+    currentLine: model.currentLine, currentOdds: model.currentOdds,
+    source: model.source, researchQuality: model.researchQuality,
+    marketExplainer: model.marketExplainer, researchChange: model.researchChange,
+    counterarguments: model.counterarguments,
+    ...(screener ? { screener } : {}),
+  });
+}
+
+function marketResearchCard(model) {
+  const actionable = model.status === "available" && !model.stale;
+  return `<article class="market-intelligence-card ${escapeHtml(model.status)}">
+    <div class="home-card-kickers"><span>${escapeHtml(model.leagueName)}</span><span>${escapeHtml(model.status)}</span>${model.source.sample ? '<span class="sample-badge">Sample</span>' : ""}</div>
+    <h3>${escapeHtml(model.participantName)} · ${escapeHtml(model.marketName)}</h3>
+    <p>${escapeHtml(model.currentLine)} · ${formatOdds(model.currentOdds)} · ${escapeHtml(model.sportsbook || "Sportsbook unavailable")}</p>
+    <dl class="market-card-metrics"><div><dt>Research Quality</dt><dd>${escapeHtml(model.researchQuality.label)} · ${model.researchQuality.score}%</dd></div><div><dt>Historical sample</dt><dd>${model.historicalPerformance.sampleSize}</dd></div><div><dt>Movement</dt><dd>${model.movement.observed ? `${model.movement.timeline.length} observed snapshots` : "Not supplied"}</dd></div></dl>
+    <p class="market-card-reason">${escapeHtml(model.reasonsFor[0] || model.reasonsAgainst[0] || "Review source coverage and current availability before drawing a conclusion.")}</p>
+    <small>${escapeHtml(model.source.provider || "Source unavailable")} · updated ${formatDateTime(model.lastUpdatedAt)} · ${actionable ? "available for research" : "not actionable"}</small>
+    <div class="card-actions"><a class="text-button" href="${escapeHtml(marketResearchHref(model))}" data-open-market="${escapeHtml(model.selectionId)}" data-market-league="${escapeHtml(model.leagueId)}">Open research</a><button class="text-button" type="button" data-market-query="Research ${escapeHtml(model.participantName)} ${escapeHtml(model.marketName)} ${escapeHtml(model.currentLine)}">Ask Edge Intelligence</button></div>
+  </article>`;
+}
+
+function marketPerformanceCard(label, performance) {
+  return `<article><span>${escapeHtml(label)}</span><strong>${performance.supported ? `${performance.hits}/${performance.sampleSize}` : "Unavailable"}</strong><small>${escapeHtml(performance.message || "No completed provider rows support this view.")}</small></article>`;
+}
+
+function screenerInputValue(key) {
+  const value = state.marketScreenerFilters?.[key];
+  return Array.isArray(value) ? value.join(", ") : value ?? "";
+}
+
+function screenerOptions(values, selected = [], labelFor = (value) => value) {
+  const accepted = new Set(Array.isArray(selected) ? selected : [selected]);
+  return values.map((value) => `<option value="${escapeHtml(value)}"${accepted.has(value) ? " selected" : ""}>${escapeHtml(labelFor(value))}</option>`).join("");
+}
+
+function renderMarketScreenerForm(result) {
+  const facets = result.facets;
+  const leagueLabel = (id) => sportsRepository.getLeague(id)?.leagueDisplayName || id;
+  const booleanLabel = {
+    projectionAboveLine: "Projection above line", upcomingOnly: "Upcoming events only", freshOnly: "Fresh data only",
+    confirmedLineupOnly: "Confirmed lineup only", noInjuryUncertainty: "No injury uncertainty", currentStoriesOnly: "Current stories attached",
+    milestoneOnly: "Upcoming milestone", streakOnly: "Active streak", recentTrendOnly: "Recent trend", noProviderConflicts: "No conflicting providers",
+  };
+  const numberFields = [
+    ["currentLineMin", "Current line minimum"], ["currentLineMax", "Current line maximum"],
+    ["openingLineMin", "Opening line minimum"], ["openingLineMax", "Opening line maximum"],
+    ["movementMin", "Minimum absolute movement"], ["oddsMin", "Odds minimum"], ["oddsMax", "Odds maximum"],
+    ["researchQualityMin", "Research Quality minimum"], ["edgeTrustMin", "Market Trust minimum"],
+    ["historicalCoverageMin", "Historical rows minimum"], ["historicalHitRateMin", "Historical hit rate minimum %"],
+    ["projectionMin", "Projection minimum"], ["edgeMin", "Projected edge minimum"], ["confidenceMin", "Model confidence minimum"],
+    ["researchCompletenessMin", "Research Completeness minimum %"],
+  ];
+  const textFields = [
+    ["competitions", "Competition"], ["gameIds", "Game or event"], ["playerIds", "Player"], ["teamIds", "Team"],
+    ["fighterIds", "Fighter"], ["driverIds", "Driver"], ["opponentIds", "Opponent"], ["positions", "Position"],
+    ["weightClasses", "Weight class"], ["tracks", "Track"], ["surfaces", "Surface"],
+  ];
+  return `<form class="market-screener-form" id="marketScreenerForm">
+    <div class="market-section-heading"><div><p class="eyebrow">Research filters</p><h2>Screen normalized markets</h2></div><span>${Object.keys(state.marketScreenerFilters).length} active filter${Object.keys(state.marketScreenerFilters).length === 1 ? "" : "s"}</span></div>
+    <div class="screener-filter-grid primary">
+      <label>Sport<select name="sportIds" multiple size="3">${screenerOptions(facets.sportIds, state.marketScreenerFilters.sportIds)}</select></label>
+      <label>League<select name="leagueIds" multiple size="3">${screenerOptions(facets.leagueIds, state.marketScreenerFilters.leagueIds, leagueLabel)}</select></label>
+      <label>Market type<select name="marketTypes" multiple size="3">${screenerOptions(facets.marketTypes, state.marketScreenerFilters.marketTypes)}</select></label>
+      <label>Sportsbook<select name="sportsbooks" multiple size="3">${screenerOptions(facets.sportsbooks, state.marketScreenerFilters.sportsbooks)}</select></label>
+      <label>Provider<select name="providers" multiple size="3">${screenerOptions(facets.providers, state.marketScreenerFilters.providers)}</select></label>
+      <label>Freshness<select name="freshness" multiple size="3">${screenerOptions(facets.freshness, state.marketScreenerFilters.freshness)}</select></label>
+    </div>
+    <details class="screener-advanced"${Object.keys(state.marketScreenerFilters).some((key) => !["sportIds", "leagueIds", "marketTypes", "sportsbooks", "providers", "freshness"].includes(key)) ? " open" : ""}><summary>Advanced research filters</summary>
+      <div class="screener-filter-grid">${textFields.map(([key, label]) => `<label>${escapeHtml(label)}<input name="${key}" value="${escapeHtml(screenerInputValue(key))}" placeholder="ID or name, comma separated"></label>`).join("")}
+        <label>Home or away<select name="homeAway" multiple size="3">${screenerOptions(["home", "away", "unknown"], state.marketScreenerFilters.homeAway)}</select></label>
+        ${numberFields.map(([key, label]) => `<label>${escapeHtml(label)}<input type="number" step="any" name="${key}" value="${escapeHtml(screenerInputValue(key))}"></label>`).join("")}
+      </div>
+      <fieldset class="screener-switches"><legend>Evidence requirements</legend>${MARKET_SCREENER_BOOLEAN_FILTERS.map((key) => `<label><input type="checkbox" name="${key}"${state.marketScreenerFilters[key] ? " checked" : ""}> ${escapeHtml(booleanLabel[key])}</label>`).join("")}</fieldset>
+    </details>
+    <div class="screener-form-actions"><button class="primary-action" type="submit">Apply filters</button><button class="text-button" type="button" data-screener-reset>Reset</button><button class="text-button" type="button" data-screener-save-preset>Save preset to Workspace</button></div>
+  </form>`;
+}
+
+function screenerStoryLabel(story) {
+  if (!story) return "No exact current story";
+  try { return storyEngine.phraseStory(story).headline; } catch { return story.headline || story.title || "Validated current story"; }
+}
+
+function screenerInsightLabel(insight, fallback) {
+  return insight?.phrasing?.headline || insight?.title || fallback;
+}
+
+function renderMarketScreenerCard(item) {
+  const selected = state.marketScreenerSelectedIds.includes(item.id);
+  return `<article class="market-screener-card" data-screener-result="${escapeHtml(item.id)}">
+    <header><label class="screener-select"><input type="checkbox" data-screener-select="${escapeHtml(item.id)}"${selected ? " checked" : ""}> <span class="sr-only">Select ${escapeHtml(item.participantName)} for comparison</span></label><div><div class="home-card-kickers"><span>${escapeHtml(item.leagueName)}</span><span>${escapeHtml(item.model.status || "status unavailable")}</span><span>${escapeHtml(item.freshness)}</span>${item.sample ? '<span class="sample-badge">Sample</span>' : ""}</div><h3>${escapeHtml(item.participantName)} · ${escapeHtml(item.marketName)}</h3><p>${escapeHtml(item.gameLabel)} · ${formatDateTime(item.startsAt)}</p></div></header>
+    <div class="screener-result-metrics">
+      <div><span>Current line</span><strong>${escapeHtml(item.currentLineDisplay)}</strong></div><div><span>Sportsbook</span><strong>${escapeHtml(item.sportsbook)}</strong></div>
+      <div><span>Research Quality</span><strong>${item.researchQuality}% · ${escapeHtml(item.researchQualityLabel)}</strong></div><div><span>Market Trust</span><strong>${item.marketTrustScore}% · ${escapeHtml(item.marketTrustLabel)}</strong></div>
+      <div><span>Projection</span><strong>${Number.isFinite(item.projection) ? item.projection : escapeHtml(item.projectionDisplay)}</strong></div><div><span>Projected edge</span><strong>${Number.isFinite(item.projectedEdge) ? item.projectedEdge : escapeHtml(item.edgeDisplay)}</strong></div>
+      <div><span>Historical trend</span><strong>${Number.isFinite(item.historicalHitRate) ? `${item.historicalHitRate}%` : "Unavailable"}</strong><small>${escapeHtml(item.historicalTrend)}</small></div><div><span>Provider agreement</span><strong>${escapeHtml(item.providerAgreement)} · ${item.providerCount}</strong></div>
+    </div>
+    <div class="screener-context-grid"><p><span>Current story</span><strong>${escapeHtml(screenerStoryLabel(item.currentStory))}</strong></p><p><span>Current streak</span><strong>${escapeHtml(screenerInsightLabel(item.currentStreak, "No supported active streak"))}</strong></p><p><span>Current milestone</span><strong>${escapeHtml(screenerInsightLabel(item.currentMilestone, "No supported upcoming milestone"))}</strong></p><p><span>Related visualization</span><strong>${escapeHtml(item.relatedVisualization?.label || "Unavailable without a canonical entity")}</strong></p></div>
+    <div class="data-warning"><strong>Counterargument</strong><p>${escapeHtml(item.counterarguments[0] || "No additional counterargument is supported by supplied fields; missing evidence remains unavailable.")}</p></div>
+    <footer><small>${escapeHtml(item.provider)} · updated ${formatDateTime(item.lastUpdatedAt)} · ${item.historicalCoverage} completed historical row${item.historicalCoverage === 1 ? "" : "s"} · Research Quality is not probability.</small><div class="card-actions"><a class="text-button" href="${escapeHtml(marketResearchHref(item.model))}" data-open-market="${escapeHtml(item.selectionId)}" data-market-league="${escapeHtml(item.leagueId)}">Open market</a><button class="text-button" type="button" data-market-query="Why is this market in the screener?" data-market-intent="explain_screener_result">Why is this here?</button><button class="text-button" type="button" data-market-query="Show supporting evidence for this screener result." data-market-intent="screener_evidence">Evidence</button>${item.relatedVisualization ? `<button class="text-button" type="button" data-open-visual="${escapeHtml(item.relatedVisualization.type)}" data-visual-entity="${escapeHtml(item.relatedVisualization.entityId)}">Trend visual</button>` : ""}<button class="text-button" type="button" data-screener-save="favorite" data-screener-id="${escapeHtml(item.id)}">Favorite</button><button class="text-button" type="button" data-screener-save="pin" data-screener-id="${escapeHtml(item.id)}">Pin</button><button class="text-button" type="button" data-screener-share="${escapeHtml(item.id)}">Share</button></div></footer>
+  </article>`;
+}
+
+function renderScreenerComparison(comparison) {
+  if (!comparison?.items?.length) return "";
+  return `<section class="market-research-section screener-comparison" aria-labelledby="screenerComparisonTitle"><div class="market-section-heading"><div><p class="eyebrow">Compare opportunities</p><h2 id="screenerComparisonTitle">Identical research fields</h2></div><span>${comparison.items.length} selected</span></div><div class="table-scroll"><table><caption>Selected market research comparison; no overall winner is calculated.</caption><thead><tr><th scope="col">Market</th><th scope="col">Research Quality</th><th scope="col">Market Trust</th><th scope="col">Coverage</th><th scope="col">Hit rate</th><th scope="col">Projection</th><th scope="col">Edge</th><th scope="col">Movement</th></tr></thead><tbody>${comparison.items.map((item) => `<tr><th scope="row">${escapeHtml(item.participantName)} · ${escapeHtml(item.marketName)}</th><td>${item.researchQuality}%</td><td>${item.marketTrustScore}%</td><td>${item.historicalCoverage}</td><td>${Number.isFinite(item.historicalHitRate) ? `${item.historicalHitRate}%` : "Unavailable"}</td><td>${Number.isFinite(item.projection) ? item.projection : "Unavailable"}</td><td>${Number.isFinite(item.projectedEdge) ? item.projectedEdge : "Unavailable"}</td><td>${item.movementVerified && Number.isFinite(item.movement) ? item.movement : "Unavailable"}</td></tr>`).join("")}</tbody></table></div><p>${escapeHtml(comparison.disclosure)}</p></section>`;
+}
+
+function parlayConstraintForm(result) {
+  const records = marketScreenerService.getRecords({ leagueIds: getSelectionSummary(state.navigationSelection).visibleLeagues.map((league) => league.leagueId) }, new Date(testFixtureTimestamp || Date.now()));
+  const values = (key) => [...new Set(records.map((item) => item[key]).filter(Boolean))].sort();
+  const selected = (key, value) => state.parlayConstraints[key]?.includes(value) ? " selected" : "";
+  const checks = {
+    confirmedLineupsOnly: "Confirmed lineups only", freshDataOnly: "Fresh data only", noProviderConflicts: "No provider conflicts",
+    noInjuryUncertainty: "No injury uncertainty", noWeatherConcerns: "No weather concerns", allowSameGame: "Allow same game",
+    currentStoriesRequired: "Current stories required", historicalSupportRequired: "Historical support required",
+    visualizationAvailable: "Visualization available", currentMilestone: "Current milestone", currentStreak: "Current streak",
+    onlyLiveCertifiedData: "Only live certified data",
+  };
+  const number = (name, label, min = "", max = "") => `<label>${label}<input type="number" name="${name}" value="${state.parlayConstraints[name] ?? ""}" ${min !== "" ? `min="${min}"` : ""} ${max !== "" ? `max="${max}"` : ""}></label>`;
+  return `<form id="parlayBuilderForm" class="parlay-builder-form">
+    <section aria-labelledby="parlayStep1"><p class="eyebrow">Step 1</p><h2 id="parlayStep1">Choose sports</h2><div class="parlay-form-grid"><label>Sports<select name="sportIds" multiple size="4">${values("sportId").map((value) => `<option value="${escapeHtml(value)}"${selected("sportIds", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><label>Current and seasonal leagues<select name="leagueIds" multiple size="4">${values("leagueId").map((value) => `<option value="${escapeHtml(value)}"${selected("leagueIds", value)}>${escapeHtml(sportsRepository.getLeague(value)?.leagueDisplayName || value)}</option>`).join("")}</select></label></div></section>
+    <section aria-labelledby="parlayStep2"><p class="eyebrow">Step 2</p><h2 id="parlayStep2">Choose verified market types</h2><label>Available normalized markets<select name="marketTypes" multiple size="6">${values("marketType").map((value) => `<option value="${escapeHtml(value)}"${selected("marketTypes", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><p>Future provider-confirmed market types appear automatically through the normalized market registry.</p></section>
+    <section aria-labelledby="parlayStep3"><p class="eyebrow">Step 3</p><h2 id="parlayStep3">Research constraints</h2><div class="parlay-form-grid">${number("minimumResearchQuality", "Minimum Research Quality", 0, 100)}${number("minimumEdgeTrust", "Minimum Edge Trust", 0, 100)}${number("minimumResearchCompleteness", "Minimum Research Completeness", 0, 100)}${number("maximumLegs", "Maximum legs", 1, 12)}${number("minimumOdds", "Minimum American odds")}${number("maximumOdds", "Maximum American odds")}<label>Preferred sportsbooks<select name="sportsbooks" multiple size="3">${values("sportsbook").map((value) => `<option value="${escapeHtml(value)}"${selected("sportsbooks", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><label>Maximum research correlation<select name="maximumResearchCorrelation">${["low", "medium", "high"].map((value) => `<option value="${value}"${state.parlayConstraints.maximumResearchCorrelation === value ? " selected" : ""}>${value}</option>`).join("")}</select></label></div><fieldset class="parlay-constraint-checks"><legend>Evidence requirements</legend>${PARLAY_BOOLEAN_CONSTRAINTS.map((key) => `<label><input type="checkbox" name="${key}"${state.parlayConstraints[key] ? " checked" : ""}> ${escapeHtml(checks[key])}</label>`).join("")}</fieldset></section>
+    <div class="screener-form-actions"><button class="primary-action" type="submit">Build research set</button><button class="text-button" type="button" data-parlay-reset>Reset</button><button class="text-button" type="button" data-parlay-save-preset>Save constraints</button></div>
+    <div class="screener-presets" aria-label="Constraint presets">${parlayBuilderService.getPresets().map((preset) => `<button class="text-button" type="button" data-parlay-preset="${escapeHtml(preset.id)}">${escapeHtml(preset.title)}</button>`).join("")}</div>
+  </form>`;
+}
+
+function renderParlayLeg(leg, index) {
+  const story = leg.currentStory ? screenerStoryLabel(leg.currentStory) : "No exact current story";
+  const favorite = state.parlayFavoriteSelectionIds.includes(leg.selectionId); const locked = state.parlayBuilderResult?.lockedSelectionIds?.includes(leg.selectionId);
+  return `<article class="parlay-leg${locked ? " locked" : ""}" data-parlay-leg="${escapeHtml(leg.id)}"><header><div><p class="eyebrow">Research leg ${index + 1}${locked ? " · locked foundation" : ""}</p><h3>${escapeHtml(leg.participantName)} · ${escapeHtml(leg.marketName)}</h3><p>${escapeHtml(leg.currentLine)} · ${formatOdds(leg.currentOdds)} · ${escapeHtml(leg.sportsbook)}</p></div><span class="sample-badge">${leg.sample ? "Sample" : "Provider"}</span></header>
+    <dl class="parlay-leg-metrics"><div><dt>Best available price</dt><dd>${leg.bestAvailablePrice ? `${escapeHtml(leg.bestAvailablePrice.sportsbook)} · ${formatOdds(leg.bestAvailablePrice.odds)}` : "Unavailable"}</dd></div><div><dt>Research Quality</dt><dd>${leg.researchQuality}% · not probability</dd></div><div><dt>Edge Trust</dt><dd>${leg.edgeTrust}% · not probability</dd></div><div><dt>Research Completeness</dt><dd>${Number.isFinite(leg.researchCompleteness) ? `${leg.researchCompleteness}%` : "Unavailable"}</dd></div><div><dt>Historical coverage</dt><dd>${leg.historicalCoverage} completed rows</dd></div><div><dt>Freshness</dt><dd>${escapeHtml(leg.freshness)}</dd></div><div><dt>Provider agreement</dt><dd>${escapeHtml(leg.providerAgreement)}</dd></div><div><dt>Lineup / injury</dt><dd>${escapeHtml(leg.lineupStatus)} · ${escapeHtml(leg.injuryStatus)}</dd></div></dl>
+    <details><summary>Why this leg?</summary><div class="market-argument-grid"><section><h4>Supporting evidence</h4><ul>${leg.supportingEvidence.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No positive conclusion is supported by supplied evidence.</li>"}</ul><dl class="parlay-reason-grid"><div><dt>Historical support</dt><dd>${escapeHtml(leg.historicalPerformance)}</dd></div><div><dt>Recent form</dt><dd>${escapeHtml(leg.recentForm)}</dd></div><div><dt>Opponent matchup</dt><dd>${escapeHtml(leg.opponentMatchup)}</dd></div><div><dt>Home / away</dt><dd>${escapeHtml(leg.homeAway)}</dd></div><div><dt>Current story</dt><dd>${escapeHtml(story)}</dd></div><div><dt>Historical story</dt><dd>${escapeHtml(leg.historicalStory || "Unavailable from supplied evidence.")}</dd></div><div><dt>Current trend</dt><dd>${escapeHtml(leg.currentTrend)}</dd></div><div><dt>Sportsbook</dt><dd>${escapeHtml(leg.sportsbook)}</dd></div></dl><p><strong>Milestone:</strong> ${escapeHtml(screenerInsightLabel(leg.milestone, "None supported"))}</p><p><strong>Streak:</strong> ${escapeHtml(screenerInsightLabel(leg.streak, "None supported"))}</p></section><section><h4>Counterarguments</h4><ul>${leg.counterarguments.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><h4>Current unknowns</h4><ul>${leg.currentUnknowns.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No additional unknown was identified in supplied fields; unobserved uncertainty remains possible.</li>"}</ul></section></div></details>
+    <details><summary>Related research</summary><div class="card-actions"><a class="text-button" href="${escapeHtml(marketResearchHref({ type: "detail", leagueId: leg.leagueId, marketId: leg.marketResearchId, selectionId: leg.selectionId }))}" data-open-market="${escapeHtml(leg.selectionId)}" data-market-league="${escapeHtml(leg.leagueId)}">Related markets and props</a>${leg.entityId ? `<button class="text-button" type="button" data-open-visual="market_line_chart" data-visual-entity="${escapeHtml(leg.entityId)}">Related visualization</button><button class="text-button" type="button" data-market-query="Compare ${escapeHtml(leg.participantName)} using identical filters">Related comparison</button>` : ""}<button class="text-button" type="button" data-parlay-query="Research related stories, milestones, streaks, and markets for ${escapeHtml(leg.participantName)}.">Edge Intelligence research</button></div></details>
+    <div class="card-actions"><button class="primary-action" type="button" data-parlay-build-around="${escapeHtml(leg.id)}">Build Around This Leg</button><button class="text-button" type="button" data-parlay-replace="${escapeHtml(leg.id)}">Replace This Leg</button><button class="text-button" type="button" aria-pressed="${favorite}" data-parlay-favorite="${escapeHtml(leg.selectionId)}">${favorite ? "Favorited" : "Favorite leg"}</button></div></article>`;
+}
+
+function renderParlayChanges(changes = []) {
+  if (!changes.length) return "";
+  return `<section class="parlay-change-log" aria-labelledby="parlayChangesTitle"><h2 id="parlayChangesTitle">Explain every change</h2>${changes.map((change) => `<article><div class="parlay-change-flow"><span>${escapeHtml(change.previousLeg ? `${change.previousLeg.participantName} · ${change.previousLeg.marketName}` : "No previous leg")}</span><span aria-hidden="true">↓</span><strong>${escapeHtml(change.newLeg ? `${change.newLeg.participantName} · ${change.newLeg.marketName}` : "No compatible replacement")}</strong></div><p>${escapeHtml(change.reason)}</p><dl>${change.metrics.map((metric) => `<div><dt>${escapeHtml(metric.label)}</dt><dd>${escapeHtml(metric.previous ?? "Unavailable")} → ${escapeHtml(metric.current ?? "Unavailable")}${Number.isFinite(metric.delta) ? ` (${metric.delta > 0 ? "+" : ""}${metric.delta})` : ""}${metric.improved === true ? " · improved" : metric.improved === false ? " · tradeoff" : ""}</dd></div>`).join("")}</dl></article>`).join("")}</section>`;
+}
+
+function renderParlayExclusions(excluded = []) {
+  return `<section class="parlay-exclusions" aria-labelledby="parlayExclusionsTitle"><div class="market-section-heading"><div><p class="eyebrow">Transparent selection</p><h2 id="parlayExclusionsTitle">Why not this leg?</h2></div><span>${excluded.length} excluded market${excluded.length === 1 ? "" : "s"}</span></div>${excluded.length ? `<div class="parlay-exclusion-list">${excluded.map((item) => `<details><summary>${escapeHtml(item.record.participantName)} · ${escapeHtml(item.record.marketName)}</summary><ul>${item.reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}</ul><a class="text-button" href="${escapeHtml(marketResearchHref({ type: "detail", leagueId: item.record.leagueId, marketId: item.record.marketResearchId, selectionId: item.record.selectionId }))}">Inspect market evidence</a></details>`).join("")}</div>` : '<div class="discovery-empty">No additional normalized market was available in this scope.</div>'}</section>`;
+}
+
+function renderParlayComparison(comparison) {
+  if (!comparison?.items?.length) return "";
+  return `<section class="parlay-version-comparison" aria-labelledby="parlayVersionComparisonTitle"><h2 id="parlayVersionComparisonTitle">Parlay version comparison</h2><div class="table-scroll"><table><caption>Research versions compared without declaring a winner.</caption><thead><tr><th>Version</th><th>Quality</th><th>Trust</th><th>Completeness</th><th>Correlation</th><th>Historical support</th><th>Potential return</th><th>Sports</th><th>Markets</th><th>Stories</th><th>Streaks</th><th>Counterarguments</th><th>Visuals</th></tr></thead><tbody>${comparison.items.map((item, index) => `<tr><th scope="row">Version ${index + 1}</th><td>${item.researchQuality ?? "Unavailable"}</td><td>${item.edgeTrust ?? "Unavailable"}</td><td>${item.researchCompleteness ?? "Unavailable"}</td><td>${escapeHtml(item.researchCorrelation)}</td><td>${item.historicalCoverage}</td><td>${item.potentialReturnOdds === null ? "Unavailable" : formatOdds(item.potentialReturnOdds)}</td><td>${escapeHtml(item.sports.join(", ") || "Unavailable")}</td><td>${escapeHtml(item.marketTypes.join(", ") || "Unavailable")}</td><td>${item.currentStoryCount}</td><td>${item.currentStreakCount}</td><td>${item.counterargumentCount}</td><td>${item.visualizationCount}</td></tr>`).join("")}</tbody></table></div><p>${escapeHtml(comparison.disclosure)}</p></section>`;
+}
+
+function renderParlayBuilder(result) {
+  const metric = (label, value) => `<div><span>${label}</span><strong>${value ?? "Unavailable"}</strong></div>`;
+  const favoriteMatches = result.legs.filter((leg) => state.parlayFavoriteSelectionIds.includes(leg.selectionId));
+  const comparison = state.parlayVersions.length > 1 ? parlayBuilderService.compare(state.parlayVersions) : null;
+  return `<div class="parlay-builder">
+    <div class="market-hub-disclosure" role="note">${escapeHtml(result.disclosure)}</div>${favoriteMatches.length ? `<div class="favorite-opportunity-notice" role="status">A favorite research opportunity is available: ${escapeHtml(favoriteMatches.map((item) => item.participantName).join(", "))}. This does not imply betting success.</div>` : ""}${parlayConstraintForm(result)}
+    <section class="parlay-research-plan" aria-labelledby="parlayPlanTitle"><p class="eyebrow">Step 4 · Edge Intelligence</p><h2 id="parlayPlanTitle">Research plan</h2><ol>${result.researchPlan.map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol></section>
+    <section class="parlay-portfolio-summary" aria-labelledby="parlaySummaryTitle"><div class="market-section-heading"><div><p class="eyebrow">Portfolio summary</p><h2 id="parlaySummaryTitle">Evidence across selected legs</h2></div><span>${result.legs.length} of ${result.eligibleCount} eligible markets selected</span></div><div class="parlay-summary-grid">${metric("Research Quality", Number.isFinite(result.portfolio.researchQuality) ? `${result.portfolio.researchQuality}% · not probability` : "Unavailable · not probability")}${metric("Edge Trust", Number.isFinite(result.portfolio.edgeTrust) ? `${result.portfolio.edgeTrust}% · not probability` : "Unavailable · not probability")}${metric("Research Completeness", Number.isFinite(result.portfolio.researchCompleteness) ? `${result.portfolio.researchCompleteness}%` : null)}${metric("Historical Coverage", `${result.portfolio.historicalCoverage} rows`)}${metric("Research Correlation", result.portfolio.researchCorrelation)}${metric("Freshness", result.portfolio.freshness)}${metric("Lineup Status", result.portfolio.lineupStatus)}${metric("Provider Agreement", result.portfolio.providerAgreement)}</div><div class="data-warning"><strong>Correlation: ${escapeHtml(result.correlation.level)}</strong><p>${escapeHtml(result.correlation.explanation)}</p><p>No unsupported probability is calculated.</p></div></section>
+    <section aria-labelledby="parlayIntelligenceTitle"><h2 id="parlayIntelligenceTitle">Edge Intelligence summary</h2><ul>${result.intelligenceSummary.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><button class="text-button" type="button" data-parlay-query="Explain this parlay research set, its evidence, counterarguments, and uncertainty.">Open structured research session</button></section>
+    <section aria-labelledby="suggestedParlayTitle"><p class="eyebrow">Step 5</p><h2 id="suggestedParlayTitle">Suggested research set</h2>${result.legs.length ? `<div class="parlay-leg-list">${result.legs.map(renderParlayLeg).join("")}</div>` : '<div class="discovery-empty" role="status"><h3>No market satisfies every constraint</h3><p>Constraints were not relaxed and unrelated markets were not substituted.</p></div>'}</section>
+    ${renderParlayChanges(result.changes)}${renderParlayExclusions(result.excluded)}${renderParlayComparison(comparison)}
+    <section aria-labelledby="improveParlayTitle"><h2 id="improveParlayTitle">Improve my parlay research</h2><div class="screener-presets">${PARLAY_REFINEMENTS.map(([id, label]) => `<button class="text-button" type="button" data-parlay-refine="${id}">${escapeHtml(label)}</button>`).join("")}</div><div class="market-explainer-actions" aria-label="Edge Intelligence parlay questions"><button class="text-button" type="button" data-parlay-query="Explain every exclusion in this parlay research set.">Explain exclusions</button><button class="text-button" type="button" data-parlay-query="Explain the supported correlation relationships and remaining unknowns.">Explain correlation</button><button class="text-button" type="button" data-parlay-query="Show stronger alternatives without relaxing my current constraints.">Show stronger alternatives</button><button class="text-button" type="button" data-parlay-query="Show alternatives with less injury and weather uncertainty.">Show lower-uncertainty alternatives</button><button class="text-button" type="button" data-parlay-query="Show higher-price alternatives and their research tradeoffs.">Show higher-price alternatives</button></div></section>
+    <section aria-labelledby="parlayVisualsTitle"><h2 id="parlayVisualsTitle">Research visuals</h2><div class="card-actions"><button class="text-button" type="button" data-parlay-query="Show the research timeline and explain every version change.">Research timeline</button><button class="text-button" type="button" data-parlay-query="Visualize line movement for every supported parlay leg.">Line movement</button><button class="text-button" type="button" data-parlay-query="Compare historical trends and Research Quality across these legs.">Historical trend and Research Quality</button><button class="text-button" type="button" data-parlay-query="Explain the supported correlation map for these legs.">Correlation map</button></div><p>Heavy visualizations remain lazy and open only after a user request.</p></section>
+    <div class="parlay-sticky-actions" aria-label="Parlay research actions"><button type="button" data-parlay-action="save">Save version</button><button type="button" data-parlay-action="share">Share</button><button type="button" data-parlay-action="export">Export</button><button type="button" data-parlay-action="track">Track version</button><button type="button" data-parlay-action="refresh">Refresh version</button><button type="button" data-parlay-action="duplicate">Duplicate version</button><button type="button" data-parlay-action="archive">Archive version</button><button type="button" data-parlay-action="compare">Compare versions</button></div>
+  </div>`;
+}
+
+function renderMarketScreener(result) {
+  const comparison = marketScreenerService.compare(state.marketScreenerSelectedIds, { leagueIds: getSelectionSummary(state.navigationSelection).visibleLeagues.map((league) => league.leagueId) }, new Date(testFixtureTimestamp || Date.now()));
+  const visibleIds = new Set(result.items.map((item) => item.id));
+  const groups = result.groupBy === "none" ? [{ label: "Research opportunities", itemIds: result.items.map((item) => item.id) }] : result.groups.map((group) => ({ ...group, itemIds: group.itemIds.filter((id) => visibleIds.has(id)) })).filter((group) => group.itemIds.length);
+  const byId = new Map(result.items.map((item) => [item.id, item]));
+  return `${renderMarketScreenerForm(result)}
+    <section class="market-research-section screener-results" aria-labelledby="screenerResultsTitle"><div class="market-section-heading"><div><p class="eyebrow">Opportunity Explorer</p><h2 id="screenerResultsTitle">${result.total} research result${result.total === 1 ? "" : "s"}</h2><p>${escapeHtml(result.explanation.uncertainty)}</p></div><span>Window ${result.total ? result.window.offset + 1 : 0}–${Math.min(result.total, result.window.offset + result.items.length)} of ${result.total}</span></div>
+      <div class="screener-presets" aria-label="Example screener presets">${marketScreenerService.getPresets().map((preset) => `<button class="text-button" type="button" data-screener-preset="${escapeHtml(preset.id)}">${escapeHtml(preset.title)}</button>`).join("")}</div>
+      <div class="screener-result-tools"><label>Sort<select data-screener-sort>${screenerOptions(MARKET_SCREENER_SORTS.map((item) => item.id), result.sortBy, (id) => MARKET_SCREENER_SORTS.find((item) => item.id === id)?.label || id)}</select></label><label>Group<select data-screener-group>${screenerOptions(MARKET_SCREENER_GROUPS.map((item) => item.id), result.groupBy, (id) => MARKET_SCREENER_GROUPS.find((item) => item.id === id)?.label || id)}</select></label><button class="text-button" type="button" data-screener-compare${state.marketScreenerSelectedIds.length < 2 ? " disabled" : ""}>Compare selected (${state.marketScreenerSelectedIds.length})</button></div>
+      <div class="market-explainer-actions" aria-label="Explain the screener with Edge Intelligence"><button class="text-button" type="button" data-screener-query="Explain this screener." data-screener-intent="explain_screener">Explain this screener</button><button class="text-button" type="button" data-screener-query="Remove weak research from this screener." data-screener-intent="remove_weak_research">Remove weak research</button><button class="text-button" type="button" data-screener-query="Compare these research opportunities." data-screener-intent="compare_opportunities">Compare opportunities</button></div>
+      <p class="market-hub-disclosure">${escapeHtml(result.disclosure)}</p>
+      ${groups.map((group) => `<section class="screener-result-group" aria-labelledby="screener-group-${escapeHtml(group.label.replace(/\W+/g, "-"))}"><div class="section-title"><h3 id="screener-group-${escapeHtml(group.label.replace(/\W+/g, "-"))}">${escapeHtml(group.label)}</h3><span>${group.itemIds.length}</span></div><div class="market-screener-grid">${group.itemIds.map((id) => renderMarketScreenerCard(byId.get(id))).join("")}</div></section>`).join("") || '<div class="discovery-empty" role="status"><h3>No markets match these research filters</h3><p>Missing values were not treated as favorable evidence. Adjust or reset filters; unrelated markets will not be substituted.</p></div>'}
+      <div class="screener-window-controls" aria-label="Virtualized result pages"><button class="text-button" type="button" data-screener-previous${result.window.offset === 0 ? " disabled" : ""}>Previous results</button><button class="text-button" type="button" data-screener-next${result.window.hasMore ? "" : " disabled"}>Next results</button></div>
+    </section>${renderScreenerComparison(comparison)}`;
+}
+
+function renderMarketExplainerPanel(model) {
+  const explainer = model.marketExplainer;
+  const currentStory = explainer.currentStory;
+  const storyHeadline = currentStory ? storyEngine.phraseStory(currentStory).headline : "No exact current story is connected to this event and market.";
+  return `<section class="market-research-section market-explainer-panel" aria-labelledby="marketExplainerTitle">
+    <div class="market-section-heading"><div><p class="eyebrow">Explain the market</p><h3 id="marketExplainerTitle">What the evidence says</h3></div><span class="market-trust-badge">${escapeHtml(explainer.researchQuality.label)} · ${explainer.researchQuality.score}% Research Quality</span></div>
+    <div class="market-explainer-grid">
+      <article><span>Current line</span><strong>${escapeHtml(explainer.currentLine)}</strong></article>
+      <article><span>Opening line</span><strong>${escapeHtml(explainer.openingLine)}</strong></article>
+      <article><span>Best verified price</span><strong>${explainer.bestPrice ? `${escapeHtml(explainer.bestPrice.sportsbook)} · ${formatOdds(explainer.bestPrice.odds)} · ${escapeHtml(model.priceComparison.freshness.status)}` : "Unavailable"}</strong></article>
+      <article><span>Movement</span><strong>${explainer.movement.observed ? `${explainer.movement.lineDelta > 0 ? "+" : ""}${explainer.movement.lineDelta ?? "Observed"}` : "No verified movement"}</strong></article>
+      <article><span>Market Trust</span><strong>${escapeHtml(explainer.marketTrust.researchQuality.label)}</strong></article>
+      <article><span>Historical context</span><strong>${explainer.historicalContext.supported ? `${explainer.historicalContext.hits}/${explainer.historicalContext.sampleSize} sample rows` : "Unavailable"}</strong></article>
+    </div>
+    <div class="market-current-story"><span>Current story</span><strong>${escapeHtml(storyHeadline)}</strong>${currentStory ? `<button class="text-button" type="button" data-view-story="${escapeHtml(currentStory.id)}">View supporting story</button>` : ""}</div>
+    <div class="data-warning ${explainer.movement.causeStatus !== "unknown" ? "verified-context" : ""}"><strong>${explainer.movement.causeStatus === "verified-cause" ? "Verified movement cause" : explainer.movement.causeStatus === "related-context" ? "Related verified context" : "Explanation limit"}</strong><p>${escapeHtml(explainer.explanation)}</p></div>
+    <div class="market-explainer-actions" aria-label="Explain with Edge Intelligence">${[
+      ["explain_market", "Explain this market."], ["explain_movement", "Explain today's movement."],
+      ["compare_books", "Compare books."], ["historical_movement", "Show historical movement."],
+      ["related_research", "Show related research."], ["counterarguments", "Show opposing arguments."],
+    ].map(([intent, query]) => `<button class="text-button" type="button" data-market-intent="${intent}" data-market-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join("")}</div>
+  </section>`;
+}
+
+function renderResearchImpact(model) {
+  const affected = model.impact.affected;
+  const currentSessionAffected = Boolean(state.researchSession?.markets?.some((item) => [item.id, item.selectionId].includes(model.selectionId)));
+  const impactPanel = (label, impact, items) => `<article class="market-impact-card ${escapeHtml(impact.status)}"><h4>${escapeHtml(label)}</h4>${impact.events.length ? impact.events.map((item) => `<p><strong>${escapeHtml(item.summary)}</strong><small>${formatDateTime(item.occurredAt)} · ${escapeHtml(item.provider)} · ${escapeHtml(item.verification)}</small></p>`).join("") : `<p>No verified ${escapeHtml(label.toLowerCase())} change is available.</p>`}<dl>${items.map(([name, count]) => `<div><dt>${escapeHtml(name)}</dt><dd>${count}</dd></div>`).join("")}</dl><small>${escapeHtml(impact.researchQualityImpact)}</small></article>`;
+  return `<section class="market-research-section" aria-labelledby="researchImpactTitle"><div class="market-section-heading"><div><p class="eyebrow">Research impact</p><h3 id="researchImpactTitle">What changed?</h3></div><span>Structured differences only</span></div>
+    <div class="research-change-list">${model.researchChange.changes.map((item) => `<article class="${escapeHtml(item.status)}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.status.replaceAll("-", " "))}</strong><p>${escapeHtml(item.detail)}</p></article>`).join("")}</div>
+    <div class="market-impact-grid">
+      ${impactPanel("Lineup impact", model.impact.lineup, [["Affected props", affected.marketIds.length], ["Affected stories", affected.storyIds.length], ["Affected research sessions", currentSessionAffected ? 1 : 0], ["Affected comparisons", affected.comparisonQueries.length], ["Affected projections", affected.projectionIds.length]])}
+      ${impactPanel("Injury impact", model.impact.injury, [["Affected markets", affected.marketIds.length], ["Affected visualizations", affected.visualizationTypes.length], ["Affected milestones", model.insights.filter((item) => /milestone/i.test(`${item.category} ${item.ruleId}`)).length], ["Affected stories", affected.storyIds.length], ["Affected comparisons", affected.comparisonQueries.length], ["Affected insights", affected.insightIds.length]])}
+    </div>
+  </section>`;
+}
+
+function renderMarketDetail(model) {
+  const entityHref = model.entity ? (model.entity.profileSystem === "athlete" ? profileUrl(model.entity.id) : entityProfileUrl(model.entity.id)) : "";
+  const entityAttribute = model.entity ? (model.entity.profileSystem === "athlete" ? `data-open-athlete="${escapeHtml(model.entity.id)}"` : `data-open-entity="${escapeHtml(model.entity.id)}"`) : "";
+  const performance = model.historicalPerformance;
+  const rowValue = (row) => row?.stats?.[performance.statId] ?? row?.[performance.statId] ?? "—";
+  const currentPick = getPickBySelectionId(sportsRepository, model.leagueId, model.selectionId);
+  return `<article class="market-research-detail">
+    <header class="market-detail-hero"><div><div class="home-card-kickers"><span>${escapeHtml(model.leagueName)}</span><span>${escapeHtml(model.status)}</span>${model.source.sample ? '<span class="sample-badge">Sample data</span>' : ""}</div><h2>${escapeHtml(model.participantName)} · ${escapeHtml(model.marketName)}</h2><p>${escapeHtml(model.period)} · ${escapeHtml(model.settlementScope)}${model.event?.startsAt ? ` · ${formatDateTime(model.event.startsAt)}` : " · Event time unavailable"}</p></div><div class="market-current-price"><span>Current provider offer</span><strong>${escapeHtml(model.currentLine)} · ${formatOdds(model.currentOdds)}</strong><small>${escapeHtml(model.sportsbook)} · updated ${formatDateTime(model.lastUpdatedAt)}</small></div></header>
+    ${model.stale ? '<div class="data-warning" role="status"><strong>Stale market</strong><p>This offer may no longer match the provider. Research remains visible with a warning; add-to-slip is disabled.</p></div>' : ""}
+    ${renderMarketExplainerPanel(model)}
+    ${renderResearchImpact(model)}
+    <section class="market-research-section" aria-labelledby="marketWhyTitle"><h3 id="marketWhyTitle">Why research this market?</h3><div class="market-argument-grid"><article><h4>Supporting evidence</h4><ul>${model.reasonsFor.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No provider evidence supports a positive conclusion.</li>"}</ul></article><article><h4>Counterarguments and uncertainty</h4><ul>${model.reasonsAgainst.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No additional counterargument was generated from supplied fields.</li>"}</ul></article></div></section>
+    <section class="market-research-section" aria-labelledby="marketHistoryTitle"><h3 id="marketHistoryTitle">Historical performance</h3><p>Observed completed source rows only. Hit rate is historical context, not projection or win probability.</p><div class="market-performance-grid">${[["Last 5",performance.last5],["Last 10",performance.last10],["Season sample",performance],["Home",performance.home],["Away",performance.away],["Opponent",performance.opponent]].map(([label,item]) => marketPerformanceCard(label,item)).join("")}</div>
+      ${performance.rows.length ? `<div class="table-scroll"><table><caption>Supporting completed event rows</caption><thead><tr><th scope="col">Date</th><th scope="col">Event</th><th scope="col">Observed value</th></tr></thead><tbody>${performance.rows.map((row) => `<tr><td>${formatDateTime(row.event_date, "Unknown")}</td><th scope="row">${escapeHtml(row.event_name || row.opponent_id || row.event_id)}</th><td>${escapeHtml(rowValue(row))}</td></tr>`).join("")}</tbody></table></div>` : '<div class="discovery-empty">No matching completed rows are available for this market statistic.</div>'}
+    </section>
+    <section class="market-research-section" aria-labelledby="movementTitle"><h3 id="movementTitle">Market timeline</h3>${model.movement.observed ? `<div class="movement-summary"><strong>Opening ${escapeHtml(model.movement.opening?.lineDisplay || "Unavailable")} · ${formatOdds(model.movement.opening?.odds)}</strong><span>Current ${escapeHtml(model.movement.current?.lineDisplay || "Unavailable")} · ${formatOdds(model.movement.current?.odds)}</span><span>Line change ${model.movement.lineDelta > 0 ? "+" : ""}${model.movement.lineDelta ?? "—"}</span></div><ol class="movement-timeline">${model.movement.timeline.map((item) => `<li class="${escapeHtml(item.changeType)}"><span class="timeline-state">${escapeHtml(item.changeType)}</span><time>${formatDateTime(item.observedAt)}</time><strong>${escapeHtml(item.lineDisplay)} · ${formatOdds(item.odds)}</strong><span>${escapeHtml(item.sportsbook)} · ${escapeHtml(item.provider)} · ${escapeHtml(item.verification)}</span></li>`).join("")}</ol>` : '<div class="discovery-empty">The provider supplied no historical price snapshots.</div>'}<div class="data-warning"><strong>Movement explanation: ${escapeHtml(model.movement.causeStatus)}</strong><p>${escapeHtml(model.movement.causeDisclosure)}</p></div>${model.movement.contributingEvents.length ? `<div class="verified-event-list"><h4>Related verified events</h4>${model.movement.contributingEvents.map((item) => `<article><strong>${escapeHtml(item.summary)}</strong><span>${formatDateTime(item.occurredAt)} · ${escapeHtml(item.provider)} · verified</span></article>`).join("")}</div>` : ""}</section>
+    <section class="market-research-section" aria-labelledby="pricesTitle"><h3 id="pricesTitle">Compare books</h3><div class="market-price-summary"><article><span>Best</span><strong>${model.priceComparison.best ? `${escapeHtml(model.priceComparison.best.sportsbook)} · ${formatOdds(model.priceComparison.best.odds)}` : "Unavailable"}</strong></article><article><span>Worst</span><strong>${model.priceComparison.worst ? `${escapeHtml(model.priceComparison.worst.sportsbook)} · ${formatOdds(model.priceComparison.worst.odds)}` : "Unavailable"}</strong></article><article><span>Median</span><strong>${model.priceComparison.medianOdds === null ? "Unavailable" : formatOdds(model.priceComparison.medianOdds)}</strong></article><article><span>Average</span><strong>${model.priceComparison.averageOdds === null ? "Unavailable" : formatOdds(Math.round(model.priceComparison.averageOdds))}</strong></article><article><span>Provider agreement</span><strong>${escapeHtml(model.priceComparison.providerAgreement.status)} · ${model.priceComparison.providerAgreement.providerCount} verified</strong></article></div><div class="table-scroll"><table><thead><tr><th scope="col">Sportsbook</th><th scope="col">Line</th><th scope="col">Odds</th><th scope="col">Freshness</th><th scope="col">Verification</th><th scope="col">Market Trust</th></tr></thead><tbody>${model.priceComparison.prices.map((price) => `<tr><th scope="row">${escapeHtml(price.sportsbook)}</th><td>${escapeHtml(price.lineDisplay || price.line)}</td><td>${formatOdds(price.odds)}</td><td>${escapeHtml(price.freshness)} · ${formatDateTime(price.observedAt)}</td><td>${escapeHtml(price.verification)}</td><td>${escapeHtml(price.marketTrust)}</td></tr>`).join("")}</tbody></table></div><p>${escapeHtml(model.priceComparison.disclosure)}</p></section>
+    <section class="market-research-section" aria-labelledby="modelContextTitle"><h3 id="modelContextTitle">Provider and model context</h3><div class="market-context-grid"><article><span>Projection</span><strong>${escapeHtml(model.projection || "Unavailable")}</strong></article><article><span>Projected edge</span><strong>${escapeHtml(model.projectedEdge || "Unavailable")}</strong></article><article><span>Model confidence</span><strong>${Number.isFinite(model.modelConfidence) ? `${model.modelConfidence}%` : "Unavailable"}</strong><small>Signal agreement, not win probability.</small></article><article><span>Lineup</span><strong>${escapeHtml(model.lineupStatus)}</strong></article><article><span>Injury</span><strong>${escapeHtml(model.injuryStatus)}</strong></article><article><span>Weather</span><strong>${escapeHtml(model.weatherStatus)}</strong></article></div></section>
+    <section class="market-research-section" aria-labelledby="marketVisualsTitle"><h3 id="marketVisualsTitle">Market visuals</h3><p>Visuals use only normalized market snapshots and completed source rows.</p><div class="market-explainer-actions">${[["market_line_chart","Line movement"],["odds_movement_chart","Price history"],["threshold_chart","Threshold history"]].map(([type,label]) => model.entity ? `<button class="text-button" type="button" data-open-visual="${type}" data-visual-entity="${escapeHtml(model.entity.id)}">${label}</button>` : `<button class="text-button" type="button" data-open-visual="${type}" disabled aria-label="${label} unavailable because no canonical entity resolved">${label} unavailable</button>`).join("")}</div>${model.entity ? "" : '<p class="data-warning">A canonical entity did not resolve for these provider rows, so entity-based charts are disabled rather than attached to the wrong participant.</p>'}<div class="market-quality-visual" role="img" aria-label="Research Quality evidence over time. ${model.researchChange.opening?.researchQuality ?? "Opening provider snapshot unavailable"}; ${model.researchChange.current?.researchQuality ?? "latest provider snapshot unavailable"}; current Edge Trust ${model.researchQuality.score}."><h4>Research Quality over time</h4>${model.researchChange.opening?.researchQuality !== null && model.researchChange.opening ? `<label>Opening provider evidence <meter min="0" max="100" value="${model.researchChange.opening.researchQuality}">${model.researchChange.opening.researchQuality}%</meter><span>${model.researchChange.opening.researchQuality}%</span></label>` : '<p>Opening provider quality snapshot unavailable.</p>'}${model.researchChange.current?.researchQuality !== null && model.researchChange.current ? `<label>Latest provider evidence <meter min="0" max="100" value="${model.researchChange.current.researchQuality}">${model.researchChange.current.researchQuality}%</meter><span>${model.researchChange.current.researchQuality}%</span></label>` : '<p>Latest provider quality snapshot unavailable.</p>'}<label>Current Edge Trust <meter min="0" max="100" value="${model.researchQuality.score}">${model.researchQuality.score}%</meter><span>${model.researchQuality.score}%</span></label><small>Provider-shaped quality snapshots and Edge Trust are labeled separately. Neither is probability.</small></div></section>
+    <section class="market-research-section" aria-labelledby="marketTrustTitle"><h3 id="marketTrustTitle">Edge Trust</h3>${renderEdgeTrustDetails(model.edgeTrust)}</section>
+    <section class="market-research-section" aria-labelledby="marketEvidenceTitle"><h3 id="marketEvidenceTitle">Supporting evidence</h3>${model.supportingEvidence.length ? `<div class="table-scroll"><table><thead><tr><th scope="col">Evidence</th><th scope="col">Timestamp</th><th scope="col">Provider</th><th scope="col">Verification</th></tr></thead><tbody>${model.supportingEvidence.map((item) => `<tr><th scope="row">${escapeHtml(item.label)}</th><td>${formatDateTime(item.timestamp)}</td><td>${escapeHtml(item.provider)}</td><td>${escapeHtml(item.verification)}</td></tr>`).join("")}</tbody></table></div>` : '<div class="discovery-empty">No structured supporting evidence is available.</div>'}</section>
+    <section class="market-research-section" aria-labelledby="relatedMarketTitle"><h3 id="relatedMarketTitle">Continue researching</h3><div class="card-actions">${model.entity ? `<a class="text-button" href="${escapeHtml(entityHref)}" ${entityAttribute}>Canonical profile</a><button class="text-button" type="button" data-open-visual="market_line_chart" data-visual-entity="${escapeHtml(model.entity.id)}">Visualize source rows</button><button class="text-button" type="button" data-market-query="Compare ${escapeHtml(model.participantName)} with a supported peer using the same filters">Open comparison</button><button class="text-button" type="button" data-market-query="Show ${escapeHtml(model.leagueName)} leaders for ${escapeHtml(performance.statId || model.marketName)}">Open leaderboard</button>` : ""}<a class="text-button" href="/history/${escapeHtml(model.sportId)}/${escapeHtml(model.leagueId)}" data-history-route>Historical Explorer</a><button class="text-button" type="button" data-market-query="Research ${escapeHtml(model.participantName)} ${escapeHtml(model.marketName)} with counterarguments">Open in Edge Intelligence</button>${currentPick && model.status === "available" && !model.stale ? `<button class="add-button" type="button" data-add="${escapeHtml(model.selectionId)}">Add to research slip</button>` : ""}</div>
+      <h4>Related markets</h4><div class="market-related-grid">${model.relatedMarkets.length ? model.relatedMarkets.map(({ market, selection }) => marketResearchCard(marketResearchService.buildModel(market, selection))).join("") : '<div class="discovery-empty">No verified related markets share this event.</div>'}</div>
+      <h4>Related deterministic evidence</h4><div class="market-related-grid">${model.stories.map((story) => `<article class="market-intelligence-card"><h3>${escapeHtml(storyEngine.phraseStory(story).headline)}</h3><p>${escapeHtml(story.coverageLabel || story.validationStatus || "Validated story evidence")}</p><button class="text-button" type="button" data-view-story="${escapeHtml(story.id)}">View supporting story</button></article>`).join("")}${model.insights.map((insight) => `<article class="market-intelligence-card"><h3>${escapeHtml(insight.phrasing?.headline || insight.title || "Deterministic insight")}</h3><p>${escapeHtml(insight.phrasing?.validationDisclosure || insight.validationStatus || "Calculated source evidence")}</p><button class="text-button" type="button" data-view-insight="${escapeHtml(insight.id)}">View supporting data</button></article>`).join("") || '<div class="discovery-empty">No exact canonical story or insight connection is available.</div>'}</div>
+    </section>
+    <footer><small>${escapeHtml(model.source.provider)} · ${escapeHtml(model.source.mode)} · updated ${formatDateTime(model.source.updatedAt)}. ${escapeHtml(model.disclosures.join(" "))}</small></footer>
+  </article>`;
+}
+
+function applyMarketResearchVisibility() {
+  document.body.classList.toggle("markets-active", state.marketResearchActive);
+  elements.marketResearchView.hidden = !state.marketResearchActive;
+  if (state.marketResearchActive) {
+    state.historyActive = false; state.workspaceActive = false;
+    elements.historicalExplorer.hidden = true; elements.personalWorkspaceView.hidden = true;
+    elements.visualAnalyticsView.hidden = true; elements.entityProfileView.hidden = true; elements.athleteProfileView.hidden = true;
+  }
+}
+
+async function renderMarketResearch({ focus = false } = {}) {
+  if (!state.marketResearchActive) return;
+  const request = ++state.marketResearchRequestSequence;
+  state.marketResearchLoading = true; elements.marketResearchLoading.hidden = false; elements.marketResearchContent.innerHTML = "";
+  const route = state.marketResearchRoute || { type: "hub" };
+  elements.marketResearchNav.querySelectorAll("[data-market-route]").forEach((link) => {
+    const active = link.dataset.marketRoute === route.type;
+    if (active) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+  });
+  elements.saveMarketResearch.textContent = ["screener", "parlay-builder"].includes(route.type) ? "Save preset" : "Save";
+  try {
+    await Promise.resolve();
+    if (request !== state.marketResearchRequestSequence) return;
+    const summary = getSelectionSummary(state.navigationSelection);
+    const scope = { leagueIds: summary.visibleLeagues.map((league) => league.leagueId), sportIds: [] };
+    if (route.type === "parlay-builder") {
+      state.marketResearchModel = null;
+      state.parlayBuilderAbortController?.abort();
+      state.parlayBuilderAbortController = new AbortController();
+      state.parlayConstraints = normalizeParlayConstraints(route.constraints || state.parlayConstraints);
+      const result = await parlayBuilderService.buildAsync(state.parlayConstraints, { scope, currentDate: new Date(testFixtureTimestamp || Date.now()), signal: state.parlayBuilderAbortController.signal });
+      if (request !== state.marketResearchRequestSequence) return;
+      state.parlayBuilderResult = result;
+      if (!state.parlayVersions.some((item) => item.id === result.id)) state.parlayVersions = [...state.parlayVersions, result].slice(-8);
+      elements.marketResearchTitle.textContent = "Parlay Builder";
+      elements.marketResearchSummary.textContent = "Build smarter parlays with Edge Intelligence and Edge Trust.";
+      elements.marketResearchContent.innerHTML = renderParlayBuilder(result);
+    } else if (route.type === "screener") {
+      state.marketResearchModel = null;
+      state.marketScreenerAbortController?.abort();
+      state.marketScreenerAbortController = new AbortController();
+      state.marketScreenerFilters = normalizeScreenerFilters(route.filters || state.marketScreenerFilters);
+      state.marketScreenerSort = MARKET_SCREENER_SORTS.some((item) => item.id === route.sortBy) ? route.sortBy : state.marketScreenerSort;
+      state.marketScreenerGroup = MARKET_SCREENER_GROUPS.some((item) => item.id === route.groupBy) ? route.groupBy : state.marketScreenerGroup;
+      const result = await marketScreenerService.screenAsync(state.marketScreenerFilters, {
+        scope,
+        sortBy: state.marketScreenerSort,
+        groupBy: state.marketScreenerGroup,
+        offset: state.marketScreenerOffset,
+        limit: MARKET_SCREENER_WINDOW_SIZE,
+        currentDate: new Date(testFixtureTimestamp || Date.now()),
+        signal: state.marketScreenerAbortController.signal,
+      });
+      if (request !== state.marketResearchRequestSequence) return;
+      state.marketScreenerResult = result;
+      state.marketScreenerSelectedIds = state.marketScreenerSelectedIds.filter((id) => marketScreenerService.getRecords(scope, new Date(testFixtureTimestamp || Date.now())).some((item) => item.id === id));
+      elements.marketResearchTitle.textContent = "Market Screener & Opportunity Explorer";
+      elements.marketResearchSummary.textContent = `${summary.contextLabel} · ${result.total} of ${result.candidateCount} normalized research markets match.`;
+      elements.marketResearchContent.innerHTML = renderMarketScreener(result);
+    } else if (route.type === "detail") {
+      const model = await marketResearchService.getBySelectionAsync(route.selectionId, route.leagueId);
+      if (request !== state.marketResearchRequestSequence) return;
+      state.marketResearchModel = model;
+      elements.marketResearchTitle.textContent = model ? `${model.participantName} market research` : "Market unavailable";
+      elements.marketResearchSummary.textContent = model ? `${model.leagueName} · ${model.marketName} · ${model.status}` : "The canonical market selection is invalid or no longer supplied.";
+      elements.marketResearchContent.innerHTML = model ? renderMarketDetail(model) : '<div class="discovery-empty" role="status"><h2>Market research unavailable</h2><p>No unrelated fallback market has been substituted.</p></div>';
+    } else {
+      state.marketResearchModel = null;
+      let savedItems = [];
+      try {
+        const { repository } = await loadWorkspaceModules();
+        savedItems = repository.snapshot().savedObjects || [];
+      } catch {
+        elements.marketResearchStatus.textContent = "Local saved-market research is unavailable; current provider research remains available.";
+      }
+      if (request !== state.marketResearchRequestSequence) return;
+      const hub = marketResearchService.buildHub({ ...scope, currentDate: new Date(), savedItems, researchSessions: state.researchSession?.markets?.length ? [state.researchSession] : [] });
+      const sections = route.type === "movement" ? hub.sections.filter((section) => ["movement", "changed"].includes(section.id)) : hub.sections;
+      elements.marketResearchTitle.textContent = route.type === "movement" ? "Market Movement Explorer" : "Edge Markets";
+      elements.marketResearchSummary.textContent = `${summary.contextLabel} · ${hub.total} normalized market selection${hub.total === 1 ? "" : "s"}.`;
+      elements.marketResearchContent.innerHTML = `<p class="market-hub-disclosure">${escapeHtml(hub.disclosure)}</p>${sections.map((section) => `<section class="market-hub-section" aria-labelledby="market-section-${escapeHtml(section.id)}"><div class="section-title"><h2 id="market-section-${escapeHtml(section.id)}">${escapeHtml(section.title)}</h2><span>${section.items.length}</span></div>${section.items.length ? `<div class="market-hub-grid">${section.items.map((item) => item.type === "market_research" ? marketResearchCard(item) : `<article class="market-intelligence-card"><h3>${escapeHtml(item.title || item.question || "Saved market research")}</h3><p>Local workspace or current research session reference.</p></article>`).join("")}</div>` : `<div class="discovery-empty">${escapeHtml(section.emptyMessage)}</div>`}</section>`).join("")}`;
+    }
+  } catch (error) {
+    if (error?.name !== "AbortError") elements.marketResearchContent.innerHTML = `<div class="data-warning" role="alert"><strong>Market research unavailable</strong><p>${escapeHtml(error?.message || "Unable to build market research.")}</p></div>`;
+  } finally {
+    if (request === state.marketResearchRequestSequence) { state.marketResearchLoading = false; elements.marketResearchLoading.hidden = true; if (focus) elements.marketResearchView.focus({ preventScroll: true }); }
+  }
+}
+
+function setMarketResearchRoute(route, { replace = false, focus = true } = {}) {
+  state.marketResearchRoute = route; state.marketResearchActive = Boolean(route);
+  const url = new URL(window.location.href);
+  if (["screener", "parlay-builder"].includes(route?.type)) {
+    const target = new URL(marketResearchHref(route), window.location.origin);
+    const scope = url.searchParams.get("scope");
+    const fixtureTimestamp = url.searchParams.get("testFixtureTimestamp");
+    url.pathname = target.pathname; url.search = target.search;
+    if (scope) url.searchParams.set("scope", scope);
+    if (fixtureTimestamp) url.searchParams.set("testFixtureTimestamp", fixtureTimestamp);
+  } else {
+    url.pathname = route ? marketResearchHref(route) : "/";
+    url.searchParams.delete("filters"); url.searchParams.delete("sort"); url.searchParams.delete("group"); url.searchParams.delete("constraints");
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardMarkets: Boolean(route) }, "", url);
+  applyMarketResearchVisibility();
+  return route ? renderMarketResearch({ focus }) : null;
+}
+
 function historicalScope(route = state.historyRoute) {
   const summary = getSelectionSummary(state.navigationSelection);
+  const anniversary = route?.type === "anniversary" && anniversaryService
+    ? anniversaryService.getAnniversary(route.anniversaryId, { mode: state.researchMode }) : null;
   const inheritNavigationScope = !route || route.type === "home";
-  const leagueId = route?.leagueId || (inheritNavigationScope && summary.selection.type === "league" ? summary.selection.id : "");
+  const leagueId = anniversary?.leagueId || route?.leagueId || (inheritNavigationScope && summary.selection.type === "league" ? summary.selection.id : "");
   const league = sportsRepository.getLeague(leagueId);
   return {
-    sportId: route?.sportId || league?.sportId || (inheritNavigationScope && summary.selection.type === "sport" ? summary.selection.id : ""),
+    sportId: anniversary?.sportId || route?.sportId || league?.sportId || (inheritNavigationScope && summary.selection.type === "sport" ? summary.selection.id : ""),
     leagueId,
   };
 }
 
 function historicalRouteHref(route = { type: "home" }) {
+  if (route.type === "anniversaries") return "/history/on-this-day";
+  if (route.type === "anniversary") return `/history/anniversaries/${encodeURIComponent(route.anniversaryId)}`;
   if (route.type === "records") return "/history/records";
   if (route.type === "performances") return "/history/performances";
   if (route.type === "championships") return "/history/championships";
@@ -2019,14 +2684,24 @@ function historicalRouteHref(route = { type: "home" }) {
 }
 
 function setHistoricalRoute(route, { replace = false, focus = true } = {}) {
+  if (route && state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
   state.historyRoute = route;
   state.historyActive = Boolean(route);
   const url = new URL(window.location.href);
   url.pathname = route ? historicalRouteHref(route) : "/";
+  ["date", "year", "category", "sport", "league"].forEach((key) => url.searchParams.delete(key));
+  if (route?.type === "anniversaries") {
+    if (route.date) url.searchParams.set("date", route.date);
+    if (route.year) url.searchParams.set("year", route.year);
+    if (route.category) url.searchParams.set("category", route.category);
+    if (route.sportId) url.searchParams.set("sport", route.sportId);
+    if (route.leagueId) url.searchParams.set("league", route.leagueId);
+  }
   if (!route) ["historyItem", "historyView"].forEach((key) => url.searchParams.delete(key));
   history[replace ? "replaceState" : "pushState"]({ edgeboardHistory: Boolean(route) }, "", url);
   applyHistoryVisibility();
-  if (route) renderHistoricalExplorer({ focus });
+  if (route) return renderHistoricalExplorer({ focus });
+  return null;
 }
 
 function applyHistoryVisibility() {
@@ -2086,6 +2761,53 @@ function renderHistoricalEvidence(item) {
   return `<div class="stats-table-wrap" tabindex="0" aria-label="Scrollable supporting evidence"><table class="stats-table"><caption>Supporting historical evidence for ${escapeHtml(item.title)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Evidence</th><th scope="col">Event</th><th scope="col">Source</th></tr></thead><tbody>${item.supportingEvidence.map((entry) => `<tr><td>${escapeHtml(entry.occurredAt || "Unavailable")}</td><th scope="row">${escapeHtml(entry.label)}</th><td>${escapeHtml(entry.eventId || "Unavailable")}</td><td>${escapeHtml(entry.sourceId || "Unavailable")}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
+function renderAnniversaryCard(item) {
+  return `<article class="historical-card anniversary-card" data-anniversary-id="${escapeHtml(item.id)}">
+    <div class="home-card-kickers"><span>${escapeHtml(item.leagueName)} · ${escapeHtml(item.sportName)}</span><span>${escapeHtml(item.category)}</span><span class="validation-label">${escapeHtml(item.validationLabel)}</span><span class="sample-badge">Sample history</span></div>
+    <p class="anniversary-year"><strong>${item.originalYear}</strong><span>${item.yearsAgo} year${item.yearsAgo === 1 ? "" : "s"} ago</span></p>
+    <h3><a href="${escapeHtml(item.route)}" data-history-route>${escapeHtml(item.title)}</a></h3>
+    <p>${escapeHtml(item.summary)}</p>
+    <div class="market-research-quality" title="Research Quality measures evidence support, not probability."><span>Research Quality</span><strong>${escapeHtml(item.researchQuality.label)} · ${item.researchQuality.score}%</strong></div>
+    <div class="home-card-actions">${item.actions.map(renderHomeDiscoveryAction).join("")}</div>
+    <small>${escapeHtml(item.sources[0]?.label || "Source unavailable")} · ${formatDateTime(item.freshness.lastUpdated)} · ${escapeHtml(item.coverageLabel)}</small>
+  </article>`;
+}
+
+function renderAnniversaryTimeline(item) {
+  const entries = [["Before", item.timeline.before], ["Event", item.timeline.event], ["After", item.timeline.after]];
+  return `<section id="anniversaryTimeline" class="historical-section" aria-labelledby="anniversaryTimelineTitle"><h2 id="anniversaryTimelineTitle">Before, event, and after</h2><p class="sr-only">${escapeHtml(item.timeline.accessibleSummary)}</p><ol class="historical-timeline">${entries.map(([label, entry]) => `<li><time>${escapeHtml(entry?.date || "Date unavailable")}</time><strong>${escapeHtml(label)} · ${entry?.title || (label === "Event" ? item.title : "No supported event")}</strong><span>${escapeHtml(entry?.eventId || "No canonical event in available coverage")}</span></li>`).join("")}</ol></section>`;
+}
+
+function renderAnniversaryDetail(item) {
+  const paths = anniversaryService.getResearchPaths(item);
+  const connections = item.currentConnections;
+  return `<article class="anniversary-detail">
+    <div class="home-card-kickers"><span>${escapeHtml(item.leagueName)} · ${escapeHtml(item.sportName)}</span><span>${escapeHtml(item.category)}</span><span class="validation-label">${escapeHtml(item.validationLabel)}</span><span class="sample-badge">Illustrative sample history</span></div>
+    <p class="anniversary-year"><strong>${item.originalYear}</strong><span>${item.yearsAgo} year${item.yearsAgo === 1 ? "" : "s"} ago</span></p>
+    <p class="anniversary-lede">${escapeHtml(item.summary)}</p>
+    <dl class="historical-coverage-grid"><div><dt>Date</dt><dd>${escapeHtml(item.date)}</dd></div><div><dt>Coverage</dt><dd>${escapeHtml(item.coverageLabel)}</dd></div><div><dt>Validation</dt><dd>${escapeHtml(item.validationLabel)}</dd></div><div><dt>Research Quality</dt><dd>${escapeHtml(item.researchQuality.label)} · ${item.researchQuality.score}%</dd></div></dl>
+    ${item.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("")}
+    <div class="home-card-actions">${item.actions.map(renderHomeDiscoveryAction).join("")}</div>
+    ${renderHistoricalEvidence(item)}
+    ${renderAnniversaryTimeline(item)}
+    <section class="historical-section" aria-labelledby="anniversaryFactsTitle"><h2 id="anniversaryFactsTitle">Did you know?</h2><p>These facts are formatted directly from the same structured event evidence.</p><dl class="historical-coverage-grid">${item.facts.map((fact) => `<div><dt>${escapeHtml(fact.label)}</dt><dd>${escapeHtml(fact.value)}</dd></div>`).join("")}</dl></section>
+    <section class="historical-section" aria-labelledby="currentConnectionsTitle"><h2 id="currentConnectionsTitle">Current connections</h2><p>Historical facts remain separate from current provider data and model output.</p><div class="historical-grid">
+      <article class="historical-card"><h3>Canonical entity</h3><p>${escapeHtml(connections.entity?.name || "No current canonical entity connection is available.")}</p>${connections.entity?.id ? `<div class="home-card-actions">${renderHomeDiscoveryAction({ type: "profile", label: "Open profile", entityId: connections.entity.id, profileSystem: connections.entityProfileSystem })}</div>` : ""}</article>
+      <article class="historical-card"><h3>Current events</h3><p>${connections.currentEvents.length ? `${connections.currentEvents.length} related upcoming event${connections.currentEvents.length === 1 ? "" : "s"} in normalized provider data.` : "No related current event is available."}</p></article>
+      <article class="historical-card"><h3>Current markets</h3><p>${escapeHtml(connections.marketsMessage)}</p><small>${connections.currentMarkets.length ? "Provider-confirmed availability only; historical context is not a prediction." : "No market was fabricated from the historical result."}</small></article>
+    </div></section>
+    ${item.relatedItems.length ? `<section class="historical-section"><h2>Related history</h2><div class="historical-grid">${item.relatedItems.map(renderHistoricalCard).join("")}</div></section>` : ""}
+    <section class="historical-section" aria-labelledby="anniversaryPathsTitle"><h2 id="anniversaryPathsTitle">Continue researching</h2><div class="home-card-actions">${paths.map((path) => `<button type="button" class="text-button" data-anniversary-query="${escapeHtml(path.query)}">${escapeHtml(path.label)}</button>`).join("")}</div></section>
+    ${item.primaryEntity?.id ? renderKnowledgeGraph(item.primaryEntity.id, { context: "anniversary-detail", limit: 24 }) : ""}
+  </article>`;
+}
+
+function renderAnniversaryFilters(route, result) {
+  const sports = [...new Map(sportsRepository.getLeagues().map((league) => [league.sportId, league.sportDisplayName])).entries()];
+  const leaguesForSport = sportsRepository.getLeagues().filter((league) => !route.sportId || league.sportId === route.sportId);
+  return `<form class="anniversary-filters" data-anniversary-filters><label>Date<input type="date" name="date" value="${escapeHtml(result.date?.iso || route.date || "")}" required></label><label>Original year<input type="number" name="year" min="1800" max="${result.date?.year || new Date().getFullYear()}" value="${escapeHtml(route.year || "")}" placeholder="Any year"></label><label>Sport<select name="sport"><option value="">All sports</option>${sports.map(([id, label]) => `<option value="${escapeHtml(id)}" ${route.sportId === id ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label><label>League<select name="league"><option value="">All leagues</option>${leaguesForSport.map((league) => `<option value="${escapeHtml(league.leagueId)}" ${route.leagueId === league.leagueId ? "selected" : ""}>${escapeHtml(league.leagueDisplayName)}</option>`).join("")}</select></label><label>Category<select name="category"><option value="">All categories</option>${anniversaryService.categories.map((category) => `<option value="${escapeHtml(category)}" ${route.category === category ? "selected" : ""}>${escapeHtml(category)}</option>`).join("")}</select></label><button type="submit" class="primary-button">Explore date</button></form><div class="home-card-actions" aria-label="Nearby anniversary dates"><button type="button" class="text-button" data-anniversary-offset="-1">Yesterday</button><button type="button" class="text-button" data-anniversary-today>Today</button><button type="button" class="text-button" data-anniversary-offset="1">Tomorrow</button></div>`;
+}
+
 async function renderHistoricalExplorer({ focus = false } = {}) {
   if (!state.historyActive) return;
   await loadHistoricalModules();
@@ -2098,18 +2820,28 @@ async function renderHistoricalExplorer({ focus = false } = {}) {
   elements.historicalCoverage.innerHTML = primaryCoverage ? renderHistoricalCoverage(primaryCoverage) : `<div class="discovery-empty">No historical coverage is configured for this scope.</div>`;
   const navScope = scope.leagueId ? `/${encodeURIComponent(scope.sportId)}/${encodeURIComponent(scope.leagueId)}` : "";
   elements.historicalNav.innerHTML = [
-    ["Overview", navScope ? `/history${navScope}` : "/history"], ["Records", "/history/records"], ["Performances", "/history/performances"], ["Championships", "/history/championships"], ["Rivalries", "/history/rivalries"],
+    ["Overview", navScope ? `/history${navScope}` : "/history"], ["On This Day", "/history/on-this-day"], ["Records", "/history/records"], ["Performances", "/history/performances"], ["Championships", "/history/championships"], ["Rivalries", "/history/rivalries"],
   ].map(([label, href]) => `<a href="${href}" data-history-route>${label}</a>`).join("");
   let title = scope.leagueId ? `${sportsRepository.getLeague(scope.leagueId)?.leagueDisplayName || scope.leagueId.toUpperCase()} Historical Explorer` : scope.sportId ? `${scope.sportId.replaceAll("-", " ")} history` : "Historical Explorer";
   let summary = "Evidence-backed sample history with explicit coverage and validation limits.";
   let content = "";
-  if (route.type === "item") {
+  if (route.type === "anniversary") {
+    const item = anniversaryService.getAnniversary(route.anniversaryId, { mode: state.researchMode });
+    title = item?.title || "Anniversary unavailable";
+    summary = item ? `${item.date} · ${item.yearsAgo} year${item.yearsAgo === 1 ? "" : "s"} ago · ${item.coverageLabel}` : "This stable anniversary ID is invalid or outside current historical coverage.";
+    content = item ? renderAnniversaryDetail(item) : `<div class="discovery-empty" role="alert"><h2>Anniversary unavailable</h2><p>No unrelated historical card has been substituted.</p></div>`;
+  } else if (route.type === "anniversaries") {
+    const result = anniversaryService.getAnniversaries({ date: route.date || new Date(), sportId: route.sportId, leagueId: route.leagueId, year: route.year, category: route.category, limit: 50, mode: state.researchMode });
+    title = "On This Day";
+    summary = result.date ? `${result.date.iso} · deterministic local-calendar anniversaries with explicit sample coverage.` : "Choose a valid calendar date.";
+    content = `${renderAnniversaryFilters(route, result)}${result.items.length ? `<p>${result.total} validated sample anniversar${result.total === 1 ? "y" : "ies"} in this exact scope.</p><div class="historical-grid">${result.items.map(renderAnniversaryCard).join("")}</div>` : `<div class="discovery-empty" role="status"><h2>No anniversaries found</h2><p>${escapeHtml(result.warnings[0] || "No validated historical event matches this date and scope.")}</p></div>`}`;
+  } else if (route.type === "item") {
     const raw = historicalService.getItem(route.itemId);
     if (!raw) content = `<div class="discovery-empty" role="alert"><h2>Historical item unavailable</h2><p>The stable historical ID is invalid or no longer supported.</p></div>`;
     else {
       const item = historicalService.buildHistoricalViewModel(raw); title = item.title; summary = item.coverageLabel;
       const related = historicalService.getRelatedHistoricalItems(raw);
-      content = `${renderHistoricalCard(item)}${renderHistoricalEvidence(item)}<h2>Accessible timeline</h2><ol class="historical-timeline">${item.supportingEvidence.map((entry) => `<li><time>${escapeHtml(entry.occurredAt || "Date unavailable")}</time><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.eventId || "No event ID")}</span></li>`).join("")}</ol>${related.length ? `<h2>Related history</h2><div class="historical-grid">${related.map(renderHistoricalCard).join("")}</div>` : ""}`;
+      content = `${renderHistoricalCard(item)}${renderHistoricalEvidence(item)}<h2>Accessible timeline</h2><ol class="historical-timeline">${item.supportingEvidence.map((entry) => `<li><time>${escapeHtml(entry.occurredAt || "Date unavailable")}</time><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.eventId || "No event ID")}</span></li>`).join("")}</ol>${related.length ? `<h2>Related history</h2><div class="historical-grid">${related.map(renderHistoricalCard).join("")}</div>` : ""}${item.primaryEntity?.id ? renderKnowledgeGraph(item.primaryEntity.id, { context: "historical-item", limit: 24 }) : ""}`;
     }
   } else if (route.type === "rivalry") {
     const rivalry = historicalService.getRivalryHistory(route.rivalryId); title = rivalry.status === "ready" ? rivalry.label : "Rivalry unavailable";
@@ -2142,6 +2874,15 @@ async function renderHistoricalExplorer({ focus = false } = {}) {
   if (focus) elements.historicalExplorer.focus({ preventScroll: true });
 }
 
+const homeDiscoveryRenderSignatures = new WeakMap();
+
+function replaceHomeDiscoveryContent(container, content) {
+  if (homeDiscoveryRenderSignatures.get(container) === content) return false;
+  container.innerHTML = content;
+  homeDiscoveryRenderSignatures.set(container, content);
+  return true;
+}
+
 function renderHomeDiscovery() {
   const summary = getSelectionSummary(state.navigationSelection);
   const model = createHomeDiscoveryModel({
@@ -2152,6 +2893,7 @@ function renderHomeDiscovery() {
     insightService,
     storyEngine,
     discoveryService,
+    anniversaryService,
     workspaceState: currentDiscoveryWorkspaceState(),
     preferences: discoveryScopeAndOptions().options.preferences,
     researchMode: state.researchMode,
@@ -2162,19 +2904,22 @@ function renderHomeDiscovery() {
   const trending = sections.get("trending");
   elements.todayPulse.dataset.scope = serializeNavigationSelection(summary.selection);
   elements.todayPulseSummary.textContent = `${stories.description} ${model.disclaimer}`;
-  elements.todayPulseGrid.innerHTML = stories.cards.length
+  const storiesContent = stories.cards.length
     ? stories.cards.map((card, index) => renderHomeDiscoveryCard(card, { feature: index === 0 })).join("")
     : `<div class="discovery-empty" role="status">${escapeHtml(stories.emptyMessage)}</div>`;
+  replaceHomeDiscoveryContent(elements.todayPulseGrid, storiesContent);
   elements.insightDiscovery.dataset.scope = serializeNavigationSelection(summary.selection);
   elements.insightDiscoverySummary.textContent = `${trending.description} Scope: ${summary.contextLabel}.`;
-  elements.insightDiscoveryGrid.innerHTML = trending.cards.length
+  const trendingContent = trending.cards.length
     ? trending.cards.map((card) => renderHomeDiscoveryCard(card)).join("")
     : `<div class="discovery-empty" role="status">${escapeHtml(trending.emptyMessage)}</div>`;
+  replaceHomeDiscoveryContent(elements.insightDiscoveryGrid, trendingContent);
   elements.homeDiscoverySections.dataset.scope = serializeNavigationSelection(summary.selection);
   elements.homeDiscoverySections.dataset.mode = state.researchMode;
-  elements.homeDiscoverySections.innerHTML = model.sections
+  const sectionContent = model.sections
     .filter((item) => !["stories", "trending"].includes(item.id))
     .map(renderHomeSection).join("");
+  replaceHomeDiscoveryContent(elements.homeDiscoverySections, sectionContent);
   renderDiscoveryExplorer();
 }
 
@@ -2214,6 +2959,7 @@ function renderInsightDialog(insight) {
       ${supporting.eventRows.map((row) => `<tr><th scope="row">${escapeHtml(row.event_name || row.event_id)}</th><td>${formatDateTime(row.event_date)}</td><td>${escapeHtml(row.result || row.method || "Observed")}</td><td>${escapeHtml(row.row_id)}</td></tr>`).join("")}
     </tbody></table></div>
     ${supporting.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("")}
+    ${insight.entity?.id ? renderKnowledgeGraph(insight.entity.id, { context: "insight-detail", limit: 18 }) : ""}
   `;
   elements.insightDialog.showModal();
   elements.closeInsightDialog.focus();
@@ -2299,6 +3045,7 @@ function renderStoryDetail(story, { updateUrl = true } = {}) {
       <section aria-labelledby="storyLimits"><h4 id="storyLimits">Known limitations</h4>${view.warnings.length ? view.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("") : "<p>No additional limitation was reported.</p>"}<p>${escapeHtml(storyEngine.phraseStory(story).uncertaintyDisclosure)}</p></section>
       ${view.market ? `<aside class="related-insight-market"><strong>Optional current betting context</strong><span>${escapeHtml(view.market.line)} · ${formatOdds(view.market.odds)} · ${escapeHtml(view.market.sportsbook)}</span><small>The observed fact is separate from projection, edge, confidence, odds, and Research Quality.</small></aside>` : ""}
       <div class="story-detail-actions" aria-label="Story research actions">${[view.primaryAction, ...view.secondaryActions].filter(Boolean).map((action) => action.type === "evidence" ? `<button type="button" class="text-button" data-focus-story-evidence>${escapeHtml(action.label)}</button>` : renderHomeDiscoveryAction(action)).join("")}</div>
+      ${story.entityIds[0] ? renderKnowledgeGraph(story.entityIds[0], { context: "story-detail", limit: 18 }) : ""}
       <footer><small>${escapeHtml(view.sourceLabel)} · ${formatDateTime(view.lastUpdated)} · ${escapeHtml(view.freshnessLabel)}</small><span class="insight-dialog-status" role="status" aria-live="polite"></span></footer>
     </article>`;
   if (updateUrl) setStoryUrl(story.id);
@@ -2632,6 +3379,7 @@ function renderAthleteProfile() {
       ${renderProfilePanel(viewModel)}
     </div>
     <aside class="related-searches" aria-labelledby="relatedSearchesHeading"><div><p class="eyebrow">Continue researching</p><h2 id="relatedSearchesHeading">Related searches</h2></div><div>${viewModel.relatedQueries.map((query) => `<button type="button" data-profile-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join("")}</div></aside>
+    ${renderKnowledgeGraph(viewModel.athlete.id, { context: "athlete-profile" })}
   `;
 }
 
@@ -2719,6 +3467,7 @@ function renderEntityProfile() {
       ${viewModel.placeholders.length ? `<ul class="entity-placeholder-list">${viewModel.placeholders.map((item) => `<li>${escapeHtml(item)}: unavailable from sample provider</li>`).join("")}</ul>` : '<p class="profile-empty">No additional profile fields are configured.</p>'}
     </section>
     <aside class="related-searches" aria-labelledby="entityRelatedSearchesHeading"><div><p class="eyebrow">Continue researching</p><h2 id="entityRelatedSearchesHeading">Related searches</h2></div><div>${viewModel.relatedQueries.map((query) => `<button type="button" data-profile-query="${escapeHtml(query)}">${escapeHtml(query)}</button>`).join("")}</div></aside>
+    ${renderKnowledgeGraph(entity.id, { context: "entity-profile" })}
   `;
 }
 
@@ -2734,7 +3483,7 @@ function renderVisualAnalytics() {
   }
   elements.visualAnalyticsContent.innerHTML = visualizationRenderer.renderVisualization(state.visualResult, {
     availableVisualizations: state.visualAvailable,
-  });
+  }) + (state.visualRequest?.entityIds?.[0] ? renderKnowledgeGraph(state.visualRequest.entityIds[0], { context: "visual-analytics", limit: 24 }) : "");
 }
 
 function setVisualAnalyticsUrl(request, { replace = false } = {}) {
@@ -3095,6 +3844,8 @@ function renderResearchAnswer(answer) {
   const source = answer.disclosure;
   const trust = trustForResearchAnswer(answer);
   const session = state.researchSession;
+  const graphEntityId = (answer.relatedEntities || []).find((item) => entityRegistry.getEntity(item.id))?.id
+    || state.graphResearchEntityId || "";
   return `
     <article class="research-answer-card" data-completeness="${escapeHtml(completeness.level.toLowerCase())}" data-research-quality="${escapeHtml(trust.researchQuality.label.toLowerCase())}">
       ${session ? `<section class="research-session-shell" aria-labelledby="researchSessionTitle">
@@ -3235,8 +3986,23 @@ function renderResearchAnswer(answer) {
         ${trust.limitations.length ? `<ul>${trust.limitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : "<p>All applicable trust checks passed.</p>"}
         <p>Research Quality measures source trust only. It is not betting confidence, historical hit rate, projection, edge, or win probability.</p>
       </div>
+      ${graphEntityId ? renderKnowledgeGraph(graphEntityId, { context: "research-answer", limit: 22 }) : ""}
     </article>
   `;
+}
+
+function canonicalEntityIdFromStatsResult(result) {
+  if (!result) return "";
+  if (result.type === "combined") return canonicalEntityIdFromStatsResult(result.statsAnswer);
+  const candidates = [
+    result.entity?.id,
+    result.athlete?.id,
+    ...(result.entities || []).map((item) => item?.id),
+    ...(result.entries || []).map((item) => item?.entity?.id || item?.entityId),
+    ...(result.rows || []).map((item) => item?.entity?.id || item?.entityId),
+    ...(result.structuredQuery?.entityIds || []),
+  ].filter(Boolean);
+  return candidates.find((id) => entityRegistry.getEntity(id)) || "";
 }
 
 function renderStatsAnswer(result) {
@@ -3392,7 +4158,12 @@ function renderResearchMode() {
     );
   }
   elements.statsInterpretation.innerHTML = statsVisible ? renderInterpretation(state.statsParsedQuery) : "";
-  elements.statsResultContent.innerHTML = statsVisible && !state.statsLoading ? renderStatsAnswer(state.statsResult) : "";
+  const statsGraphEntityId = !state.researchAnswer
+    ? canonicalEntityIdFromStatsResult(state.statsResult) || state.graphResearchEntityId
+    : "";
+  elements.statsResultContent.innerHTML = statsVisible && !state.statsLoading
+    ? `${renderStatsAnswer(state.statsResult)}${statsGraphEntityId ? renderKnowledgeGraph(statsGraphEntityId, { context: "stats-result", limit: 22 }) : ""}`
+    : "";
   elements.researchAnswer.hidden = !state.researchAnswer || state.statsLoading;
   elements.researchAnswerContent.innerHTML = state.researchAnswer && !state.statsLoading
     ? renderResearchAnswer(state.researchAnswer)
@@ -3478,7 +4249,7 @@ async function loadWorkspace({ focusHeading = false } = {}) {
         setWorkspaceUrl(state.workspaceRoute, { replace: true });
         viewModel = service.buildWorkspaceViewModel(repository.snapshot(), fallback.id, state.workspaceRoute);
       } else if (repository.getDiagnostics().storageStatus === "ready") {
-        const created = await repository.createWorkspace({ title: "My EdgeBoard", description: "Local personal workspace" });
+        const created = await repository.createWorkspace({ title: "Workspace", description: "Local personal workspace" });
         state.workspaceRoute = { workspaceId: created.id, view: "home" };
         setWorkspaceUrl(state.workspaceRoute, { replace: true });
         viewModel = service.buildWorkspaceViewModel(repository.snapshot(), created.id, state.workspaceRoute);
@@ -3700,7 +4471,9 @@ function renderAll() {
   renderEntityProfile();
   applyWorkspaceVisibility();
   applyHistoryVisibility();
+  applyMarketResearchVisibility();
   if (state.historyActive) renderHistoricalExplorer();
+  if (state.marketResearchActive) renderMarketResearch();
   if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
 }
 
@@ -3906,8 +4679,9 @@ function openSearchResult(result) {
 function renderAthleteSearchResults() {
   const results = state.athleteSearchResults;
   const discoveryGroups = state.discoverySearch?.groups || [];
-  elements.athleteSearchResults.hidden = results.length === 0 && discoveryGroups.length === 0;
-  elements.queryInput.setAttribute("aria-expanded", String(results.length > 0 || discoveryGroups.length > 0));
+  const marketResults = state.marketSearchResults || [];
+  elements.athleteSearchResults.hidden = results.length === 0 && discoveryGroups.length === 0 && marketResults.length === 0;
+  elements.queryInput.setAttribute("aria-expanded", String(results.length > 0 || discoveryGroups.length > 0 || marketResults.length > 0));
   elements.queryInput.setAttribute(
     "aria-activedescendant",
     state.athleteSearchIndex >= 0 ? `athlete-search-option-${state.athleteSearchIndex}` : "",
@@ -3918,8 +4692,9 @@ function renderAthleteSearchResults() {
       <small>${escapeHtml(entity.typeLabel)}${entity.context ? ` · ${escapeHtml(entity.context)}` : ""}</small>
     </a>
   `).join("")}${state.athleteSearchGuidance.length ? `<div class="athlete-search-guidance" aria-label="Suggested research paths"><strong>Research next</strong><div>${state.athleteSearchGuidance.map((item) => `<button type="button" data-search-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>` : ""}
+  ${marketResults.length ? `<section class="discovery-search-group" role="group" aria-labelledby="market-search-results"><strong id="market-search-results">${state.marketSearchIntent?.matched ? "Explain the Market" : "Relevant Markets"}</strong><div>${marketResults.slice(0, 6).map((model) => `<a href="${escapeHtml(marketResearchHref(model))}" data-open-market="${escapeHtml(model.selectionId)}" data-market-league="${escapeHtml(model.leagueId)}">${escapeHtml(model.participantName)} · ${escapeHtml(model.marketName)} <small>${escapeHtml(model.leagueName)} · ${escapeHtml(model.status)}${state.marketSearchIntent?.matched ? ` · ${escapeHtml(state.marketSearchIntent.intent.replaceAll("-", " "))}` : ""}</small></a>`).join("")}</div></section>` : ""}
   ${discoveryGroups.filter((group) => group.id !== "direct").map((group) => `<section class="discovery-search-group" role="group" aria-labelledby="discovery-search-${escapeHtml(group.id)}"><strong id="discovery-search-${escapeHtml(group.id)}">${escapeHtml(group.label)}</strong><div>${group.items.slice(0, 4).map((item) => item.route?.href || item.route
-    ? group.id === "history" ? `<a href="${escapeHtml(item.route)}" data-history-route>${escapeHtml(item.title)}</a>` : `<a href="${escapeHtml(item.route.href)}" data-discovery-route="${escapeHtml(item.route.href)}">${escapeHtml(item.title)}</a>`
+    ? ["history", "anniversaries"].includes(group.id) ? `<a href="${escapeHtml(item.route)}" data-history-route>${escapeHtml(item.title)}</a>` : `<a href="${escapeHtml(item.route.href)}" data-discovery-route="${escapeHtml(item.route.href)}">${escapeHtml(item.title)}</a>`
     : `<button type="button" data-discovery-search-query="${escapeHtml(item.queryTemplate?.query || item.query || item.title)}">${escapeHtml(item.title || item.label)}</button>`).join("")}</div></section>`).join("")}`;
 }
 
@@ -3930,6 +4705,8 @@ function updateAthleteSearch(query) {
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
     state.athleteSearchGuidance = [];
+    state.marketSearchResults = [];
+    state.marketSearchIntent = null;
     state.discoverySearch = null;
     renderAthleteSearchResults();
     return;
@@ -3940,6 +4717,9 @@ function updateAthleteSearch(query) {
   }, 10);
   const activeMatches = matches.filter((match) => match.active);
   state.athleteSearchResults = (activeMatches.length ? activeMatches : matches).slice(0, 6);
+  const selectionSummary = getSelectionSummary(state.navigationSelection);
+  state.marketSearchIntent = classifyMarketExplainerQuery(text);
+  state.marketSearchResults = marketResearchService.search(text, { leagueIds: selectionSummary.visibleLeagues.map((league) => league.leagueId) }, 6);
   const primary = state.athleteSearchResults[0];
   const canonical = primary ? entityRegistry.getEntity(primary.id) : null;
   const hasMarkets = primary?.profileSystem === "athlete"
@@ -3955,7 +4735,8 @@ function updateAthleteSearch(query) {
     await loadHistoricalModules();
     if (elements.queryInput.value.trim() !== text) return;
     const history = historicalService.searchHistoricalItems({ query: text, sportId: scope.sportIds.length === 1 ? scope.sportIds[0] : "", leagueId: scope.leagueIds.length === 1 ? scope.leagueIds[0] : "", pageSize: 4 }).items;
-    const groups = [...discoverySearch.groups, ...(history.length ? [{ id: "history", label: "History", items: history }] : [])];
+    const anniversaries = anniversaryService.searchAnniversaries(text, { date: new Date(), sportId: scope.sportIds.length === 1 ? scope.sportIds[0] : "", leagueId: scope.leagueIds.length === 1 ? scope.leagueIds[0] : "", limit: 4 }).items;
+    const groups = [...discoverySearch.groups, ...(anniversaries.length ? [{ id: "anniversaries", label: "On This Day & Anniversaries", items: anniversaries }] : []), ...(history.length ? [{ id: "history", label: "History", items: history }] : [])];
     state.discoverySearch = { ...discoverySearch, groups, total: groups.reduce((sum, group) => sum + group.items.length, 0) };
     renderAthleteSearchResults();
   }, 180);
@@ -4084,6 +4865,10 @@ elements.researchIntentNav.addEventListener("click", (event) => {
   const button = event.target.closest("[data-intent]");
   if (!button) return;
   state.researchIntent = button.dataset.intent;
+  if (state.researchIntent === "sgp") {
+    setMarketResearchRoute({ type: "parlay-builder", constraints: state.parlayConstraints });
+    return;
+  }
   if (state.researchIntent === "ai-research") {
     elements.queryInput.focus();
     document.querySelector(".hero").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4098,6 +4883,246 @@ elements.openHistory.addEventListener("click", (event) => {
   setHistoricalRoute(league ? { type: "league", sportId: league.sportId, leagueId: league.leagueId }
     : summary.selection.type === "sport" ? { type: "sport", sportId: summary.selection.id } : { type: "home" });
   recordWorkspaceActivity("opened", "historical_explorer", league?.leagueId || summary.selection.id, "Opened Historical Explorer");
+});
+
+elements.openMarkets.addEventListener("click", (event) => {
+  event.preventDefault();
+  setMarketResearchRoute({ type: "hub" });
+  recordWorkspaceActivity("opened", "market_research", "markets", "Opened Edge Markets");
+});
+
+elements.closeMarketResearch.addEventListener("click", (event) => {
+  event.preventDefault();
+  setMarketResearchRoute(null, { focus: false });
+  elements.openMarkets.focus({ preventScroll: true });
+});
+
+elements.shareMarketResearch.addEventListener("click", async () => {
+  try { await writeClipboardWithTimeout(window.location.href); elements.marketResearchStatus.textContent = "Edge Markets link copied."; }
+  catch (error) { elements.marketResearchStatus.textContent = error?.message || "Copy is unavailable."; }
+});
+
+function marketScreenerWorkspaceCandidate(item, { pinned = false } = {}) {
+  return {
+    title: `${item.participantName} · ${item.marketName}`,
+    description: "Saved Market Screener research result. This is not a betting recommendation.",
+    type: "saved_research", boardId: "board-betting-research", sample: item.sample,
+    isPinned: pinned,
+    tags: ["market screener", pinned ? "pinned opportunity research" : "favorite research"],
+    sourceState: { mode: state.researchMode, sportId: item.sportId, leagueId: item.leagueId, queryText: "", structuredQuery: { marketScreener: state.marketScreenerFilters, resultId: item.id, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup } },
+    canonicalReferences: { entityIds: item.entityId ? [item.entityId] : [], eventIds: item.gameId ? [item.gameId] : [], marketIds: [item.marketResearchId], insightIds: [item.currentStreak?.id, item.currentMilestone?.id].filter(Boolean), queryId: null, visualizationId: item.relatedVisualization?.type || null },
+    researchSnapshot: safeSnapshot({ type: "market_screener_result", result: item, filters: state.marketScreenerFilters, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup, savedAt: new Date().toISOString(), disclosure: state.marketScreenerResult?.disclosure }),
+  };
+}
+
+function marketScreenerPresetCandidate() {
+  const result = state.marketScreenerResult;
+  return {
+    title: "Saved Market Screener preset",
+    description: "Refreshable deterministic market research filters. Not a betting recommendation.",
+    type: "saved_query", boardId: "board-stats-trends", sample: true,
+    tags: ["market screener", "research preset"],
+    sourceState: { mode: state.researchMode, sportId: "", leagueId: "", queryText: "", structuredQuery: { marketScreener: state.marketScreenerFilters, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup } },
+    canonicalReferences: { entityIds: [], eventIds: [], marketIds: result?.items.map((item) => item.marketResearchId) || [], insightIds: [], queryId: `market-screener:${serializeScreenerFilters(state.marketScreenerFilters)}`, visualizationId: null },
+    researchSnapshot: safeSnapshot({ type: "market_screener_preset", filters: state.marketScreenerFilters, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup, resultCount: result?.total || 0, capturedAt: new Date().toISOString(), disclosure: result?.disclosure }),
+  };
+}
+
+function parlayWorkspaceCandidate({ preset = false, tracked = false, archived = false, title = "Parlay research set" } = {}) {
+  const result = state.parlayBuilderResult;
+  return {
+    title, description: "Evidence-backed parlay research. This is not a wager, prediction, or recommendation.",
+    type: tracked ? "tracked_research_idea" : preset ? "saved_query" : "saved_research",
+    boardId: archived ? "board-archived" : "board-betting-research", sample: result?.sample ?? true, isArchived: archived, tags: ["parlay research", preset ? "constraints" : "evidence", `version ${state.parlayVersions.length || 1}`],
+    sourceState: { mode: state.researchMode, sportId: "", leagueId: "", queryText: "", structuredQuery: { parlayConstraints: state.parlayConstraints } },
+    canonicalReferences: { entityIds: result?.legs.map((item) => item.entityId).filter(Boolean) || [], eventIds: result?.legs.map((item) => item.eventId).filter(Boolean) || [], marketIds: result?.legs.map((item) => item.marketResearchId) || [], insightIds: result?.legs.flatMap((item) => [item.milestone?.id, item.streak?.id]).filter(Boolean) || [], queryId: `parlay-builder:${serializeParlayConstraints(state.parlayConstraints)}`, visualizationId: null },
+    researchSnapshot: safeSnapshot({ ...(preset ? { type: "parlay_constraint_preset", constraints: state.parlayConstraints } : result), savedAt: new Date().toISOString() }),
+  };
+}
+
+function applyParlayResult(result, message = "Parlay research updated with a transparent change record.") {
+  if (!result) return;
+  state.parlayBuilderResult = result; state.parlayConstraints = result.constraints;
+  if (!state.parlayVersions.some((item) => item.id === result.id && item.generatedAt === result.generatedAt)) state.parlayVersions = [...state.parlayVersions, result].slice(-8);
+  const url = new URL(window.location.href); const target = new URL(marketResearchHref({ type: "parlay-builder", constraints: result.constraints }), window.location.origin); url.pathname = target.pathname; url.search = target.search; history.replaceState({ edgeboardMarkets: true }, "", url);
+  elements.marketResearchContent.innerHTML = renderParlayBuilder(result); elements.marketResearchStatus.textContent = message;
+}
+
+function marketScreenerResearchContext(intent = "explain_screener") {
+  const result = state.marketScreenerResult;
+  const selected = result?.items.filter((item) => state.marketScreenerSelectedIds.includes(item.id)) || [];
+  const items = (selected.length ? selected : result?.items || []).slice(0, 4);
+  if (!items.length) return null;
+  const screener = Object.freeze({
+    intent,
+    filters: state.marketScreenerFilters,
+    sortBy: state.marketScreenerSort,
+    groupBy: state.marketScreenerGroup,
+    candidateCount: result.candidateCount,
+    matchedCount: result.total,
+    resultIds: Object.freeze(items.map((item) => item.id)),
+    explanation: result.explanation,
+    supportingEvidence: Object.freeze(items.map((item) => Object.freeze({
+      id: item.id, type: "screener_result", label: `${item.participantName} · ${item.marketName}`,
+      provider: item.provider, verification: item.sample ? "validated-sample" : "provider-verified",
+      values: Object.freeze({ researchQuality: item.researchQuality, marketTrust: item.marketTrustScore, historicalCoverage: item.historicalCoverage, movement: item.movementVerified ? item.movement : null }),
+    }))),
+    disclosure: result.disclosure,
+  });
+  return marketResearchContextFor(items[0].model, intent, screener);
+}
+
+elements.saveMarketResearch.addEventListener("click", () => {
+  if (state.marketResearchRoute?.type === "parlay-builder") {
+    openWorkspaceSave(parlayWorkspaceCandidate({ preset: true, title: "Saved Parlay Builder constraints" })).catch(reportWorkspaceError);
+    return;
+  }
+  if (state.marketResearchRoute?.type === "screener") {
+    openWorkspaceSave(marketScreenerPresetCandidate()).catch(reportWorkspaceError);
+    return;
+  }
+  const model = state.marketResearchModel;
+  openWorkspaceSave({
+    title: model ? `${model.participantName} · ${model.marketName}` : elements.marketResearchTitle.textContent,
+    description: "Saved immutable Edge Markets research snapshot",
+    type: "saved_research", boardId: "board-betting-research", sample: model?.source.sample ?? true,
+    sourceState: { mode: state.researchMode, sportId: model?.sportId || "", leagueId: model?.leagueId || "", queryText: "", structuredQuery: { marketResearchRoute: state.marketResearchRoute } },
+    canonicalReferences: { entityIds: model?.entity ? [model.entity.id] : [], eventIds: model?.event?.id ? [model.event.id] : [], marketIds: model ? [model.id] : [], insightIds: model?.insights?.map((item) => item.id) || [], queryId: null, visualizationId: null },
+    researchSnapshot: safeSnapshot(model || { route: state.marketResearchRoute, scope: getSelectionSummary(state.navigationSelection).contextLabel, savedAt: new Date().toISOString(), sample: true }),
+  }).catch(reportWorkspaceError);
+});
+
+elements.marketResearchNav.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-market-route]");
+  if (!link) return;
+  event.preventDefault(); setMarketResearchRoute({ type: link.dataset.marketRoute });
+});
+
+function screenerFiltersFromForm(form) {
+  const data = new FormData(form);
+  const input = {};
+  MARKET_SCREENER_ARRAY_FILTERS.forEach((key) => {
+    const values = data.getAll(key).flatMap((value) => String(value || "").split(",")).map((value) => value.trim()).filter(Boolean);
+    if (values.length) input[key] = values;
+  });
+  MARKET_SCREENER_NUMERIC_FILTERS.forEach((key) => {
+    const value = String(data.get(key) || "").trim();
+    if (value !== "" && Number.isFinite(Number(value))) input[key] = Number(value);
+  });
+  MARKET_SCREENER_BOOLEAN_FILTERS.forEach((key) => { if (data.has(key)) input[key] = true; });
+  return normalizeScreenerFilters(input);
+}
+
+function parlayConstraintsFromForm(form) {
+  const data = new FormData(form); const input = {};
+  ["sportIds", "leagueIds", "marketTypes", "sportsbooks"].forEach((key) => { const values = data.getAll(key).filter(Boolean); if (values.length) input[key] = values; });
+  ["minimumResearchQuality", "minimumEdgeTrust", "minimumResearchCompleteness", "maximumLegs", "minimumOdds", "maximumOdds"].forEach((key) => { const value = String(data.get(key) || "").trim(); if (value !== "" && Number.isFinite(Number(value))) input[key] = Number(value); });
+  input.maximumResearchCorrelation = data.get("maximumResearchCorrelation");
+  PARLAY_BOOLEAN_CONSTRAINTS.forEach((key) => { input[key] = data.has(key); });
+  return normalizeParlayConstraints(input);
+}
+
+elements.marketResearchView.addEventListener("submit", (event) => {
+  if (event.target.id === "parlayBuilderForm") {
+    event.preventDefault(); state.parlayConstraints = parlayConstraintsFromForm(event.target);
+    setMarketResearchRoute({ type: "parlay-builder", constraints: state.parlayConstraints }, { replace: true, focus: false }); return;
+  }
+  if (event.target.id !== "marketScreenerForm") return;
+  event.preventDefault();
+  state.marketScreenerFilters = screenerFiltersFromForm(event.target);
+  state.marketScreenerOffset = 0;
+  state.marketScreenerSelectedIds = [];
+  setMarketResearchRoute({ type: "screener", filters: state.marketScreenerFilters, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup }, { replace: true, focus: false });
+});
+
+elements.marketResearchView.addEventListener("change", (event) => {
+  const selected = event.target.closest("[data-screener-select]");
+  if (selected) {
+    const id = selected.dataset.screenerSelect;
+    state.marketScreenerSelectedIds = selected.checked ? [...new Set([...state.marketScreenerSelectedIds, id])].slice(0, 4) : state.marketScreenerSelectedIds.filter((item) => item !== id);
+    const button = elements.marketResearchView.querySelector("[data-screener-compare]");
+    if (button) { button.disabled = state.marketScreenerSelectedIds.length < 2; button.textContent = `Compare selected (${state.marketScreenerSelectedIds.length})`; }
+    return;
+  }
+  if (event.target.matches("[data-screener-sort]")) state.marketScreenerSort = event.target.value;
+  else if (event.target.matches("[data-screener-group]")) state.marketScreenerGroup = event.target.value;
+  else return;
+  state.marketScreenerOffset = 0;
+  setMarketResearchRoute({ type: "screener", filters: state.marketScreenerFilters, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup }, { replace: true, focus: false });
+});
+
+elements.marketResearchView.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-parlay-reset]")) { state.parlayConstraints = normalizeParlayConstraints(); await setMarketResearchRoute({ type: "parlay-builder", constraints: state.parlayConstraints }, { replace: true, focus: false }); return; }
+  const parlayPreset = event.target.closest("[data-parlay-preset]");
+  if (parlayPreset) { const preset = parlayBuilderService.getPresets().find((item) => item.id === parlayPreset.dataset.parlayPreset); if (preset) { state.parlayConstraints = normalizeParlayConstraints(preset.constraints); await setMarketResearchRoute({ type: "parlay-builder", constraints: state.parlayConstraints }, { replace: true, focus: false }); } return; }
+  if (event.target.closest("[data-parlay-save-preset]")) { await openWorkspaceSave(parlayWorkspaceCandidate({ preset: true, title: "Saved Parlay Builder constraints" })); return; }
+  const buildAround = event.target.closest("[data-parlay-build-around]");
+  if (buildAround) { const summary = getSelectionSummary(state.navigationSelection); const next = parlayBuilderService.buildAround(state.parlayBuilderResult, buildAround.dataset.parlayBuildAround, { scope: { leagueIds: summary.visibleLeagues.map((item) => item.leagueId) }, currentDate: new Date(testFixtureTimestamp || Date.now()) }); applyParlayResult(next, "Selected leg locked. Compatible legs were researched without relaxing constraints."); return; }
+  const replaceLeg = event.target.closest("[data-parlay-replace]");
+  if (replaceLeg) { const summary = getSelectionSummary(state.navigationSelection); const next = parlayBuilderService.replaceLeg(state.parlayBuilderResult, replaceLeg.dataset.parlayReplace, { scope: { leagueIds: summary.visibleLeagues.map((item) => item.leagueId) }, currentDate: new Date(testFixtureTimestamp || Date.now()) }); applyParlayResult(next, next.changes.at(-1)?.reason || "Replacement evaluated without rebuilding other legs."); return; }
+  const favorite = event.target.closest("[data-parlay-favorite]");
+  if (favorite) { const id = favorite.dataset.parlayFavorite; const wasFavorite = state.parlayFavoriteSelectionIds.includes(id); state.parlayFavoriteSelectionIds = wasFavorite ? state.parlayFavoriteSelectionIds.filter((item) => item !== id) : [...state.parlayFavoriteSelectionIds, id]; try { localStorage.setItem("edgeboard-parlay-favorite-legs-v1", JSON.stringify(state.parlayFavoriteSelectionIds)); } catch { elements.marketResearchStatus.textContent = "Favorite changed for this session; local persistence is unavailable."; } applyParlayResult(state.parlayBuilderResult, wasFavorite ? "Favorite removed." : "Favorite research leg saved locally. Availability notifications do not imply betting success."); return; }
+  const refine = event.target.closest("[data-parlay-refine]");
+  if (refine) { const action = refine.dataset.parlayRefine; const summary = getSelectionSummary(state.navigationSelection); const next = parlayBuilderService.refine(state.parlayBuilderResult, action, { scope: { leagueIds: summary.visibleLeagues.map((item) => item.leagueId) }, currentDate: new Date(testFixtureTimestamp || Date.now()) }); applyParlayResult(next, next.changes.at(-1)?.reason || `Applied ${action.replaceAll("_", " ")} while preserving explicit constraints.`); return; }
+  const parlayQuery = event.target.closest("[data-parlay-query]");
+  if (parlayQuery) { const first = state.parlayBuilderResult?.legs[0]; const record = first ? marketScreenerService.getRecords({}, new Date(testFixtureTimestamp || Date.now())).find((item) => item.selectionId === first.selectionId) : null; setMarketResearchRoute(null, { replace: true, focus: false }); elements.queryInput.value = parlayQuery.dataset.parlayQuery; state.marketResearchContext = record ? marketResearchContextFor(record.model, "parlay_research", { parlay: state.parlayBuilderResult }) : null; document.querySelector("#queryForm").requestSubmit(); return; }
+  const action = event.target.closest("[data-parlay-action]");
+  if (action) {
+    const kind = action.dataset.parlayAction;
+    if (["save", "track", "duplicate", "archive"].includes(kind)) await openWorkspaceSave(parlayWorkspaceCandidate({ tracked: kind === "track", archived: kind === "archive", title: kind === "duplicate" ? "Copy of Parlay research set" : kind === "archive" ? "Archived Parlay research version" : "Parlay research set" }));
+    else if (kind === "refresh") { parlayBuilderService.cache.clear(); const summary = getSelectionSummary(state.navigationSelection); const next = parlayBuilderService.build(state.parlayConstraints, { scope: { leagueIds: summary.visibleLeagues.map((item) => item.leagueId) }, currentDate: new Date(testFixtureTimestamp || Date.now()), lockedSelectionIds: state.parlayBuilderResult?.lockedSelectionIds || [] }); applyParlayResult(next, "A new refreshable version was created. Earlier snapshots remain unchanged."); }
+    else if (kind === "share") { try { await writeClipboardWithTimeout(window.location.href); elements.marketResearchStatus.textContent = "Parlay research link copied. Private notes were not included."; } catch (error) { elements.marketResearchStatus.textContent = error?.message || "Copy is unavailable."; } }
+    else if (kind === "export") { const payload = JSON.stringify(safeSnapshot({ ...state.parlayBuilderResult, privateNotes: undefined }), null, 2); const blob = new Blob([payload], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "edgeboard-parlay-research.json"; link.click(); URL.revokeObjectURL(link.href); elements.marketResearchStatus.textContent = "Parlay research exported with source and uncertainty metadata."; }
+    else if (kind === "compare") { elements.marketResearchContent.querySelector("#parlayVersionComparisonTitle")?.scrollIntoView({ behavior: "smooth", block: "start" }); elements.marketResearchStatus.textContent = state.parlayVersions.length > 1 ? "Saved in-session versions are compared without declaring a winner." : "Create or refresh another version before comparing."; }
+    return;
+  }
+  const reset = event.target.closest("[data-screener-reset]");
+  if (reset) {
+    state.marketScreenerFilters = Object.freeze({}); state.marketScreenerOffset = 0; state.marketScreenerSelectedIds = [];
+    await setMarketResearchRoute({ type: "screener", filters: {}, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup }, { replace: true, focus: false }); return;
+  }
+  const presetButton = event.target.closest("[data-screener-preset]");
+  if (presetButton) {
+    const preset = marketScreenerService.getPreset(presetButton.dataset.screenerPreset);
+    if (!preset) return;
+    state.marketScreenerFilters = normalizeScreenerFilters(preset.filters); state.marketScreenerOffset = 0; state.marketScreenerSelectedIds = [];
+    await setMarketResearchRoute({ type: "screener", filters: state.marketScreenerFilters, sortBy: state.marketScreenerSort, groupBy: state.marketScreenerGroup }, { replace: true, focus: false }); return;
+  }
+  if (event.target.closest("[data-screener-save-preset]")) { await openWorkspaceSave(marketScreenerPresetCandidate()); return; }
+  if (event.target.closest("[data-screener-next]")) { state.marketScreenerOffset += MARKET_SCREENER_WINDOW_SIZE; await renderMarketResearch({ focus: false }); return; }
+  if (event.target.closest("[data-screener-previous]")) { state.marketScreenerOffset = Math.max(0, state.marketScreenerOffset - MARKET_SCREENER_WINDOW_SIZE); await renderMarketResearch({ focus: false }); return; }
+  if (event.target.closest("[data-screener-compare]")) { await renderMarketResearch({ focus: false }); const heading = elements.marketResearchView.querySelector("#screenerComparisonTitle"); heading?.setAttribute("tabindex", "-1"); heading?.focus(); return; }
+  const save = event.target.closest("[data-screener-save]");
+  if (save) {
+    const item = marketScreenerService.getRecords({ leagueIds: getSelectionSummary(state.navigationSelection).visibleLeagues.map((league) => league.leagueId) }, new Date(testFixtureTimestamp || Date.now())).find((record) => record.id === save.dataset.screenerId);
+    if (item) await openWorkspaceSave(marketScreenerWorkspaceCandidate(item, { pinned: save.dataset.screenerSave === "pin" }));
+    return;
+  }
+  const share = event.target.closest("[data-screener-share]");
+  if (share) {
+    const item = state.marketScreenerResult?.items.find((record) => record.id === share.dataset.screenerShare);
+    if (!item) return;
+    try { await writeClipboardWithTimeout(new URL(marketResearchHref(item.model), window.location.origin).href); elements.marketResearchStatus.textContent = "Canonical market research link copied."; }
+    catch (error) { elements.marketResearchStatus.textContent = error?.message || "Copy is unavailable."; }
+    return;
+  }
+  const screenerQuery = event.target.closest("[data-screener-query]");
+  if (screenerQuery) {
+    const context = marketScreenerResearchContext(screenerQuery.dataset.screenerIntent || "explain_screener");
+    setMarketResearchRoute(null, { replace: true, focus: false });
+    elements.queryInput.value = screenerQuery.dataset.screenerQuery;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    state.marketResearchContext = context;
+    document.querySelector("#queryForm").requestSubmit();
+    document.querySelector("#researchWorkspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const addButton = event.target.closest("[data-add]");
+  if (!addButton) return;
+  const model = state.marketResearchModel;
+  const pick = model ? getPickBySelectionId(sportsRepository, model.leagueId, addButton.dataset.add) : null;
+  if (!pick?.available || pick.stale || state.slip.some((item) => item.id === pick.id)) return;
+  state.slip.push(pick); state.selectedPickId = pick.id; renderSlip(); addButton.textContent = "Added"; addButton.disabled = true;
 });
 
 elements.closeHistoricalExplorer.addEventListener("click", (event) => {
@@ -4119,7 +5144,8 @@ elements.saveHistoricalExplorer.addEventListener("click", async () => {
   await loadHistoricalModules();
   const route = state.historyRoute || { type: "home" };
   const scope = historicalScope(route);
-  const item = route.type === "item" ? historicalService.getItem(route.itemId) : null;
+  const anniversary = route.type === "anniversary" ? anniversaryService.getAnniversary(route.anniversaryId, { mode: state.researchMode }) : null;
+  const item = route.type === "item" ? historicalService.getItem(route.itemId) : anniversary ? historicalService.getItem(anniversary.historicalItemId) : null;
   const coverage = historicalService.getHistoricalCoverage(scope);
   openWorkspaceSave({
     title: item?.title || elements.historicalExplorerTitle.textContent,
@@ -4127,7 +5153,7 @@ elements.saveHistoricalExplorer.addEventListener("click", async () => {
     type: "saved_research", boardId: "board-stats-trends", sample: true,
     sourceState: { mode: state.researchMode, sportId: scope.sportId, leagueId: scope.leagueId, queryText: "", structuredQuery: { historicalRoute: route } },
     canonicalReferences: { entityIds: item?.entityIds || [], eventIds: item?.eventIds || [], marketIds: [], insightIds: [], queryId: null, visualizationId: null },
-    researchSnapshot: safeSnapshot({ route, item, coverage, savedAt: new Date().toISOString(), source: "EdgeBoard historical sample fixtures", sample: true }),
+    researchSnapshot: safeSnapshot({ route, item, anniversary, coverage, savedAt: new Date().toISOString(), source: "EdgeBoard historical sample fixtures", sample: true }),
   }).catch(reportWorkspaceError);
 });
 
@@ -4135,7 +5161,36 @@ elements.historicalExplorer.addEventListener("click", async (event) => {
   const routeLink = event.target.closest("[data-history-route]");
   if (routeLink) {
     event.preventDefault();
-    setHistoricalRoute(parseHistoricalRoute(new URL(routeLink.href, window.location.origin)));
+    const existingTimeline = document.querySelector("#anniversaryTimeline");
+    if (routeLink.hash === "#anniversaryTimeline" && existingTimeline) {
+      existingTimeline.scrollIntoView({ behavior: "smooth", block: "start" });
+      existingTimeline.setAttribute("tabindex", "-1");
+      existingTimeline.focus({ preventScroll: true });
+      return;
+    }
+    await setHistoricalRoute(parseHistoricalRoute(new URL(routeLink.href, window.location.origin)));
+    if (routeLink.hash === "#anniversaryTimeline") {
+      const timeline = document.querySelector("#anniversaryTimeline");
+      timeline?.scrollIntoView({ behavior: "smooth", block: "start" });
+      timeline?.setAttribute("tabindex", "-1");
+      timeline?.focus({ preventScroll: true });
+    }
+    return;
+  }
+  const offset = event.target.closest("[data-anniversary-offset]");
+  if (offset || event.target.closest("[data-anniversary-today]")) {
+    const current = state.historyRoute?.date || new Date();
+    const query = offset ? (Number(offset.dataset.anniversaryOffset) < 0 ? "yesterday" : "tomorrow") : "today";
+    const parsed = anniversaryQueryParser(query, { today: offset ? current : new Date() });
+    setHistoricalRoute({ ...state.historyRoute, type: "anniversaries", date: parsed.date });
+    return;
+  }
+  const anniversaryQuery = event.target.closest("[data-anniversary-query]");
+  if (anniversaryQuery) {
+    elements.queryInput.value = anniversaryQuery.dataset.anniversaryQuery;
+    setHistoricalRoute(null, { focus: false });
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
     return;
   }
   const research = event.target.closest("[data-history-research]");
@@ -4163,6 +5218,17 @@ elements.historicalExplorer.addEventListener("click", async (event) => {
     state.historyActive = false;
     openVisualAnalytics({ visualizationType: "timeline", sportId: item.sportId, leagueId: item.leagueId, entityType: entity.type, entityIds: [entity.id], eventIds: item.eventIds, statIds: item.statIds, dateRange: { type: "season", value: item.season }, filters: {} });
   }
+});
+
+elements.historicalExplorer.addEventListener("submit", (event) => {
+  const form = event.target.closest("[data-anniversary-filters]");
+  if (!form) return;
+  event.preventDefault();
+  const values = new FormData(form);
+  const sportId = String(values.get("sport") || "");
+  let leagueId = String(values.get("league") || "");
+  if (leagueId && sportId && sportsRepository.getLeague(leagueId)?.sportId !== sportId) leagueId = "";
+  setHistoricalRoute({ type: "anniversaries", date: String(values.get("date") || ""), year: String(values.get("year") || ""), sportId, leagueId, category: String(values.get("category") || "") });
 });
 
 elements.todayMarketGrid.addEventListener("click", (event) => {
@@ -4295,7 +5361,7 @@ elements.slipList.addEventListener("keydown", (event) => {
 });
 
 function runBettingResearch(query) {
-  const parsed = parseResearchQuery(query, sportsRepository, state.discoveryResearchContext?.leagueId || state.leagueId, state.market);
+  const parsed = parseResearchQuery(query, sportsRepository, state.marketResearchContext?.leagueId || state.discoveryResearchContext?.leagueId || state.leagueId, state.market);
   const priorSportId = currentLeague()?.sportId;
   const priorCanonicalMarketId = state.canonicalMarketId;
   state.query = query;
@@ -4372,6 +5438,7 @@ function runBettingResearch(query) {
     providerName: sportsRepository.getMetadata().provider,
     storyContext: state.storyResearchContext,
     discoveryContext: state.discoveryResearchContext,
+    marketContext: state.marketResearchContext,
     historicalQuery: state.historicalParsedQuery,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: state.leagueId,
@@ -4403,11 +5470,25 @@ async function runStatsResearch(query) {
   state.statsParsedQuery = parseStatisticalQuery(query, {
     mode: state.researchMode,
     sportsRepository,
-    currentLeagueId: state.storyResearchContext?.leagueId || state.discoveryResearchContext?.leagueId || state.leagueId,
-    selectedEntityId: state.storyResearchContext?.entityIds?.[0] || state.discoveryResearchContext?.entityIds?.[0] || state.selectedEntityId,
+    currentLeagueId: state.marketResearchContext?.leagueId || state.storyResearchContext?.leagueId || state.discoveryResearchContext?.leagueId || state.leagueId,
+    selectedEntityId: state.marketResearchContext?.entityIds?.[0] || state.storyResearchContext?.entityIds?.[0] || state.discoveryResearchContext?.entityIds?.[0] || state.selectedEntityId,
     ignoreExplicitLeague: state.statsContextOverrideDisabled,
   });
-  if (state.storyResearchContext) {
+  if (state.marketResearchContext) {
+    state.statsParsedQuery = Object.freeze({
+      ...state.statsParsedQuery,
+      structuredQuery: Object.freeze({
+        ...state.statsParsedQuery.structuredQuery,
+        sportId: state.marketResearchContext.sportId,
+        leagueId: state.marketResearchContext.leagueId,
+        primaryEntityIds: state.marketResearchContext.entityIds,
+        entitySet: state.marketResearchContext.entityIds,
+        entitySetSource: "structured-market-context",
+        contextOverride: false,
+        scopeOverride: true,
+      }),
+    });
+  } else if (state.storyResearchContext) {
     state.statsParsedQuery = Object.freeze({
       ...state.statsParsedQuery,
       structuredQuery: Object.freeze({
@@ -4451,6 +5532,7 @@ async function runStatsResearch(query) {
     providerName: sportsRepository.getMetadata().provider,
     storyContext: state.storyResearchContext,
     discoveryContext: state.discoveryResearchContext,
+    marketContext: state.marketResearchContext,
     historicalQuery: state.historicalParsedQuery,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: parsed.structuredQuery.leagueId || state.leagueId,
@@ -4508,7 +5590,7 @@ async function submitResearchQuery() {
     renderAll();
     return;
   }
-  const historicalRequested = /\b(history|historical|all[- ]time|championship|rivalr|dynast|comeback|upset|career timeline|season comparison|record progression|on this day|fastest finish|longest streak)\b/i.test(query);
+  const historicalRequested = /\b(history|historical|all[- ]time|championship|rivalr|dynast|comeback|upset|career timeline|season comparison|record progression|on this day|anniversar(?:y|ies)|what happened (?:today|on this date)|fastest finish|longest streak)\b/i.test(query);
   if (historicalRequested) await loadHistoricalModules();
   state.historicalParsedQuery = historicalRequested ? historicalQueryParser(query, {
     entityRegistry, sportsRepository, sportId: currentLeague()?.sportId || "", leagueId: state.leagueId,
@@ -4516,6 +5598,22 @@ async function submitResearchQuery() {
   if (state.historicalParsedQuery) {
     const parsedHistory = state.historicalParsedQuery;
     const coverage = historicalService.getHistoricalCoverage({ sportId: parsedHistory.sportId, leagueId: parsedHistory.leagueId });
+    if (parsedHistory.intent === "event_anniversary") {
+      const parsedAnniversary = anniversaryQueryParser(query, { today: new Date() });
+      const anniversaryResult = anniversaryService.searchAnniversaries(query, { date: parsedAnniversary.date || new Date(), sportId: parsedHistory.sportId, leagueId: parsedHistory.leagueId, year: parsedAnniversary.originalYear, category: parsedAnniversary.category, limit: 5, mode: state.researchMode });
+      const anniversary = anniversaryResult.items[0] || null;
+      state.discoveryResearchContext = anniversary ? {
+        itemId: anniversary.id, type: "historical_anniversary", title: anniversary.title, entityIds: anniversary.entityIds, eventIds: anniversary.eventIds, storyIds: [], statIds: historicalService.getItem(anniversary.historicalItemId)?.statIds || [], marketIds: anniversary.currentConnections.currentMarkets.map((market) => market.id), sportId: anniversary.sportId, leagueId: anniversary.leagueId,
+        queryTemplate: { query, intent: "event_anniversary", date: parsedAnniversary.date, originalYear: parsedAnniversary.originalYear },
+        sourceSignals: anniversary.supportingEvidence.map((entry) => ({ type: "historical_evidence", label: entry.label, weight: 1 })),
+        sources: anniversary.sources, freshness: anniversary.freshness, validationStatus: anniversary.validationStatus, edgeTrust: anniversary.edgeTrust, researchQuality: anniversary.researchQuality,
+        warnings: [...anniversary.warnings, `Historical coverage: ${anniversary.coverageLabel}`, "This anniversary is a historical fact, not a prediction."],
+      } : {
+        itemId: `anniversary-query-${parsedAnniversary.date || "invalid"}`, type: "historical_anniversary_query", title: "No supported anniversary found", entityIds: [], eventIds: [], storyIds: [], statIds: [], marketIds: [], sportId: parsedHistory.sportId, leagueId: parsedHistory.leagueId,
+        queryTemplate: { query, intent: "event_anniversary", date: parsedAnniversary.date }, sourceSignals: [], sources: [], freshness: { state: "unavailable", lastUpdated: null }, validationStatus: "incomplete", edgeTrust: null, researchQuality: null,
+        warnings: [...parsedAnniversary.warnings, ...anniversaryResult.warnings, "No unrelated event was substituted."],
+      };
+    } else {
     const result = historicalService.searchHistoricalItems({ query, sportId: parsedHistory.sportId, leagueId: parsedHistory.leagueId, entityIds: parsedHistory.entityIds, pageSize: 5 });
     const raw = result.items[0] ? historicalService.getItem(result.items[0].id) : null;
     const unsupportedAllTime = parsedHistory.allTimeRequested && !coverage?.allTimeClaimsSupported;
@@ -4531,6 +5629,7 @@ async function submitResearchQuery() {
       edgeTrust: raw?.edgeTrust || null, researchQuality: raw?.researchQuality || null,
       warnings: [...(raw?.warnings || []), ...(parsedHistory.warnings || []), ...(parsedHistory.unsupportedPortions || []), `Historical coverage: ${coverage?.label || "unavailable"}`],
     };
+    }
   }
   if (/\b(chart|map|visual|plot|telemetry|passing network|line movement|odds movement|round by round|race position|lap time)\b/i.test(query)) {
     const modules = await loadVisualizationModules();
@@ -4593,6 +5692,7 @@ async function submitResearchQuery() {
         providerName: sportsRepository.getMetadata().provider,
         storyContext: state.storyResearchContext,
         discoveryContext: state.discoveryResearchContext,
+        marketContext: state.marketResearchContext,
         resolvedEntities: matches,
       });
       elements.queryFeedback.textContent = `Visual request interpreted as ${preliminary.visualizationType.replaceAll("_", " ")}. Provider capability and row validation will run before rendering.`;
@@ -4623,6 +5723,10 @@ async function submitResearchQuery() {
 
 document.querySelector("#queryForm").addEventListener("submit", (event) => {
   event.preventDefault();
+  if (/\b(parlay|builder|same[- ]game|sgp)\b/i.test(elements.queryInput.value)) {
+    setMarketResearchRoute({ type: "parlay-builder", constraints: state.parlayConstraints });
+    return;
+  }
   submitResearchQuery().catch((error) => {
     statsRequestSequence += 1;
     state.statsLoading = false;
@@ -4692,6 +5796,8 @@ elements.queryInput.addEventListener("input", () => {
   state.researchAnswer = null;
   state.storyResearchContext = null;
   state.discoveryResearchContext = null;
+  state.marketResearchContext = null;
+  state.graphResearchEntityId = "";
   state.selectedEntityId = "";
   state.statsContextOverrideDisabled = false;
   persistResearchState({ updateUrl: false });
@@ -5143,11 +6249,95 @@ function handleHomeDiscoveryQuery(event) {
 [elements.todayPulse, elements.insightDiscovery, elements.homeDiscoverySections, elements.discoveryExplorer]
   .forEach((container) => container.addEventListener("click", handleHomeDiscoveryQuery));
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
+  const marketLink = event.target.closest("[data-open-market]");
+  if (marketLink) {
+    event.preventDefault();
+    const model = marketResearchService.getBySelection(marketLink.dataset.openMarket, marketLink.dataset.marketLeague || "");
+    setMarketResearchRoute(model ? { type: "detail", leagueId: model.leagueId, marketId: model.marketId, selectionId: model.selectionId } : { type: "detail", leagueId: marketLink.dataset.marketLeague || "", marketId: "market", selectionId: marketLink.dataset.openMarket });
+    return;
+  }
+  const marketQuery = event.target.closest("[data-market-query]");
+  if (marketQuery) {
+    const marketCard = marketQuery.closest(".market-intelligence-card, [data-screener-result]");
+    const selectionId = state.marketResearchModel?.selectionId
+      || marketCard?.querySelector("[data-open-market]")?.dataset.openMarket || "";
+    const leagueId = state.marketResearchModel?.leagueId
+      || marketCard?.querySelector("[data-open-market]")?.dataset.marketLeague || "";
+    const contextModel = state.marketResearchModel || marketResearchService.getBySelection(selectionId, leagueId);
+    setMarketResearchRoute(null, { replace: true, focus: false });
+    elements.queryInput.value = marketQuery.dataset.marketQuery;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    state.marketResearchContext = marketResearchContextFor(contextModel, marketQuery.dataset.marketIntent || "explain_market");
+    document.querySelector("#queryForm").requestSubmit();
+    document.querySelector("#researchWorkspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const graphQuery = event.target.closest("[data-graph-query]");
+  if (graphQuery) {
+    if (elements.insightDialog.open) elements.insightDialog.close();
+    if (state.workspaceActive) closeWorkspace({ updateUrl: false });
+    if (state.historyActive) setHistoricalRoute(null, { replace: true, focus: false });
+    if (state.visualRequest) closeVisualAnalytics({ useHistory: false });
+    if (state.profileAthleteId) closeAthleteProfile({ useHistory: false });
+    if (state.entityProfileId) closeEntityProfile({ useHistory: false });
+    if (state.discoveryRoute) setDiscoveryRoute(null, { replace: true, focus: false });
+    elements.queryInput.value = graphQuery.dataset.graphQuery;
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    state.graphResearchEntityId = graphQuery.closest("[data-knowledge-graph]")?.dataset.knowledgeGraph || "";
+    document.querySelector("#queryForm").requestSubmit();
+    document.querySelector("#researchWorkspace")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const graphWorkspace = event.target.closest("[data-graph-workspace]");
+  if (graphWorkspace) {
+    const entity = entityRegistry.getEntity(graphWorkspace.dataset.graphWorkspace);
+    if (!entity) return;
+    const graph = knowledgeGraphService.getEntityGraph(entity.id, { mode: state.researchMode, currentDate: new Date() });
+    const base = currentWorkspaceCandidate();
+    await openWorkspaceSave({
+      ...base,
+      type: "saved_entity",
+      boardId: "board-stats-trends",
+      title: `${entity.displayName} connected research graph`,
+      description: "Saved deterministic EdgeBoard knowledge graph snapshot",
+      canonicalReferences: { ...base.canonicalReferences, entityIds: [entity.id] },
+      researchSnapshot: safeSnapshot({
+        schemaVersion: graph.schemaVersion,
+        center: graph.center,
+        nodes: graph.nodes,
+        edges: graph.edges,
+        source: graph.source,
+        warnings: graph.warnings,
+        savedAt: new Date().toISOString(),
+      }),
+    });
+    return;
+  }
+  const shareAnniversary = event.target.closest("[data-share-anniversary]");
+  if (shareAnniversary) {
+    await loadHistoricalModules();
+    const item = anniversaryService.getAnniversary(shareAnniversary.dataset.shareAnniversary, { mode: state.researchMode });
+    const snapshot = anniversaryService.shareSnapshot(item);
+    const localStatus = shareAnniversary.closest("[data-home-card]")?.querySelector("[role=status]") || elements.historicalActionStatus;
+    try {
+      await writeClipboardWithTimeout(JSON.stringify(snapshot, null, 2));
+      localStatus.textContent = "Read-only anniversary snapshot copied with source, coverage, and sample disclosure.";
+    } catch (error) {
+      localStatus.textContent = error?.message || "Copy is unavailable.";
+    }
+    return;
+  }
   const historyLink = event.target.closest("[data-history-route]");
   if (historyLink && !historyLink.closest("#historicalExplorer")) {
     event.preventDefault();
-    setHistoricalRoute(parseHistoricalRoute(new URL(historyLink.href, window.location.origin)));
+    await setHistoricalRoute(parseHistoricalRoute(new URL(historyLink.href, window.location.origin)));
+    if (historyLink.hash === "#anniversaryTimeline") {
+      const timeline = document.querySelector("#anniversaryTimeline");
+      timeline?.scrollIntoView({ behavior: "smooth", block: "start" });
+      timeline?.setAttribute("tabindex", "-1");
+      timeline?.focus({ preventScroll: true });
+    }
     return;
   }
   const routeLink = event.target.closest("[data-discovery-route]");
@@ -5344,6 +6534,7 @@ document.addEventListener("click", (event) => {
   const visualLinkTarget = event.target.closest("[data-open-visual]");
   if (visualLinkTarget) {
     event.preventDefault();
+    if (state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
     const entity = entityRegistry.getEntity(visualLinkTarget.dataset.visualEntity);
     openVisualAnalytics({
       visualizationType: visualLinkTarget.dataset.openVisual || defaultVisualizationType(entity),
@@ -5359,6 +6550,7 @@ document.addEventListener("click", (event) => {
   const athleteLinkTarget = event.target.closest("[data-open-athlete]");
   if (athleteLinkTarget) {
     event.preventDefault();
+    if (state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
     renderAthleteSearchResults();
@@ -5368,6 +6560,7 @@ document.addEventListener("click", (event) => {
   const entityLinkTarget = event.target.closest("[data-open-entity]");
   if (entityLinkTarget) {
     event.preventDefault();
+    if (state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
     renderAthleteSearchResults();
@@ -5867,7 +7060,7 @@ elements.workspaceEditForm.addEventListener("submit", async (event) => {
     if (action === "session-note") {
       state.researchSession = addResearchSessionNote(state.researchSession, description || title);
       renderResearchMode();
-      elements.queryFeedback.textContent = "Private note added to the active research session. Save the session to retain it in My EdgeBoard.";
+      elements.queryFeedback.textContent = "Private note added to the active Research Session. Save the session to retain it in Workspace.";
     }
     else if (action === "create-board") await workspaceRepository.createBoard({ workspaceId: vm.workspace.id, title, description });
     else if (action === "edit-board") await workspaceRepository.updateBoard(targetId, { title, description });
@@ -6365,6 +7558,18 @@ elements.workspaceShareDialog.addEventListener("click", async (event) => {
 });
 
 window.addEventListener("popstate", () => {
+  const marketRoute = parseMarketRoute();
+  state.marketResearchRoute = marketRoute;
+  state.marketResearchActive = Boolean(marketRoute);
+  if (marketRoute?.leagueId && sportsRepository.getLeague(marketRoute.leagueId)) {
+    state.navigationSelection = { type: "league", id: marketRoute.leagueId };
+    state.leagueId = marketRoute.leagueId;
+  }
+  if (marketRoute) {
+    state.historyActive = false; state.historyRoute = null; state.workspaceActive = false; state.workspaceRoute = null;
+    renderAll(); elements.marketResearchView.focus({ preventScroll: true }); return;
+  }
+  applyMarketResearchVisibility();
   const historicalRoute = parseHistoricalRoute();
   state.historyRoute = historicalRoute;
   state.historyActive = Boolean(historicalRoute);
@@ -6559,7 +7764,8 @@ document.querySelectorAll("[data-theme-option]").forEach((button) => {
 
 document.querySelector(".brand").addEventListener("click", (event) => {
   event.preventDefault();
-  if (state.historyActive) setHistoricalRoute(null, { focus: false });
+  if (state.marketResearchActive) setMarketResearchRoute(null, { focus: false });
+  else if (state.historyActive) setHistoricalRoute(null, { focus: false });
   else if (state.workspaceActive) closeWorkspace();
   else if (state.visualRequest) closeVisualAnalytics();
   else if (state.profileAthleteId) closeAthleteProfile();
@@ -6581,7 +7787,8 @@ function initializeOnboarding() {
   if (!elements.onboarding || (document.referrer.includes("/browser-tests/") && !forceTestOnboarding)) return;
   let completed = false;
   try {
-    completed = localStorage.getItem("edgeboard-onboarding-v1.1-complete") === "true";
+    completed = localStorage.getItem("edgeboard-onboarding-v1.6-complete") === "true"
+      || localStorage.getItem("edgeboard-onboarding-v1.1-complete") === "true";
   } catch {
     completed = false;
   }
@@ -6593,9 +7800,42 @@ function initializeOnboarding() {
 elements.dismissOnboarding?.addEventListener("click", () => {
   elements.onboarding.hidden = true;
   try {
+    localStorage.setItem("edgeboard-onboarding-v1.6-complete", "true");
     localStorage.setItem("edgeboard-onboarding-v1.1-complete", "true");
   } catch {
     elements.queryFeedback.textContent = "The guide is hidden for this visit, but browser storage is unavailable so the preference cannot be saved.";
+  }
+});
+
+elements.openCommandPalette?.addEventListener("click", openCommandPalette);
+elements.closeCommandPalette?.addEventListener("click", closeCommandPalette);
+elements.commandPalette?.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeCommandPalette();
+});
+elements.commandPaletteInput?.addEventListener("input", scheduleCommandPaletteSearch);
+elements.commandPaletteInput?.addEventListener("keydown", (event) => {
+  if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault();
+    if (!commandPaletteItems.length) return;
+    commandPaletteIndex = (commandPaletteIndex + (event.key === "ArrowDown" ? 1 : -1) + commandPaletteItems.length) % commandPaletteItems.length;
+    renderCommandPalette(commandPaletteItems);
+    document.querySelector(`#command-palette-option-${commandPaletteIndex}`)?.scrollIntoView({ block: "nearest" });
+  } else if (event.key === "Enter" && commandPaletteIndex >= 0) {
+    event.preventDefault();
+    executeCommandPaletteItem(commandPaletteItems[commandPaletteIndex]);
+  }
+});
+elements.commandPaletteResults?.addEventListener("click", (event) => {
+  const option = event.target.closest("[data-command-index]");
+  if (option) executeCommandPaletteItem(commandPaletteItems[Number(option.dataset.commandIndex)]);
+  const query = event.target.closest("[data-command-query]");
+  if (query) executeCommandPaletteItem({ query: query.dataset.commandQuery });
+});
+document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    if (elements.commandPalette.open) closeCommandPalette(); else openCommandPalette();
   }
 });
 
@@ -6605,6 +7845,9 @@ renderAll();
 scheduleMarketBoardLoad();
 window.setTimeout(() => {
   loadWorkspaceModules().then(() => renderHomeDiscovery()).catch(() => {});
+  loadHistoricalModules().then(() => {
+    if (!state.historyActive && !state.workspaceActive) renderHomeDiscovery();
+  }).catch(() => {});
 }, 0);
 if (new URLSearchParams(window.location.search).get("coverage") === "1") {
   window.setTimeout(() => {
@@ -6614,10 +7857,10 @@ if (new URLSearchParams(window.location.search).get("coverage") === "1") {
     });
   }, 0);
 }
-if (initialWorkspaceRoute) {
+if (initialWorkspaceRoute && !initialMarketRoute) {
   loadWorkspace({ focusHeading: false });
 }
-if (!initialWorkspaceRoute && initialResearchState.profileAthleteId) {
+if (!initialWorkspaceRoute && !initialMarketRoute && initialResearchState.profileAthleteId) {
   loadAthleteProfile({ focusHeading: false }).catch((error) => {
     state.profileLoading = false;
     state.profileViewModel = {
@@ -6628,13 +7871,13 @@ if (!initialWorkspaceRoute && initialResearchState.profileAthleteId) {
     renderAthleteProfile();
   });
 }
-if (!initialWorkspaceRoute && initialResearchState.entityProfileId) {
+if (!initialWorkspaceRoute && !initialMarketRoute && initialResearchState.entityProfileId) {
   loadEntityProfile({ focusHeading: false });
 }
-if (!initialWorkspaceRoute && state.visualRequest) {
+if (!initialWorkspaceRoute && !initialMarketRoute && state.visualRequest) {
   loadVisualAnalytics({ focusHeading: false });
 }
-if (!initialWorkspaceRoute && initialResearchState.queryText
+if (!initialWorkspaceRoute && !initialMarketRoute && initialResearchState.queryText
   && !initialResearchState.visualType
   && !initialResearchState.profileAthleteId
   && !initialResearchState.entityProfileId) {

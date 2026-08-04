@@ -105,6 +105,20 @@ function collectDiscoveryContextEvidence(plan) {
   }));
 }
 
+function collectMarketContextEvidence(plan) {
+  const market = plan?.marketContext;
+  if (!market) return [];
+  return [...market.marketExplainer.supportingEvidence, ...(market.screener?.supportingEvidence || [])].map((item) => Object.freeze({
+    type: item.type || "market-evidence",
+    label: item.label || "Market evidence",
+    value: Object.entries(item.values || {}).map(([key, value]) => `${key}: ${displayValue(value)}`).join(" · ") || "Observed provider record",
+    entityId: market.entityIds[0] || "", entityName: market.participantName,
+    sampleSize: market.screener?.matchedCount ?? market.marketExplainer.supportingEvidence.length,
+    source: item.provider || market.source.provider || "Market provider unavailable",
+    validation: item.verification || "unverified", eventIds: Object.freeze([...(market.eventIds || [])]),
+  }));
+}
+
 function collectStatsEvidence(result, source) {
   const active = statsResult(result);
   const records = [];
@@ -509,7 +523,9 @@ export function buildResearchAnswer({
   if (!plan) throw new Error("A structured research plan is required.");
   const safeMode = normalizeResearchMode(mode, plan.mode);
   const defaultSource = resultSource(suppliedStatsResult, statsProvider);
-  const source = plan.storyContext
+  const source = plan.marketContext
+    ? { provider: plan.marketContext.source.provider || "Market provider unavailable", lastUpdated: plan.marketContext.source.updatedAt || null, sample: plan.marketContext.source.sample !== false }
+    : plan.storyContext
     ? {
       provider: plan.storyContext.sources.map((item) => item.label).join(" + ")
         || plan.storyContext.sourceIds.join(" + ") || "Story source unavailable",
@@ -539,6 +555,7 @@ export function buildResearchAnswer({
   const collectedStatEvidence = [
     ...collectStoryEvidence(plan),
     ...collectDiscoveryContextEvidence(plan),
+    ...collectMarketContextEvidence(plan),
     ...collectDiscoveryEvidence(plan),
     ...collectEntityEvidence(plan),
     ...collectStatsEvidence(suppliedStatsResult, source),
@@ -550,11 +567,13 @@ export function buildResearchAnswer({
   })));
   const statEvidence = evidence.slice(0, collectedStatEvidence.length);
   const marketEvidence = evidence.slice(collectedStatEvidence.length);
-  const sampleSize = plan.storyContext?.supportingEvidence.length || plan.discoveryContext?.sourceSignals.length || resultSampleSize(suppliedStatsResult);
+  const sampleSize = plan.marketContext?.screener?.matchedCount ?? (plan.marketContext?.marketExplainer.supportingEvidence.length || plan.storyContext?.supportingEvidence.length || plan.discoveryContext?.sourceSignals.length || resultSampleSize(suppliedStatsResult));
   const warnings = unique([
     ...warningsFor(suppliedStatsResult, bettingWorkflow, bettingPicks),
     ...(plan.storyContext?.warnings || []),
     ...(plan.discoveryContext?.warnings || []),
+    ...(plan.marketContext?.counterarguments || []),
+    ...(plan.marketContext?.screener ? [plan.marketContext.screener.explanation?.uncertainty, plan.marketContext.screener.disclosure] : []),
   ]);
   const tables = [discoveryTable(plan), statsTable(suppliedStatsResult), bettingTable(freshPicks)].filter(Boolean);
   const completeness = researchCompleteness({
@@ -572,6 +591,8 @@ export function buildResearchAnswer({
     source.sample ? "The dataset is illustrative sample data and does not establish complete career, league, or all-time coverage." : "",
     plan.storyContext ? `The retained story is ${plan.storyContext.validationStatus.replaceAll("_", " ")}; research text cannot strengthen that status.` : "",
     plan.discoveryContext ? "Discovery relevance is not measured public popularity and does not strengthen the underlying evidence." : "",
+    plan.marketContext ? plan.marketContext.marketExplainer.explanation : "",
+    plan.marketContext?.screener ? "Screener inclusion means the market matched explicit research filters; it is not a betting recommendation." : "",
     freshPicks.length ? "Odds, lines, and model fields can change; verify the provider timestamp before use." : "",
   ]);
   const disclosure = Object.freeze({

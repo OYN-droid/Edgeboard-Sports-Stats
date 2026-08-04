@@ -49,7 +49,7 @@ function workspaceNavigation(viewModel) {
     ["journal", "Journal", ""],
     ["settings", "Settings", ""],
   ];
-  return `<nav class="workspace-nav" aria-label="My EdgeBoard">
+  return `<nav class="workspace-nav" aria-label="Workspace">
     ${links.map(([id, label, count]) => `<a href="${escapeHtml(workspaceRouteUrl({ workspaceId: viewModel.workspace.id, view: id }))}" data-workspace-route="${id}" aria-current="${viewModel.route.view === id ? "page" : "false"}"><span>${escapeHtml(label)}</span>${count !== "" ? `<span aria-label="${count} ${escapeHtml(label.toLowerCase())}">${count}</span>` : ""}</a>`).join("")}
   </nav>`;
 }
@@ -108,7 +108,7 @@ function dashboardModule(module, viewModel) {
 
 function dashboardView(viewModel) {
   return `<section aria-labelledby="workspaceDashboardTitle">
-    <div class="workspace-section-heading"><div><p class="eyebrow">Personal sports intelligence</p><h2 id="workspaceDashboardTitle">My EdgeBoard dashboard</h2><p>Continue local research without changing the live sports-discovery experience.</p></div>
+    <div class="workspace-section-heading"><div><p class="eyebrow">Personal sports intelligence</p><h2 id="workspaceDashboardTitle">Workspace dashboard</h2><p>Continue local research without changing the live sports-discovery experience.</p></div>
       <label>Layout preset<select data-dashboard-preset>${Object.keys(DASHBOARD_PRESETS).map((preset) => `<option value="${preset}" ${viewModel.dashboard.preset === preset ? "selected" : ""}>${escapeHtml(preset.replaceAll("-", " "))}</option>`).join("")}<option value="custom" ${viewModel.dashboard.preset === "custom" ? "selected" : ""}>Custom</option></select></label>
     </div>
     <div class="workspace-dashboard-grid">${viewModel.dashboard.modules.map((module) => dashboardModule(module, viewModel)).join("")}</div>
@@ -246,13 +246,13 @@ export function renderWorkspace(viewModel) {
 
 export function renderSaveDialogFields({ boards, candidate, duplicate = null }) {
   return `<form method="dialog" id="workspaceSaveForm">
-    <div class="dialog-heading"><div><p class="eyebrow">Save structured research</p><h2 id="workspaceSaveDialogTitle">${duplicate ? "Already saved" : "Save to My EdgeBoard"}</h2></div><button type="button" data-close-save-dialog aria-label="Close save dialog">Close</button></div>
+    <div class="dialog-heading"><div><p class="eyebrow">Save structured research</p><h2 id="workspaceSaveDialogTitle">${duplicate ? "Already saved" : "Save to Workspace"}</h2></div><button type="button" data-close-save-dialog aria-label="Close save dialog">Close</button></div>
     ${duplicate ? `<div class="data-warning" role="status"><strong>A matching item already exists.</strong><p>${escapeHtml(duplicate.title)}</p></div>` : ""}
     <label>Title<input name="title" required maxlength="240" value="${escapeHtml(candidate.title || "")}" /></label>
     <label>Board<select name="boardId" required>${boards.filter((board) => !board.isArchived).map((board) => `<option value="${escapeHtml(board.id)}" ${board.id === candidate.boardId ? "selected" : ""}>${escapeHtml(board.title)}</option>`).join("")}</select></label>
     <label>Private note<textarea name="note" rows="3" maxlength="10000"></textarea></label>
-    <label>Tags<input name="tags" placeholder="wnba, comparison" /></label>
-    <label><input type="checkbox" name="isPinned" /> Pin saved item</label>
+    <label>Tags<input name="tags" placeholder="wnba, comparison" value="${escapeHtml((candidate.tags || []).join(", "))}" /></label>
+    <label><input type="checkbox" name="isPinned" ${candidate.isPinned ? "checked" : ""} /> Pin saved item</label>
     <fieldset><legend>Save behavior</legend><label><input type="radio" name="saveMode" value="snapshot" /> Snapshot only</label><label><input type="radio" name="saveMode" value="refreshable" /> Refreshable research</label><label><input type="radio" name="saveMode" value="snapshot_and_refreshable" checked /> Snapshot and refreshable research</label></fieldset>
     <p>Snapshots preserve visible values and source timestamps. Refreshable research preserves the structured request and never overwrites the original snapshot.</p>
     <div class="dialog-actions">${duplicate ? '<button type="submit" value="open-existing" data-save-strategy="open">Open existing</button><button type="submit" value="update-existing" data-save-strategy="update">Update existing</button><button type="submit" value="copy" data-save-strategy="copy">Save another copy</button>' : '<button type="submit" value="save">Save</button>'}<button type="button" data-close-save-dialog>Cancel</button></div>

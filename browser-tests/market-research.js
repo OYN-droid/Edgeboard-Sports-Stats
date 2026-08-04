@@ -1,0 +1,62 @@
+import { MARKET_RESEARCH_SCORE_WEIGHTS, MARKET_RESEARCH_STATUSES } from "../src/config/market-research-config.js";
+import { mockProviderPayload } from "../src/data/mock-provider.js";
+import { mockStatsProviderPayload } from "../src/data/mock-stats-provider.js";
+import { createEntityRegistry } from "../src/services/entity-registry-service.js";
+import { createInsightService } from "../src/services/insight-service.js";
+import { createMarketResearchService, validateMarketResearchModel } from "../src/services/market-research-service.js";
+import { createSportsRepository } from "../src/services/sports-repository.js";
+import { createStatsRepository } from "../src/services/stats-provider.js";
+import { createStoryEngine } from "../src/services/story-engine.js";
+
+const checks=[];const failures=[];const check=(condition,label)=>{checks.push(label);if(!condition)failures.push(label);};
+const wait=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms));
+const entityRegistry=createEntityRegistry();
+const sportsRepository=createSportsRepository(mockProviderPayload);
+const statsRepository=createStatsRepository(mockStatsProviderPayload,{generatedAt:"2026-08-03T12:00:00.000Z"});
+const insightService=createInsightService(statsRepository,sportsRepository);
+const storyEngine=createStoryEngine({insightService,sportsRepository,statsRepository,entityRegistry,clock:()=>new Date(2026,7,3,12)});
+const service=createMarketResearchService({sportsRepository,statsRepository,entityRegistry,insightService,storyEngine});
+
+check(MARKET_RESEARCH_STATUSES.includes("stale")&&MARKET_RESEARCH_STATUSES.includes("suspended"),"1 normalized market research statuses cover defensive states");
+check(!Object.keys(MARKET_RESEARCH_SCORE_WEIGHTS).some((key)=>/confidence|probability/i.test(key)),"2 research ranking excludes model confidence and probability");
+const maxey=service.getBySelection("maxey-points","nba");
+check(maxey?.id==="market-research:maxey-points:maxey-points"&&maxey.entity?.id==="nba-tyrese-maxey","3 selection resolves to stable market and canonical athlete IDs");
+check(validateMarketResearchModel(maxey).valid,"4 normalized model passes runtime validation");
+check(maxey.historicalPerformance.sampleSize===10&&maxey.historicalPerformance.last5.sampleSize===5,"5 performance comes from completed source rows with visible samples");
+check(maxey.movement.observed&&maxey.movement.timeline.length===3&&maxey.movement.lineDelta===1,"6 provider price snapshots produce deterministic observed movement");
+check(maxey.movement.causeStatus==="unknown"&&/no verified cause has been identified/i.test(maxey.movement.causeDisclosure),"7 movement cause is never inferred");
+check(maxey.priceComparison.prices.length===3&&maxey.priceComparison.prices.every((item)=>item.verification==="verified")&&maxey.priceComparison.comparisonState==="multi-book","8 comparison uses only explicitly verified provider sportsbooks");
+check(/3 verified sample-provider sportsbook prices/i.test(maxey.priceComparison.disclosure),"9 multi-book sample comparison discloses its verified scope");
+check(maxey.reasonsAgainst.length>0&&maxey.counterarguments.length>0,"10 market research includes counterarguments");
+check(maxey.edgeTrust.researchQuality.score===maxey.researchQuality.score&&maxey.disclosures.some((item)=>/not win probability/i.test(item)),"11 Edge Trust remains distinct from betting confidence");
+check(service.search("points",{leagueIds:["nba"]}).some((item)=>item.selectionId==="maxey-points"),"12 canonical market search finds relevant normalized markets");
+check(!service.search("points",{leagueIds:["mlb"]}).some((item)=>item.leagueId==="nba"),"13 search respects explicit league scope");
+const hub=service.buildHub({leagueIds:["nba"],currentDate:new Date(2026,7,28,12)});
+check(hub.sections.map((item)=>item.id).includes("movement")&&hub.sections.map((item)=>item.id).includes("best-price"),"14 hub exposes movement and price research lanes");
+check(hub.sections.find((item)=>item.id==="today").items.every((item)=>item.event?.startsAt),"15 Today never treats a missing event time as today");
+check(/not public popularity/i.test(hub.disclosure),"16 deterministic trending label is honest");
+check(hub.sections.find((item)=>item.id==="lineups").items.length===0&&/No provider-confirmed/.test(hub.sections.find((item)=>item.id==="lineups").emptyMessage),"17 unavailable lineup evidence has an explicit empty state");
+const invalid=validateMarketResearchModel({...maxey,currentOdds:"bad",priceComparison:{...maxey.priceComparison,prices:[{odds:"bad"}]}});
+check(!invalid.valid,"18 malformed price research fails validation");
+const aborted=new AbortController();aborted.abort();
+try{await service.getBySelectionAsync("maxey-points","nba",{signal:aborted.signal});check(false,"19 aborted requests cannot update a current page");}catch(error){check(error.name==="AbortError","19 aborted requests cannot update a current page");}
+
+const frame=document.querySelector("#app");frame.contentWindow.addEventListener("error",e=>window.testErrors.push(`app: ${e.message}`));frame.contentWindow.addEventListener("unhandledrejection",e=>window.testErrors.push(`app: ${String(e.reason)}`));
+await new Promise((resolve)=>frame.addEventListener("load",resolve,{once:true}));await wait(700);
+const doc=frame.contentDocument;const win=frame.contentWindow;
+win.history.pushState({},"","/markets/nba/maxey-points/maxey-points?scope=league%3Anba");win.dispatchEvent(new PopStateEvent("popstate"));await wait(900);
+check(doc.body.classList.contains("markets-active")&&!doc.querySelector("#marketResearchView").hidden,"20 refresh-safe detail route opens Edge Markets only");
+check(doc.querySelector(".market-research-detail h2")?.textContent.includes("Tyrese Maxey"),"21 canonical market detail renders");
+check(doc.querySelectorAll(".movement-timeline li").length===3&&doc.querySelector(".market-research-detail")?.textContent.includes("Movement explanation: unknown"),"22 movement evidence and unknown cause render clearly");
+check(doc.querySelector(".edge-trust-details")&&doc.querySelector(".market-argument-grid"),"23 Edge Trust and counterarguments are visible");
+check(doc.querySelector(".market-research-detail")?.textContent.includes("3 verified sample-provider sportsbook prices"),"24 verified comparison scope is visible");
+const add=doc.querySelector("#marketResearchView [data-add]");if(add){add.click();await wait(100);}check(add ? (doc.querySelector("#mobileLegCount")?.textContent==="1"||doc.querySelector("#slipList")?.textContent.includes("Tyrese Maxey")) : doc.querySelector(".market-research-detail")?.textContent.includes("Stale market"),"25 shared research slip accepts verified fresh selections and blocks stale offers explicitly");
+const intelligence=doc.querySelector("#marketResearchView [data-market-query]");intelligence?.click();await wait(900);check(!doc.body.classList.contains("markets-active")&&doc.querySelector("#queryInput")?.value==="Explain this market."&&doc.querySelector("#researchAnswerContent")?.textContent.includes("market snapshot"),"26 Edge Intelligence receives structured market evidence without losing the query");
+win.history.pushState({},"","/markets");win.dispatchEvent(new PopStateEvent("popstate"));await wait(1400);check(doc.querySelector("#marketResearchTitle")?.textContent==="Edge Markets"&&doc.querySelectorAll(".market-hub-section").length>=10,"27 browser navigation restores the scoped hub");
+doc.querySelector('[data-theme-option="light"]')?.click();check(doc.body.dataset.theme==="light","28 light theme works");doc.querySelector('[data-theme-option="dark"]')?.click();
+frame.style.width="390px";await wait(150);check(doc.documentElement.scrollWidth<=doc.documentElement.clientWidth+2,"29 mobile market research has no horizontal overflow");
+const focusTarget=doc.querySelector("#marketResearchView a,#marketResearchView button");focusTarget?.focus();check(doc.activeElement===focusTarget,"30 market controls are keyboard focusable");
+check(window.testErrors.length===0,"31 no console or unhandled promise errors were recorded");
+
+document.querySelector("#results").textContent=failures.length?`FAIL ${failures.length}/${checks.length}\n${failures.join("\n")}\nConsole: ${window.testErrors.join(" | ")}`:`PASS ${checks.length} checks`;
+if(failures.length)throw new Error(failures.join("; "));

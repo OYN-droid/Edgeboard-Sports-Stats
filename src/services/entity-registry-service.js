@@ -30,6 +30,18 @@ export class EntityRegistry {
     return this.byId.get(String(id || "")) || null;
   }
 
+  resolveProviderEntity(providerId, { sportId = "", leagueId = "" } = {}) {
+    const normalizedId = String(providerId || "").trim().toLowerCase();
+    if (!normalizedId) return null;
+    const direct = this.getEntity(providerId);
+    if (direct && (!sportId || direct.sportId === sportId) && (!leagueId || direct.leagueId === leagueId)) return direct;
+    const matches = this.entities.filter((entity) => (!sportId || entity.sportId === sportId)
+      && (!leagueId || entity.leagueId === leagueId)
+      && [entity.id, ...Object.values(entity.providerIds || {})]
+        .some((value) => String(value || "").trim().toLowerCase() === normalizedId));
+    return matches.length === 1 ? matches[0] : null;
+  }
+
   getEntities({ type = "", sportId = "", leagueId = "", activeOnly = false } = {}) {
     return this.entities.filter((entity) =>
       (!type || entity.type === type)

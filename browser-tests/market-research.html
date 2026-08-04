@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Edge Markets tests</title><link rel="icon" href="data:,"></head><body>
+<pre id="results">Running…</pre>
+<iframe id="app" title="Edge Markets app" src="/?scope=league%3Anba&amp;testFixtureTimestamp=2026-08-03T12%3A00%3A00.000Z" style="width:1280px;height:1000px;border:0"></iframe>
+<script>window.testErrors=[];addEventListener("error",e=>testErrors.push(e.message));addEventListener("unhandledrejection",e=>testErrors.push(String(e.reason)));setTimeout(()=>{const r=document.querySelector("#results");if(r.textContent==="Running…")r.textContent=`ERROR\n${testErrors.join("\n")||"Harness did not complete."}`},20000);</script>
+<script type="module" src="./market-research.js"></script>
+</body></html>

@@ -251,8 +251,8 @@ check(unsupported.answer.summary.includes("No fallback statistic"), "24 unsuppor
 check(getRecoveryActions(unsupported.statsResult, { leagueName: "WNBA" }).length > 0,
   "24a unsupported results offer deterministic next actions");
 check(isComplexResearchPlan(leaderboard.plan), "24b complex research plans are identified for proactive display");
-check(getOnboardingSteps().map((step) => step.id).join(",") === "stats,betting,both,analyst,workspace",
-  "24c first-visit guide covers the five primary experiences");
+check(getOnboardingSteps().map((step) => step.id).join(",") === "edge-intelligence,edge-trust,stories,discovery,markets,history,workspace",
+  "24c first-visit guide covers the seven primary product concepts");
 const conflictTrust = evaluateEdgeTrust({
   components: { historical: "verified", agreement: "verified", freshness: "fresh", coverage: 1, identity: "verified" },
   conflicts: [{ category: "status_conflict", sources: [{ provider: "A", status: "Questionable" }, { provider: "B", status: "Out" }] }],
@@ -327,10 +327,11 @@ const app = frame.contentDocument;
 const view = frame.contentWindow;
 const input = app.querySelector("#queryInput");
 check(!app.querySelector("#edgeboardOnboarding").hidden
-  && app.querySelectorAll("#onboardingSteps article").length === 5,
-  "35a first-visit guide presents all five experiences without blocking research");
+  && app.querySelectorAll("#onboardingSteps article").length === 7,
+  "35a first-visit guide presents all seven concepts without blocking research");
 app.querySelector("#dismissOnboarding")?.click();
 check(app.querySelector("#edgeboardOnboarding").hidden
+  && view.localStorage.getItem("edgeboard-onboarding-v1.6-complete") === "true"
   && view.localStorage.getItem("edgeboard-onboarding-v1.1-complete") === "true",
   "35b first-visit guide dismissal persists locally");
 input.value = "Who averages the most assists in the WNBA this season?";

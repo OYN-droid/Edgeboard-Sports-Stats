@@ -106,6 +106,29 @@ function normalizeDiscoveryContext(context) {
   });
 }
 
+function normalizeMarketContext(context) {
+  if (!context?.id || !context?.selectionId || !context?.marketExplainer) return null;
+  return Object.freeze({
+    id: String(context.id), selectionId: String(context.selectionId), marketId: String(context.marketId || ""),
+    canonicalMarketId: String(context.canonicalMarketId || ""), intent: String(context.intent || "explain_market").replaceAll("-", "_"),
+    sportId: String(context.sportId || ""), leagueId: String(context.leagueId || ""),
+    entityIds: Object.freeze([...(context.entityIds || [])]), eventIds: Object.freeze([...(context.eventIds || [])]),
+    participantName: String(context.participantName || "Market participant"), marketName: String(context.marketName || "Market"),
+    currentLine: String(context.currentLine || "Unavailable"), currentOdds: context.currentOdds ?? null,
+    source: Object.freeze({ ...(context.source || {}) }), researchQuality: Object.freeze({ ...(context.researchQuality || {}) }),
+    marketExplainer: Object.freeze({ ...context.marketExplainer, supportingEvidence: Object.freeze([...(context.marketExplainer.supportingEvidence || [])]) }),
+    researchChange: Object.freeze({ ...context.researchChange, changes: Object.freeze([...(context.researchChange?.changes || [])]) }),
+    counterarguments: Object.freeze([...(context.counterarguments || [])]),
+    screener: context.screener ? Object.freeze({
+      ...context.screener,
+      filters: Object.freeze({ ...(context.screener.filters || {}) }),
+      resultIds: Object.freeze([...(context.screener.resultIds || [])]),
+      explanation: Object.freeze({ ...(context.screener.explanation || {}) }),
+      supportingEvidence: Object.freeze((context.screener.supportingEvidence || []).map((item) => Object.freeze({ ...item, values: Object.freeze({ ...(item.values || {}) }) }))),
+    }) : null,
+  });
+}
+
 export function createResearchPlan({
   query = "",
   mode = "stats",
@@ -117,6 +140,7 @@ export function createResearchPlan({
   resolvedEntities = [],
   storyContext = null,
   discoveryContext = null,
+  marketContext = null,
   historicalQuery = null,
 } = {}) {
   const safeQuery = String(query || "").trim();
@@ -124,8 +148,9 @@ export function createResearchPlan({
   const classification = classifyResearchQuery(safeQuery, safeMode);
   const normalizedStoryContext = normalizeStoryContext(storyContext);
   const normalizedDiscoveryContext = normalizeDiscoveryContext(discoveryContext);
+  const normalizedMarketContext = normalizeMarketContext(marketContext);
   const structuredQuery = parsedStats?.structuredQuery || null;
-  const questionType = historicalQuery?.intent || determineQuestionType(safeQuery, classification.intent, structuredQuery);
+  const questionType = normalizedMarketContext ? `market_${normalizedMarketContext.intent}` : historicalQuery?.intent || determineQuestionType(safeQuery, classification.intent, structuredQuery);
   const entityIds = [...new Set([
     ...(structuredQuery
       ? [
@@ -136,15 +161,17 @@ export function createResearchPlan({
     ...resolvedEntities.map((entity) => entity.id),
     ...(normalizedStoryContext?.entityIds || []),
     ...(normalizedDiscoveryContext?.entityIds || []),
+    ...(normalizedMarketContext?.entityIds || []),
   ])];
   const statIds = structuredQuery?.statIds?.length ? structuredQuery.statIds : normalizedDiscoveryContext?.statIds || [];
   const marketIds = [
     structuredQuery?.rankingMetric && safeMode !== "stats" ? structuredQuery.rankingMetric : "",
     bettingWorkflow?.marketId || "",
     ...(normalizedDiscoveryContext?.marketIds || []),
+    normalizedMarketContext?.canonicalMarketId || "",
   ].filter(Boolean);
-  const resolvedLeagueId = normalizedStoryContext?.leagueId || normalizedDiscoveryContext?.leagueId || structuredQuery?.leagueId || bettingWorkflow?.leagueId || currentLeague?.leagueId || "";
-  const resolvedSportId = normalizedStoryContext?.sportId || normalizedDiscoveryContext?.sportId || structuredQuery?.sportId || currentLeague?.sportId || "";
+  const resolvedLeagueId = normalizedMarketContext?.leagueId || normalizedStoryContext?.leagueId || normalizedDiscoveryContext?.leagueId || structuredQuery?.leagueId || bettingWorkflow?.leagueId || currentLeague?.leagueId || "";
+  const resolvedSportId = normalizedMarketContext?.sportId || normalizedStoryContext?.sportId || normalizedDiscoveryContext?.sportId || structuredQuery?.sportId || currentLeague?.sportId || "";
   const scopeLabel = [
     currentLeague?.sportDisplayName || resolvedSportId,
     currentLeague?.leagueDisplayName || resolvedLeagueId,
@@ -197,6 +224,7 @@ export function createResearchPlan({
     marketIds: Object.freeze(marketIds),
     storyContext: normalizedStoryContext,
     discoveryContext: normalizedDiscoveryContext,
+    marketContext: normalizedMarketContext,
     historicalQuery: historicalQuery ? Object.freeze({ ...historicalQuery }) : null,
     discovery: Object.freeze({
       provider: providerName || bettingWorkflow?.evidence?.provider || "Normalized sports registry",
@@ -211,6 +239,7 @@ export function createResearchPlan({
         ...evidenceNeeds(questionType, safeMode),
         ...(normalizedStoryContext ? ["retained structured story claim and supporting rows"] : []),
         ...(normalizedDiscoveryContext ? ["retained discovery signals, canonical references, and trust metadata"] : []),
+        ...(normalizedMarketContext ? ["retained normalized market snapshots, verified context events, counterarguments, and market Trust metadata"] : []),
         ...(historicalQuery ? ["historical coverage boundary and validation-appropriate wording"] : []),
       ]),
     }),
@@ -229,7 +258,9 @@ export function createResearchPlan({
         ? marketLabels.join(", ")
         : needsBetting ? "Use only provider-confirmed markets in the resolved scope." : "Betting retrieval disabled in Stats mode.",
       needsBetting ? "ready" : "skipped"),
-      stage("evidence", "Determine supporting evidence", normalizedStoryContext
+      stage("evidence", "Determine supporting evidence", normalizedMarketContext
+        ? `${evidenceNeeds(questionType, safeMode).join(", ")}; retain ${normalizedMarketContext.marketExplainer.supportingEvidence.length} normalized market evidence item${normalizedMarketContext.marketExplainer.supportingEvidence.length === 1 ? "" : "s"}. Unknown causes must remain unknown.`
+        : normalizedStoryContext
         ? `${evidenceNeeds(questionType, safeMode).join(", ")}; retain ${normalizedStoryContext.supportingEvidence.length} structured story evidence item${normalizedStoryContext.supportingEvidence.length === 1 ? "" : "s"} without broadening the claim.`
         : normalizedDiscoveryContext
           ? `${evidenceNeeds(questionType, safeMode).join(", ")}; retain ${normalizedDiscoveryContext.sourceSignals.length} deterministic discovery signal${normalizedDiscoveryContext.sourceSignals.length === 1 ? "" : "s"} without treating relevance as popularity.`

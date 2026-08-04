@@ -107,6 +107,31 @@ upsets, timelines, season routes, search, accessibility, and responsive layouts:
 http://127.0.0.1:9010/browser-tests/historical-explorer.html
 ```
 
+The On This Day harness covers deterministic local-calendar anniversaries,
+normalized historical evidence, scope isolation, scoring, trust, stable routes,
+search, sharing, accessible timelines, themes, and responsive layouts:
+
+```text
+http://127.0.0.1:9010/browser-tests/anniversaries.html
+```
+
+The connected-knowledge-graph harness covers canonical direct and reverse
+relationships, ambiguity-safe provider identity reconciliation, normalized
+events, story/insight/history paths, mode-aware markets, caching and
+cancellation, profile-to-research navigation, accessibility, themes, console
+errors, and mobile overflow:
+
+```text
+http://127.0.0.1:9010/browser-tests/knowledge-graph.html
+```
+
+See [On This Day architecture](docs/on-this-day.md) for the normalized model,
+date engine, data flow, safety rules, routes, and provider extension point.
+
+See [Connected Sports Knowledge Graph architecture](docs/connected-knowledge-graph.md)
+for the Sprint 6 node and edge contracts, canonical relationship rules,
+composition flow, UI integration, caching, accessibility, and current limits.
+
 ## Market taxonomy
 
 `src/config/market-catalog.js` is the provider-neutral source of truth for canonical market definitions and confidence bands. The sports registry declares which definitions a sport can support; the repository maps provider offers to those definitions; and the UI only promotes categories and markets that have an open or explicitly suspended provider instance.
@@ -187,3 +212,36 @@ for Version 1.4 Sprint 3 canonical discovery items, sport-aware taxonomies,
 deterministic ranking and diversity, guided paths, local personalization and
 privacy controls, grouped search, Edge Intelligence context, routing, caching,
 fixture limits, and the Sprint 4 recommendation.
+
+See [Edge Markets architecture](docs/edge-markets.md) for Version 1.5 Sprint 1
+canonical market research models, hub and detail routes, observed movement,
+verified price comparison, Edge Trust integration, provider gaps, and the
+focused browser validation harness.
+
+## Product guides
+
+- [Getting started](docs/getting-started.md)
+- [Research guide](docs/research-guide.md)
+- [Edge Intelligence guide](docs/edge-intelligence.md)
+- [Edge Intelligence and Research Sessions](docs/research-sessions.md)
+- [Edge Trust](docs/edge-trust.md)
+- [Historical Explorer](docs/historical-explorer.md)
+- [Parlay Builder](docs/parlay-builder.md)
+- [Keyboard shortcuts](docs/keyboard-shortcuts.md)
+- [Data coverage](docs/coverage.md)
+- [FAQ](docs/faq.md)
+- [About EdgeBoard](docs/about.md)
+- [Changelog](docs/changelog.md)
+- [Version 1.6 launch-readiness architecture](docs/launch-readiness.md)
+
+See [Market Intelligence and Explain the Market](docs/market-explanations.md) for
+Version 1.5 Sprint 2 timeline and causality contracts, verified sportsbook
+comparison, lineup and injury impact references, structured Edge Intelligence
+evidence, Research Quality visuals, search routing, and provider limitations.
+
+See [Market Screener and Opportunity Explorer](docs/market-screener.md) for
+Version 1.5 Sprint 3 normalized research filters, deterministic evidence ranking,
+windowed rendering, cancellation, comparisons, Workspace presets, Edge
+Intelligence context, safety language, and provider-coverage limitations.
+
+See [Edge Markets Parlay Builder](docs/parlay-builder.md) for the deterministic constraint, correlation, refinement, Workspace, and evidence architecture.
