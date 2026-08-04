@@ -8,4 +8,5 @@
 - Added local recent-search suggestions that honor Workspace privacy mode when loaded.
 - Improved command-search loading, empty, error, keyboard, focus, mobile, touch-target, and reduced-motion behavior.
 - Added launch documentation and regression coverage. No provider, model, or major product capability was introduced.
-
+- Added a refresh-safe About EdgeBoard route explaining connected research, Edge Intelligence, Edge Trust, optional market research, responsible-use principles, and current coverage limits.
+- Added About entry points to the utility footer and command palette, with shared application-version configuration and route metadata.

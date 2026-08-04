@@ -871,6 +871,14 @@ class HttpBoundaryTests(unittest.TestCase):
         response.read()
         self.assertEqual(response.status, 404)
 
+    def test_about_route_is_refresh_safe(self):
+        self.connection.request("GET", "/about")
+        response = self.connection.getresponse()
+        body = response.read().decode("utf-8")
+        self.assertEqual(response.status, 200)
+        self.assertIn('<article class="about-view" id="aboutView"', body)
+        self.assertIn('<script type="module" src="app.js"></script>', body)
+
     def test_production_disallows_framing_and_browser_harnesses(self):
         config = ProviderConfig.from_env({
             "APP_ENV": "production", "ALLOWED_ORIGINS": "https://edgeboard.example",

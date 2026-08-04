@@ -234,6 +234,8 @@ focused browser validation harness.
 - [Changelog](docs/changelog.md)
 - [Version 1.6 launch-readiness architecture](docs/launch-readiness.md)
 
+The in-app About EdgeBoard experience is available at `/about`. The production-boundary server provides refresh-safe fallback routing for this path.
+
 See [Market Intelligence and Explain the Market](docs/market-explanations.md) for
 Version 1.5 Sprint 2 timeline and causality contracts, verified sportsbook
 comparison, lineup and injury impact references, structured Edge Intelligence

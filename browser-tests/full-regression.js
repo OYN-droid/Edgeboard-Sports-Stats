@@ -1,5 +1,5 @@
 const suites = [
-  "advanced-stats", "anniversaries", "athlete-profiles", "discovery-engine", "entities",
+  "about", "advanced-stats", "anniversaries", "athlete-profiles", "discovery-engine", "entities",
   "historical-explorer", "insights", "knowledge-graph", "launch-readiness", "market-depth",
   "market-explanations", "market-research", "market-screener", "parlay-builder", "research-analyst",
   "stats-research", "story-engine", "visualizations", "workspace",

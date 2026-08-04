@@ -81,6 +81,7 @@ import {
 } from "./src/config/market-screener-config.js";
 import { createParlayBuilderService, normalizeParlayConstraints, parseParlayConstraints, serializeParlayConstraints } from "./src/services/parlay-builder-service.js";
 import { PARLAY_BOOLEAN_CONSTRAINTS, PARLAY_REFINEMENTS } from "./src/config/parlay-builder-config.js";
+import { APP_CONFIG } from "./src/config/app-config.js";
 
 const providerPayload = await loadProviderPayload();
 const sportsRepository = createSportsRepository(providerPayload);
@@ -344,6 +345,7 @@ function researchLeagueForSelection(selection, preferredLeagueId = "") {
 const initialDiscoveryRoute = parseDiscoveryRoute();
 const initialHistoricalRoute = parseHistoricalRoute();
 const initialMarketRoute = parseMarketRoute();
+const initialAboutRoute = window.location.pathname.replace(/\/+$/, "") === "/about";
 const routeLeagueId = initialMarketRoute?.leagueId || initialHistoricalRoute?.leagueId || initialDiscoveryRoute?.leagueId;
 const initialNavigationSelection = routeLeagueId && sportsRepository.getLeague(routeLeagueId)
   ? normalizeNavigationSelection({ type: "league", id: routeLeagueId }, navigationModel.allLeagues, defaultLeague?.leagueId)
@@ -369,6 +371,7 @@ function loadFavoriteParlayLegs() {
 }
 
 const state = {
+  aboutActive: initialAboutRoute,
   navigationSelection: initialNavigationSelection,
   leagueId: initialResearchLeague?.leagueId || "",
   market: "props",
@@ -664,6 +667,10 @@ const elements = {
   onboarding: document.querySelector("#edgeboardOnboarding"),
   onboardingSteps: document.querySelector("#onboardingSteps"),
   dismissOnboarding: document.querySelector("#dismissOnboarding"),
+  aboutView: document.querySelector("#aboutView"),
+  aboutVersion: document.querySelector("#aboutVersion"),
+  aboutFeatureStatus: document.querySelector("#aboutFeatureStatus"),
+  aboutLiveStatus: document.querySelector("#aboutLiveStatus"),
   commandPalette: document.querySelector("#commandPalette"),
   openCommandPalette: document.querySelector("#openCommandPalette"),
   closeCommandPalette: document.querySelector("#closeCommandPalette"),
@@ -736,8 +743,48 @@ function commandDefinitions() {
     { id: "command-parlay", group: "Commands", label: "Open Parlay Builder", detail: "Research tool — not a placed wager", action: () => setMarketResearchRoute({ type: "parlay-builder" }) },
     { id: "command-history", group: "Commands", label: "Open Historical Explorer", detail: "Evidence-backed history", action: () => elements.openHistory.click() },
     { id: "command-workspace", group: "Commands", label: "Open Workspace", detail: "Saved research, watchlists, alerts, and tracking", action: () => openWorkspace() },
+    { id: "command-about", group: "Commands", label: "About EdgeBoard", detail: "Purpose, research principles, coverage, and current status", action: () => setAboutRoute(true) },
     { id: "command-comparison", group: "Commands", label: "Start a comparison", detail: "Use identical filters for both entities", query: "Compare two players using the same date and split filters" },
   ];
+}
+
+function updateRouteMetadata() {
+  const about = state.aboutActive;
+  document.title = about ? APP_CONFIG.aboutTitle : APP_CONFIG.defaultTitle;
+  const description = document.querySelector('meta[name="description"]');
+  if (description) description.content = about ? APP_CONFIG.aboutDescription : APP_CONFIG.defaultDescription;
+}
+
+function applyAboutVisibility({ focus = false } = {}) {
+  document.body.classList.toggle("about-active", state.aboutActive);
+  elements.aboutView.hidden = !state.aboutActive;
+  elements.aboutVersion.textContent = `Version ${APP_CONFIG.version}`;
+  elements.aboutFeatureStatus.textContent = APP_CONFIG.status;
+  elements.aboutLiveStatus.textContent = APP_CONFIG.liveDataStatus;
+  document.querySelectorAll("[data-about-route]").forEach((link) => {
+    if (state.aboutActive) link.setAttribute("aria-current", "page"); else link.removeAttribute("aria-current");
+  });
+  updateRouteMetadata();
+  if (state.aboutActive && focus) elements.aboutView.focus({ preventScroll: true });
+}
+
+function setAboutRoute(active, { replace = false, focus = true } = {}) {
+  state.aboutActive = Boolean(active);
+  const url = new URL(window.location.href);
+  url.pathname = state.aboutActive ? "/about" : "/";
+  if (!state.aboutActive) {
+    state.marketResearchActive = false;
+    state.marketResearchRoute = null;
+    state.historyActive = false;
+    state.historyRoute = null;
+    state.workspaceActive = false;
+    state.workspaceRoute = null;
+    applyMarketResearchVisibility();
+    applyHistoryVisibility();
+    applyWorkspaceVisibility();
+  }
+  history[replace ? "replaceState" : "pushState"]({ edgeboardAbout: state.aboutActive }, "", url);
+  applyAboutVisibility({ focus });
 }
 
 function commandPaletteMarkup(items) {
@@ -7557,7 +7604,38 @@ elements.workspaceShareDialog.addEventListener("click", async (event) => {
   }
 });
 
+document.addEventListener("click", (event) => {
+  const aboutLink = event.target.closest("[data-about-route]");
+  if (aboutLink) {
+    event.preventDefault();
+    setAboutRoute(true);
+    return;
+  }
+  const closeAbout = event.target.closest("[data-close-about]");
+  if (closeAbout) {
+    event.preventDefault();
+    setAboutRoute(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return;
+  }
+  if (event.target.closest("[data-about-research]")) {
+    setAboutRoute(false, { focus: false });
+    elements.queryInput.focus({ preventScroll: true });
+    elements.queryInput.select();
+    return;
+  }
+  if (event.target.closest("[data-open-coverage]")) {
+    openCoverageView().catch((error) => {
+      elements.coverageContent.setAttribute("aria-busy", "false");
+      elements.coverageContent.innerHTML = `<div class="data-warning" role="alert"><strong>Coverage details are unavailable</strong><p>${escapeHtml(error?.message || "Try again or review the coverage documentation.")}</p></div>`;
+    });
+  }
+});
+
 window.addEventListener("popstate", () => {
+  state.aboutActive = window.location.pathname.replace(/\/+$/, "") === "/about";
+  applyAboutVisibility({ focus: state.aboutActive });
+  if (state.aboutActive) return;
   const marketRoute = parseMarketRoute();
   state.marketResearchRoute = marketRoute;
   state.marketResearchActive = Boolean(marketRoute);
@@ -7840,6 +7918,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 initializeOnboarding();
+applyAboutVisibility();
 persistNavigationSelection();
 renderAll();
 scheduleMarketBoardLoad();
