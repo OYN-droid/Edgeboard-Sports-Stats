@@ -226,6 +226,15 @@ body.workspace-active .mobile-slip-toggle {
   display: none !important;
 }
 
+body.history-active .app-shell > main > :not(#historicalExplorer) {
+  display: none !important;
+}
+
+body.history-active .research-intent-nav,
+body.history-active .mobile-slip-toggle {
+  display: none !important;
+}
+
 .athlete-profile-view,
 .entity-profile-view,
 .visual-analytics-view,
@@ -234,6 +243,103 @@ body.workspace-active .mobile-slip-toggle {
   min-height: calc(100vh - 78px);
   margin: 0 auto;
   padding: 22px 0 70px;
+}
+
+.historical-explorer {
+  width: min(1440px, calc(100% - 32px));
+  min-height: calc(100vh - 78px);
+  margin: 0 auto;
+  padding: 22px 0 70px;
+}
+
+.historical-nav,
+.historical-grid,
+.historical-coverage-grid,
+.historical-timeline,
+.historical-section {
+  display: grid;
+  gap: 12px;
+}
+
+.historical-nav {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 18px 0;
+}
+
+.historical-nav a {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--control-bg);
+  color: var(--text);
+  font-weight: 800;
+  text-align: center;
+}
+
+.historical-nav a:hover,
+.historical-nav a:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+.historical-coverage {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+}
+
+.historical-coverage-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 12px 0;
+}
+
+.historical-coverage-grid > div,
+.historical-card {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.historical-coverage-grid :is(dt, dd) { margin: 0; overflow-wrap: anywhere; }
+.historical-coverage-grid dt { color: var(--muted); font-size: .76rem; }
+.historical-coverage-grid dd { margin-top: 5px; font-weight: 800; }
+
+.historical-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.historical-section { margin: 24px 0; }
+.historical-card { display: grid; align-content: start; gap: 10px; }
+.historical-card :is(h3, p, small) { margin: 0; overflow-wrap: anywhere; }
+.historical-card h3 a { color: inherit; text-underline-offset: 4px; }
+.historical-card > p { color: var(--muted); }
+.historical-card .historical-value { color: var(--accent); font-size: 1.8rem; font-weight: 900; }
+.historical-card > small { color: var(--muted); margin-top: auto; }
+
+.historical-timeline { padding: 0; list-style: none; }
+.historical-timeline li { display: grid; grid-template-columns: minmax(120px, .35fr) 1fr; gap: 5px 16px; padding: 12px; border-left: 3px solid var(--accent); background: var(--surface); }
+.historical-timeline li span { grid-column: 2; color: var(--muted); }
+.historical-category-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.historical-category-list li { padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--control-bg); }
+
+@media (max-width: 900px) {
+  .historical-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .historical-coverage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .historical-nav { display: flex; overflow-x: auto; }
+  .historical-nav a { min-width: 145px; }
+}
+
+@media (max-width: 620px) {
+  .historical-explorer { width: min(100% - 20px, 1440px); padding-top: 12px; }
+  .historical-grid,
+  .historical-coverage-grid { grid-template-columns: minmax(0, 1fr); }
+  .historical-timeline li { grid-template-columns: 1fr; }
+  .historical-timeline li span { grid-column: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .historical-explorer *, .historical-explorer *::before, .historical-explorer *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
 
 .workspace-entry {

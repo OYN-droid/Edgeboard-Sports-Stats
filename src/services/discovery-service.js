@@ -188,13 +188,14 @@ function typeForEntity(entity) {
 }
 
 export class DeterministicDiscoveryService {
-  constructor({ sportsRepository, statsRepository, insightService, storyEngine, entityRegistry, changes = MOCK_DISCOVERY_CHANGES, clock = () => new Date() } = {}) {
+  constructor({ sportsRepository, statsRepository, insightService, storyEngine, entityRegistry, historicalService = null, changes = MOCK_DISCOVERY_CHANGES, clock = () => new Date() } = {}) {
     if (!sportsRepository || !statsRepository || !insightService || !storyEngine || !entityRegistry) throw new TypeError("Discovery requires normalized sports, statistics, insight, story, and entity services.");
     this.sportsRepository = sportsRepository;
     this.statsRepository = statsRepository;
     this.insightService = insightService;
     this.storyEngine = storyEngine;
     this.entityRegistry = entityRegistry;
+    this.historicalService = historicalService;
     this.changes = changes;
     this.clock = clock;
     this.cache = new Map();
@@ -373,6 +374,22 @@ export class DeterministicDiscoveryService {
     }, this);
   }
 
+  historicalItem(item) {
+    const documentedRivalry = item.type === "rivalry_event" && item.metadata?.rivalryId && item.metadata.classification !== "direct_head_to_head";
+    const type = documentedRivalry ? "rivalry" : item.type === "record" ? "record" : "historical_topic";
+    return createDiscoveryItem({
+      id: `discovery-${item.id}`, type, title: item.title,
+      summary: `${item.coverageLabel}. ${item.validationLabel}.`, label: documentedRivalry ? "Rivalry history" : item.type === "rivalry_event" ? "Direct head-to-head history" : "Historical Explorer",
+      sportId: item.sportId, leagueId: item.leagueId, entityIds: item.entityIds, eventIds: item.eventIds, statIds: item.statIds,
+      queryTemplate: { query: `Explore ${item.title}`, intent: "historical_exploration", historicalItemId: item.id },
+      route: { href: item.route, type: "history", historicalItemId: item.id },
+      sourceSignals: item.supportingEvidence.slice(0, 2).map((entry) => sourceSignal("historical_evidence", entry.label, 1)),
+      sources: item.sources, freshness: item.freshness, sampleMode: item.sample,
+      validationStatus: item.validationStatus === "partial_coverage" ? "partial_coverage" : "dataset_only",
+      warnings: [...item.warnings, `Historical validation: ${item.validationStatus}.`], drillDownDepth: 4,
+    }, this);
+  }
+
   generate(scope = {}, options = {}) {
     const key = this.cacheKey(scope, options);
     if (!options.noCache && this.cache.has(key)) return this.cache.get(key);
@@ -389,6 +406,10 @@ export class DeterministicDiscoveryService {
         .map((event) => this.eventItem(event, league, context))),
       ...leagues.flatMap((league) => this.entityRegistry.getEntities({ sportId: league.sportId, leagueId: league.leagueId, activeOnly: true }).slice(0, 3)
         .map((entity) => this.entityItem(entity, context))),
+      ...(this.historicalService ? this.historicalService.searchHistoricalItems({
+        sportId: context.sportIds.length === 1 ? context.sportIds[0] : "",
+        leagueId: context.leagueIds.length === 1 ? context.leagueIds[0] : "", pageSize: 12,
+      }).items.map((item) => this.historicalItem(item)) : []),
     ];
     const localDate = safeDate(context.now)?.toLocaleDateString("en-CA");
     const uniqueItems = [...new Map(candidates.map((item) => [item.id, item])).values()]

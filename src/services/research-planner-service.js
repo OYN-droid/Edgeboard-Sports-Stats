@@ -117,6 +117,7 @@ export function createResearchPlan({
   resolvedEntities = [],
   storyContext = null,
   discoveryContext = null,
+  historicalQuery = null,
 } = {}) {
   const safeQuery = String(query || "").trim();
   const safeMode = normalizeResearchMode(mode, "stats");
@@ -124,7 +125,7 @@ export function createResearchPlan({
   const normalizedStoryContext = normalizeStoryContext(storyContext);
   const normalizedDiscoveryContext = normalizeDiscoveryContext(discoveryContext);
   const structuredQuery = parsedStats?.structuredQuery || null;
-  const questionType = determineQuestionType(safeQuery, classification.intent, structuredQuery);
+  const questionType = historicalQuery?.intent || determineQuestionType(safeQuery, classification.intent, structuredQuery);
   const entityIds = [...new Set([
     ...(structuredQuery
       ? [
@@ -196,6 +197,7 @@ export function createResearchPlan({
     marketIds: Object.freeze(marketIds),
     storyContext: normalizedStoryContext,
     discoveryContext: normalizedDiscoveryContext,
+    historicalQuery: historicalQuery ? Object.freeze({ ...historicalQuery }) : null,
     discovery: Object.freeze({
       provider: providerName || bettingWorkflow?.evidence?.provider || "Normalized sports registry",
       leagues: Object.freeze(discoveryLeagues),
@@ -209,6 +211,7 @@ export function createResearchPlan({
         ...evidenceNeeds(questionType, safeMode),
         ...(normalizedStoryContext ? ["retained structured story claim and supporting rows"] : []),
         ...(normalizedDiscoveryContext ? ["retained discovery signals, canonical references, and trust metadata"] : []),
+        ...(historicalQuery ? ["historical coverage boundary and validation-appropriate wording"] : []),
       ]),
     }),
     stages: Object.freeze([

@@ -14,3 +14,4 @@ data/
 src/data/*
 !src/data/mock-story-fixtures.js
 !src/data/mock-discovery-fixtures.js
+!src/data/mock-historical-fixtures.js

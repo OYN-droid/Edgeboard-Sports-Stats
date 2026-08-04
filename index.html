@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
     <title>EdgeBoard Sports Stats</title>
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="styles.css" />
@@ -24,6 +25,7 @@
           My EdgeBoard <span id="workspaceSavedCount" aria-label="0 saved items">0</span>
           <span id="workspaceAlertCount" aria-label="0 unread alerts">0</span>
         </button>
+        <a class="workspace-entry history-entry" id="openHistory" href="/history" aria-label="Open Historical Explorer">History</a>
         <div class="theme-switch" role="group" aria-label="Color theme">
           <button class="theme-option active" type="button" data-theme-option="dark">Dark</button>
           <button class="theme-option" type="button" data-theme-option="light">Light</button>
@@ -98,6 +100,25 @@
             <button type="button" class="text-button" id="closeDiscoveryExplorer">Close Explore</button>
           </div>
           <div id="discoveryExplorerContent"></div>
+        </section>
+
+        <section class="historical-explorer" id="historicalExplorer" aria-labelledby="historicalExplorerTitle" tabindex="-1" hidden>
+          <div class="profile-view-toolbar">
+            <a class="text-button profile-back" id="closeHistoricalExplorer" href="/">← Back to sports discovery</a>
+            <div class="profile-toolbar-actions">
+              <button class="text-button" id="saveHistoricalExplorer" type="button">Save</button>
+              <button class="text-button" id="shareHistoricalExplorer" type="button">Copy link</button>
+            </div>
+          </div>
+          <div class="today-board-heading">
+            <div><p class="eyebrow">Evidence-backed sports history</p><h1 id="historicalExplorerTitle">Historical Explorer</h1><p id="historicalExplorerSummary">Browse only the history supported by normalized sample evidence.</p></div>
+            <span class="sample-badge">Sample historical data</span>
+          </div>
+          <div class="historical-coverage" id="historicalCoverage" role="status"></div>
+          <nav class="historical-nav" id="historicalNav" aria-label="Historical Explorer sections"></nav>
+          <div class="historical-loading" id="historicalLoading" role="status" hidden>Loading historical evidence on demand…</div>
+          <div id="historicalExplorerContent" aria-live="polite"></div>
+          <p id="historicalActionStatus" role="status" aria-live="polite"></p>
         </section>
 
         <div class="home-discovery-sections" id="homeDiscoverySections" aria-live="polite"></div>

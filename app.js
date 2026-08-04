@@ -75,6 +75,24 @@ const athleteProfileRepository = createAthleteProfileRepository(statsRepository,
 const entityRegistry = createEntityRegistry();
 const storyEngine = createStoryEngine({ insightService, sportsRepository, statsRepository, entityRegistry });
 const discoveryService = createDiscoveryService({ sportsRepository, statsRepository, insightService, storyEngine, entityRegistry });
+let historicalModulesPromise = null;
+let historicalService = null;
+let historicalQueryParser = null;
+function loadHistoricalModules() {
+  if (!historicalModulesPromise) {
+    historicalModulesPromise = Promise.all([
+      import("./src/services/historical-service.js"),
+      import("./src/services/historical-query-service.js"),
+    ]).then(([serviceModule, queryModule]) => {
+      historicalService ||= serviceModule.createHistoricalExplorerService({ sportsRepository, statsRepository, entityRegistry });
+      historicalQueryParser = queryModule.parseHistoricalQuery;
+      discoveryService.historicalService = historicalService;
+      discoveryService.clearCache();
+      return { historicalService, parseHistoricalQuery: historicalQueryParser };
+    });
+  }
+  return historicalModulesPromise;
+}
 const entityProfileRepository = createEntityProfileRepository(
   entityRegistry,
   sportsRepository,
@@ -235,6 +253,18 @@ function cleanRouteValue(value) {
   return String(value || "").trim().slice(0, 240);
 }
 
+function parseHistoricalRoute(location = window.location) {
+  const parts = location.pathname.split("/").filter(Boolean).map((part) => decodeURIComponent(part));
+  if (parts[0] !== "history") return null;
+  if (parts[1] === "items" && parts[2]) return { type: "item", itemId: cleanRouteValue(parts[2]) };
+  if (parts[1] === "rivalries" && parts[2]) return { type: "rivalry", rivalryId: cleanRouteValue(parts[2]) };
+  if (["records", "performances", "rivalries", "championships"].includes(parts[1])) return { type: parts[1] };
+  if (parts[3] === "seasons" && parts[4]) return { type: "season", sportId: cleanRouteValue(parts[1]), leagueId: cleanRouteValue(parts[2]), seasonId: cleanRouteValue(parts[4]) };
+  if (parts[1] && parts[2]) return { type: "league", sportId: cleanRouteValue(parts[1]), leagueId: cleanRouteValue(parts[2]) };
+  if (parts[1]) return { type: "sport", sportId: cleanRouteValue(parts[1]) };
+  return { type: "home" };
+}
+
 function getSelectionSummary(selection) {
   return getVisibleMarketSummaries({
     selection,
@@ -255,8 +285,10 @@ function researchLeagueForSelection(selection, preferredLeagueId = "") {
 }
 
 const initialDiscoveryRoute = parseDiscoveryRoute();
-const initialNavigationSelection = initialDiscoveryRoute?.leagueId && sportsRepository.getLeague(initialDiscoveryRoute.leagueId)
-  ? normalizeNavigationSelection({ type: "league", id: initialDiscoveryRoute.leagueId }, navigationModel.allLeagues, defaultLeague?.leagueId)
+const initialHistoricalRoute = parseHistoricalRoute();
+const routeLeagueId = initialHistoricalRoute?.leagueId || initialDiscoveryRoute?.leagueId;
+const initialNavigationSelection = routeLeagueId && sportsRepository.getLeague(routeLeagueId)
+  ? normalizeNavigationSelection({ type: "league", id: routeLeagueId }, navigationModel.allLeagues, defaultLeague?.leagueId)
   : loadNavigationSelection();
 const initialResearchLeague = researchLeagueForSelection(initialNavigationSelection);
 const initialResearchState = loadResearchState();
@@ -367,6 +399,12 @@ const state = {
   discoveryRoute: initialDiscoveryRoute,
   discoverySearch: null,
   discoveryCategory: "",
+  historyActive: Boolean(initialHistoricalRoute),
+  historyRoute: initialHistoricalRoute,
+  historicalResult: null,
+  historicalLoading: false,
+  historicalRequestSequence: 0,
+  historicalParsedQuery: null,
   workspaceActive: Boolean(initialWorkspaceRoute),
   workspaceRoute: initialWorkspaceRoute,
   workspaceViewModel: null,
@@ -486,6 +524,18 @@ const elements = {
   discoveryExplorerSummary: document.querySelector("#discoveryExplorerSummary"),
   discoveryExplorerContent: document.querySelector("#discoveryExplorerContent"),
   closeDiscoveryExplorer: document.querySelector("#closeDiscoveryExplorer"),
+  openHistory: document.querySelector("#openHistory"),
+  historicalExplorer: document.querySelector("#historicalExplorer"),
+  historicalExplorerTitle: document.querySelector("#historicalExplorerTitle"),
+  historicalExplorerSummary: document.querySelector("#historicalExplorerSummary"),
+  historicalCoverage: document.querySelector("#historicalCoverage"),
+  historicalNav: document.querySelector("#historicalNav"),
+  historicalLoading: document.querySelector("#historicalLoading"),
+  historicalExplorerContent: document.querySelector("#historicalExplorerContent"),
+  historicalActionStatus: document.querySelector("#historicalActionStatus"),
+  closeHistoricalExplorer: document.querySelector("#closeHistoricalExplorer"),
+  saveHistoricalExplorer: document.querySelector("#saveHistoricalExplorer"),
+  shareHistoricalExplorer: document.querySelector("#shareHistoricalExplorer"),
   insightDialog: document.querySelector("#insightDialog"),
   insightDialogTitle: document.querySelector("#insightDialogTitle"),
   insightDialogContent: document.querySelector("#insightDialogContent"),
@@ -1799,7 +1849,9 @@ function renderHomeDiscoveryAction(action) {
   if (action.type === "follow-entity") return `<button type="button" class="text-button" data-follow-entity="${escapeHtml(action.entityId)}" aria-pressed="${state.followedEntityIds.includes(action.entityId)}">${state.followedEntityIds.includes(action.entityId) ? "Following" : escapeHtml(action.label)}</button>`;
   if (action.type === "share-story") return `<button type="button" class="text-button" data-share-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
   if (action.type === "research-story") return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="research" data-research-story="${escapeHtml(action.storyId)}">${escapeHtml(action.label)}</button>`;
-  if (action.type === "route") return `<a class="text-button" href="${escapeHtml(action.href)}" data-discovery-route="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`;
+  if (action.type === "route") return action.href.startsWith("/history")
+    ? `<a class="text-button" href="${escapeHtml(action.href)}" data-history-route>${escapeHtml(action.label)}</a>`
+    : `<a class="text-button" href="${escapeHtml(action.href)}" data-discovery-route="${escapeHtml(action.href)}">${escapeHtml(action.label)}</a>`;
   if (action.type === "research") return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="research" data-discovery-research="${escapeHtml(action.context?.itemId || "")}">${escapeHtml(action.label)}</button>`;
   return `<button type="button" class="text-button" data-home-query="${escapeHtml(action.query)}" data-home-action="${escapeHtml(action.kind)}">${escapeHtml(action.label)}</button>`;
 }
@@ -1940,6 +1992,154 @@ function renderDiscoveryExplorer({ focus = false } = {}) {
   elements.discoveryExplorerSummary.textContent = summaryText;
   elements.discoveryExplorerContent.innerHTML = content;
   if (focus) elements.discoveryExplorer.focus({ preventScroll: true });
+}
+
+function historicalScope(route = state.historyRoute) {
+  const summary = getSelectionSummary(state.navigationSelection);
+  const inheritNavigationScope = !route || route.type === "home";
+  const leagueId = route?.leagueId || (inheritNavigationScope && summary.selection.type === "league" ? summary.selection.id : "");
+  const league = sportsRepository.getLeague(leagueId);
+  return {
+    sportId: route?.sportId || league?.sportId || (inheritNavigationScope && summary.selection.type === "sport" ? summary.selection.id : ""),
+    leagueId,
+  };
+}
+
+function historicalRouteHref(route = { type: "home" }) {
+  if (route.type === "records") return "/history/records";
+  if (route.type === "performances") return "/history/performances";
+  if (route.type === "championships") return "/history/championships";
+  if (route.type === "rivalries" && !route.rivalryId) return "/history/rivalries";
+  if (route.type === "rivalry") return `/history/rivalries/${encodeURIComponent(route.rivalryId)}`;
+  if (route.type === "item") return `/history/items/${encodeURIComponent(route.itemId)}`;
+  if (route.type === "season") return `/history/${encodeURIComponent(route.sportId)}/${encodeURIComponent(route.leagueId)}/seasons/${encodeURIComponent(route.seasonId)}`;
+  if (route.type === "league") return `/history/${encodeURIComponent(route.sportId)}/${encodeURIComponent(route.leagueId)}`;
+  if (route.type === "sport") return `/history/${encodeURIComponent(route.sportId)}`;
+  return "/history";
+}
+
+function setHistoricalRoute(route, { replace = false, focus = true } = {}) {
+  state.historyRoute = route;
+  state.historyActive = Boolean(route);
+  const url = new URL(window.location.href);
+  url.pathname = route ? historicalRouteHref(route) : "/";
+  if (!route) ["historyItem", "historyView"].forEach((key) => url.searchParams.delete(key));
+  history[replace ? "replaceState" : "pushState"]({ edgeboardHistory: Boolean(route) }, "", url);
+  applyHistoryVisibility();
+  if (route) renderHistoricalExplorer({ focus });
+}
+
+function applyHistoryVisibility() {
+  document.body.classList.toggle("history-active", state.historyActive);
+  elements.historicalExplorer.hidden = !state.historyActive;
+  if (state.historyActive) {
+    state.workspaceActive = false;
+    elements.personalWorkspaceView.hidden = true;
+    elements.visualAnalyticsView.hidden = true;
+    elements.entityProfileView.hidden = true;
+    elements.athleteProfileView.hidden = true;
+  }
+}
+
+function renderHistoricalActions(item) {
+  return item.actions.map((action) => {
+    if (action.type === "entity") return `<a class="text-button" href="${escapeHtml(action.profileSystem === "athlete" ? profileUrl(action.entityId) : entityProfileUrl(action.entityId))}" ${action.profileSystem === "athlete" ? `data-open-athlete="${escapeHtml(action.entityId)}"` : `data-open-entity="${escapeHtml(action.entityId)}"`}>${escapeHtml(action.label)}</a>`;
+    if (action.type === "visualize") return `<button class="text-button" type="button" data-history-visual="${escapeHtml(item.id)}">${escapeHtml(action.label)}</button>`;
+    if (action.type === "research") return `<button class="text-button" type="button" data-history-research="${escapeHtml(item.id)}" data-history-query="${escapeHtml(action.query)}">${escapeHtml(action.label)}</button>`;
+    return "";
+  }).join("");
+}
+
+function renderHistoricalCard(item) {
+  const value = item.titleData.value ?? item.titleData.champion ?? item.titleData.meetings ?? item.titleData.championships ?? null;
+  return `<article class="historical-card" data-historical-item="${escapeHtml(item.id)}">
+    <div class="home-card-kickers"><span>${escapeHtml(item.leagueName)} · ${escapeHtml(item.sportName)}</span><span>${escapeHtml(item.type.replaceAll("_", " "))}</span><span class="validation-label">${escapeHtml(item.validationLabel)}</span><span class="sample-badge">Sample</span></div>
+    <h3><a href="${escapeHtml(item.route)}" data-history-route>${escapeHtml(item.title)}</a></h3>
+    ${value !== null ? `<p class="historical-value">${escapeHtml(String(value))}</p>` : ""}
+    <p>${escapeHtml(item.coverageLabel)}</p>
+    <div class="market-research-quality" title="Research Quality measures evidence support, not probability."><span>Research Quality</span><strong>${escapeHtml(item.researchQuality.label)} · ${item.researchQuality.score}%</strong></div>
+    ${item.correction ? `<p class="data-warning"><strong>Corrected result</strong> Previous value ${escapeHtml(String(item.correction.oldValue))}; corrected to ${escapeHtml(String(item.correction.newValue))} on ${escapeHtml(item.correction.correctedAt || "date unavailable")}.</p>` : ""}
+    ${item.dynastyCriteria ? `<p class="data-warning"><strong>Candidate criteria:</strong> at least ${item.dynastyCriteria.minimumTitles} championships within ${item.dynastyCriteria.windowSeasons} seasons. This is not a verified dynasty label.</p>` : ""}
+    ${item.warnings.map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("")}
+    <div class="home-card-actions">${renderHistoricalActions(item)}</div>
+    <small>${escapeHtml(item.sources[0]?.label || "Source unavailable")} · ${formatDateTime(item.freshness.lastUpdated)} · ${escapeHtml(item.validationStatus.replaceAll("_", " "))}</small>
+  </article>`;
+}
+
+function renderHistoricalCoverage(coverage) {
+  return `<section aria-labelledby="historicalCoverageTitle"><h2 id="historicalCoverageTitle">Historical Coverage</h2>
+    <dl class="historical-coverage-grid">
+      <div><dt>Scope</dt><dd>${escapeHtml(coverage.leagueName || "Selected sports")}</dd></div>
+      <div><dt>Available period</dt><dd>${escapeHtml(coverage.label)}</dd></div>
+      <div><dt>Events</dt><dd>${escapeHtml(coverage.eventCompleteness || "Unavailable")}</dd></div>
+      <div><dt>Standings</dt><dd>${escapeHtml(coverage.standingsCoverage || "Unavailable")}</dd></div>
+      <div><dt>Playoffs or tournament</dt><dd>${escapeHtml(coverage.playoffCoverage || "Unavailable")}</dd></div>
+      <div><dt>Championships</dt><dd>${escapeHtml(coverage.championshipCoverage || "Unavailable")}</dd></div>
+      <div><dt>Play-by-play</dt><dd>${escapeHtml(coverage.playByPlayAvailability || "Unavailable")}</dd></div>
+      <div><dt>All-time claims</dt><dd>${coverage.allTimeClaimsSupported ? "Supported for the verified bounded scope" : "Not supported"}</dd></div>
+    </dl>
+    ${(coverage.providerLimitations || []).map((warning) => `<p class="data-warning">${escapeHtml(warning)}</p>`).join("")}
+  </section>`;
+}
+
+function renderHistoricalEvidence(item) {
+  return `<div class="stats-table-wrap" tabindex="0" aria-label="Scrollable supporting evidence"><table class="stats-table"><caption>Supporting historical evidence for ${escapeHtml(item.title)}</caption><thead><tr><th scope="col">Date</th><th scope="col">Evidence</th><th scope="col">Event</th><th scope="col">Source</th></tr></thead><tbody>${item.supportingEvidence.map((entry) => `<tr><td>${escapeHtml(entry.occurredAt || "Unavailable")}</td><th scope="row">${escapeHtml(entry.label)}</th><td>${escapeHtml(entry.eventId || "Unavailable")}</td><td>${escapeHtml(entry.sourceId || "Unavailable")}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+async function renderHistoricalExplorer({ focus = false } = {}) {
+  if (!state.historyActive) return;
+  await loadHistoricalModules();
+  if (!state.historyActive) return;
+  const route = state.historyRoute || { type: "home" };
+  const scope = historicalScope(route);
+  const coverageResult = historicalService.getHistoricalCoverage(scope);
+  const coverageList = Array.isArray(coverageResult) ? coverageResult : [coverageResult];
+  const primaryCoverage = coverageList[0] || null;
+  elements.historicalCoverage.innerHTML = primaryCoverage ? renderHistoricalCoverage(primaryCoverage) : `<div class="discovery-empty">No historical coverage is configured for this scope.</div>`;
+  const navScope = scope.leagueId ? `/${encodeURIComponent(scope.sportId)}/${encodeURIComponent(scope.leagueId)}` : "";
+  elements.historicalNav.innerHTML = [
+    ["Overview", navScope ? `/history${navScope}` : "/history"], ["Records", "/history/records"], ["Performances", "/history/performances"], ["Championships", "/history/championships"], ["Rivalries", "/history/rivalries"],
+  ].map(([label, href]) => `<a href="${href}" data-history-route>${label}</a>`).join("");
+  let title = scope.leagueId ? `${sportsRepository.getLeague(scope.leagueId)?.leagueDisplayName || scope.leagueId.toUpperCase()} Historical Explorer` : scope.sportId ? `${scope.sportId.replaceAll("-", " ")} history` : "Historical Explorer";
+  let summary = "Evidence-backed sample history with explicit coverage and validation limits.";
+  let content = "";
+  if (route.type === "item") {
+    const raw = historicalService.getItem(route.itemId);
+    if (!raw) content = `<div class="discovery-empty" role="alert"><h2>Historical item unavailable</h2><p>The stable historical ID is invalid or no longer supported.</p></div>`;
+    else {
+      const item = historicalService.buildHistoricalViewModel(raw); title = item.title; summary = item.coverageLabel;
+      const related = historicalService.getRelatedHistoricalItems(raw);
+      content = `${renderHistoricalCard(item)}${renderHistoricalEvidence(item)}<h2>Accessible timeline</h2><ol class="historical-timeline">${item.supportingEvidence.map((entry) => `<li><time>${escapeHtml(entry.occurredAt || "Date unavailable")}</time><strong>${escapeHtml(entry.label)}</strong><span>${escapeHtml(entry.eventId || "No event ID")}</span></li>`).join("")}</ol>${related.length ? `<h2>Related history</h2><div class="historical-grid">${related.map(renderHistoricalCard).join("")}</div>` : ""}`;
+    }
+  } else if (route.type === "rivalry") {
+    const rivalry = historicalService.getRivalryHistory(route.rivalryId); title = rivalry.status === "ready" ? rivalry.label : "Rivalry unavailable";
+    content = rivalry.status === "ready" ? `<p>${escapeHtml(rivalry.disclosure)}</p><div class="historical-grid">${rivalry.events.map(renderHistoricalCard).join("") || `<div class="discovery-empty">No completed meetings are available.</div>`}</div>` : `<div class="discovery-empty" role="status">${escapeHtml(rivalry.message)}</div>`;
+  } else if (route.type === "season") {
+    const season = historicalService.getSeasonSummary(route.sportId, route.leagueId, route.seasonId); title = `${route.leagueId.toUpperCase()} ${route.seasonId} season`;
+    content = `<dl class="historical-coverage-grid"><div><dt>Completed events</dt><dd>${season.completedEvents}</dd></div><div><dt>Participants</dt><dd>${season.participantCount}</dd></div><div><dt>Standings</dt><dd>${escapeHtml(season.standingsMessage)}</dd></div></dl>${season.items.length ? `<div class="historical-grid">${season.items.map(renderHistoricalCard).join("")}</div>` : `<div class="discovery-empty">No normalized historical items are available for this season.</div>`}`;
+  } else if (route.type === "records") {
+    title = "Records Explorer"; const records = historicalService.getRecordResults(scope);
+    content = [["Verified records", records.verified], ["Provider-asserted records", records.providerAsserted], ["Dataset highs", records.datasetHighs], ["Record candidates", records.candidates]].map(([label, values]) => values.length ? `<section><h2>${label}</h2><div class="historical-grid">${values.map(renderHistoricalCard).join("")}</div></section>` : "").join("") || `<div class="discovery-empty">No validated record result exists for this scope.</div>`;
+  } else if (route.type === "performances") {
+    title = "Greatest Available Performances"; const values = historicalService.getPerformanceRankings(scope);
+    content = values.length ? `<p class="data-warning"><strong>Ranking method:</strong> Raw source values are ranked only within matching sport, league, statistic, and unit cohorts. No composite greatness score or era adjustment is used. Equal values share a rank.</p><div class="stats-table-wrap" tabindex="0" aria-label="Scrollable historical performance rankings"><table class="stats-table"><caption>Deterministic raw-stat performance rankings within comparable sample cohorts</caption><thead><tr><th scope="col">Rank</th><th scope="col">Performance</th><th scope="col">Cohort</th><th scope="col">Raw component</th><th scope="col">Qualification</th><th scope="col">Coverage</th><th scope="col">Validation</th></tr></thead><tbody>${values.map((item) => `<tr><td>${item.rank}</td><th scope="row"><a href="${item.route}" data-history-route>${escapeHtml(item.title)}</a></th><td>${escapeHtml(item.cohortKey)}</td><td>${escapeHtml(item.components.map((component) => `${component.label}: ${component.value}`).join("; "))}</td><td>${escapeHtml(item.qualification.rule)}</td><td>${escapeHtml(item.coverageLabel)}</td><td>${escapeHtml(item.validationLabel)}</td></tr>`).join("")}</tbody></table></div>` : `<div class="discovery-empty">No supported performance ranking is available for this scope.</div>`;
+  } else if (route.type === "championships") {
+    title = "Championship and Tournament History"; const values = historicalService.getChampionshipHistory(scope);
+    content = values.length ? `<div class="historical-grid">${values.map(renderHistoricalCard).join("")}</div>` : `<div class="discovery-empty">Championship history is not available from the configured provider for this scope.</div>`;
+  } else if (route.type === "rivalries") {
+    title = "Rivalry Explorer"; const values = historicalService.searchHistoricalItems({ ...scope, type: "rivalry_event", pageSize: 50 }).items;
+    const documented = values.filter((item) => item.metadata.rivalryId && item.metadata.classification !== "direct_head_to_head");
+    const direct = values.filter((item) => !item.metadata.rivalryId || item.metadata.classification === "direct_head_to_head");
+    content = documented.length || direct.length ? `${documented.length ? `<section><h2>Configured or evidence-classified rivalries</h2><div class="historical-grid">${documented.map(renderHistoricalCard).join("")}</div></section>` : ""}${direct.length ? `<section><h2>Direct head-to-head history — not classified as a rivalry</h2><div class="historical-grid">${direct.map(renderHistoricalCard).join("")}</div></section>` : ""}` : `<div class="discovery-empty">No documented rivalry is available for this scope. Frequent matchups are not relabeled as rivalries.</div>`;
+  } else {
+    const sections = historicalService.getHistoricalExplorerSections(scope);
+    const categories = scope.sportId ? historicalService.getCategories(scope.sportId) : [];
+    content = `${categories.length ? `<section class="historical-section"><h2>Supported historical categories</h2><ul class="historical-category-list">${categories.map((category) => `<li>${escapeHtml(category)}</li>`).join("")}</ul></section>` : ""}${sections.length ? sections.map((section) => `<section class="historical-section" aria-labelledby="historical-${section.id}"><h2 id="historical-${section.id}">${escapeHtml(section.title)}</h2><div class="historical-grid">${section.items.map(renderHistoricalCard).join("")}</div></section>`).join("") : `<div class="discovery-empty" role="status"><h2>Insufficient historical coverage</h2><p>EdgeBoard does not have verified historical items for this selected scope.</p><button type="button" class="text-button" data-history-query="Show current-season leaders" data-history-research="">View current-season leaders</button></div>`}`;
+  }
+  elements.historicalExplorerTitle.textContent = title;
+  elements.historicalExplorerSummary.textContent = summary;
+  elements.historicalExplorerContent.innerHTML = content;
+  if (focus) elements.historicalExplorer.focus({ preventScroll: true });
 }
 
 function renderHomeDiscovery() {
@@ -3499,12 +3699,15 @@ function renderAll() {
   renderAthleteProfile();
   renderEntityProfile();
   applyWorkspaceVisibility();
+  applyHistoryVisibility();
+  if (state.historyActive) renderHistoricalExplorer();
   if (elements.discoveryDrawer.classList.contains("open")) renderDiscovery();
 }
 
 function setProfileUrl(athleteId, tab, { replace = false } = {}) {
   const url = new URL(window.location.href);
   if (athleteId) {
+    url.pathname = "/";
     url.searchParams.set("player", athleteId);
     url.searchParams.set("tab", tab || "overview");
     url.searchParams.delete("entityProfile");
@@ -3581,6 +3784,9 @@ async function loadAthleteProfile({ focusHeading = false } = {}) {
 }
 
 function openAthleteProfile(athleteId, tab = "overview", { replace = false, focusHeading = true } = {}) {
+  state.historyActive = false;
+  state.historyRoute = null;
+  applyHistoryVisibility();
   if (!athleteId) return;
   entityProfileAbortController?.abort();
   entityProfileRequestSequence += 1;
@@ -3616,6 +3822,7 @@ function closeAthleteProfile({ useHistory = true } = {}) {
 function setEntityProfileUrl(entityId, { replace = false } = {}) {
   const url = new URL(window.location.href);
   if (entityId) {
+    url.pathname = "/";
     url.searchParams.set("entityProfile", entityId);
     url.searchParams.delete("player");
     url.searchParams.delete("tab");
@@ -3662,6 +3869,9 @@ async function loadEntityProfile({ focusHeading = false } = {}) {
 }
 
 function openEntityProfile(entityId, { replace = false, focusHeading = true } = {}) {
+  state.historyActive = false;
+  state.historyRoute = null;
+  applyHistoryVisibility();
   if (!entityId) return;
   profileRequestSequence += 1;
   state.profileAthleteId = "";
@@ -3708,8 +3918,8 @@ function renderAthleteSearchResults() {
       <small>${escapeHtml(entity.typeLabel)}${entity.context ? ` · ${escapeHtml(entity.context)}` : ""}</small>
     </a>
   `).join("")}${state.athleteSearchGuidance.length ? `<div class="athlete-search-guidance" aria-label="Suggested research paths"><strong>Research next</strong><div>${state.athleteSearchGuidance.map((item) => `<button type="button" data-search-followup="${escapeHtml(item.query)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>` : ""}
-  ${discoveryGroups.filter((group) => group.id !== "direct").map((group) => `<section class="discovery-search-group" role="group" aria-labelledby="discovery-search-${escapeHtml(group.id)}"><strong id="discovery-search-${escapeHtml(group.id)}">${escapeHtml(group.label)}</strong><div>${group.items.slice(0, 4).map((item) => item.route?.href
-    ? `<a href="${escapeHtml(item.route.href)}" data-discovery-route="${escapeHtml(item.route.href)}">${escapeHtml(item.title)}</a>`
+  ${discoveryGroups.filter((group) => group.id !== "direct").map((group) => `<section class="discovery-search-group" role="group" aria-labelledby="discovery-search-${escapeHtml(group.id)}"><strong id="discovery-search-${escapeHtml(group.id)}">${escapeHtml(group.label)}</strong><div>${group.items.slice(0, 4).map((item) => item.route?.href || item.route
+    ? group.id === "history" ? `<a href="${escapeHtml(item.route)}" data-history-route>${escapeHtml(item.title)}</a>` : `<a href="${escapeHtml(item.route.href)}" data-discovery-route="${escapeHtml(item.route.href)}">${escapeHtml(item.title)}</a>`
     : `<button type="button" data-discovery-search-query="${escapeHtml(item.queryTemplate?.query || item.query || item.title)}">${escapeHtml(item.title || item.label)}</button>`).join("")}</div></section>`).join("")}`;
 }
 
@@ -3739,9 +3949,14 @@ function updateAthleteSearch(query) {
   state.athleteSearchIndex = -1;
   renderAthleteSearchResults();
   window.clearTimeout(discoverySearchTimer);
-  discoverySearchTimer = window.setTimeout(() => {
+  discoverySearchTimer = window.setTimeout(async () => {
     const { scope, options } = discoveryScopeAndOptions();
-    state.discoverySearch = discoveryService.searchDiscovery(text, scope, { ...options, includeDirectMatches: false });
+    const discoverySearch = discoveryService.searchDiscovery(text, scope, { ...options, includeDirectMatches: false });
+    await loadHistoricalModules();
+    if (elements.queryInput.value.trim() !== text) return;
+    const history = historicalService.searchHistoricalItems({ query: text, sportId: scope.sportIds.length === 1 ? scope.sportIds[0] : "", leagueId: scope.leagueIds.length === 1 ? scope.leagueIds[0] : "", pageSize: 4 }).items;
+    const groups = [...discoverySearch.groups, ...(history.length ? [{ id: "history", label: "History", items: history }] : [])];
+    state.discoverySearch = { ...discoverySearch, groups, total: groups.reduce((sum, group) => sum + group.items.length, 0) };
     renderAthleteSearchResults();
   }, 180);
 }
@@ -3874,6 +4089,80 @@ elements.researchIntentNav.addEventListener("click", (event) => {
     document.querySelector(".hero").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   scheduleMarketBoardLoad();
+});
+
+elements.openHistory.addEventListener("click", (event) => {
+  event.preventDefault();
+  const summary = getSelectionSummary(state.navigationSelection);
+  const league = summary.selection.type === "league" ? sportsRepository.getLeague(summary.selection.id) : null;
+  setHistoricalRoute(league ? { type: "league", sportId: league.sportId, leagueId: league.leagueId }
+    : summary.selection.type === "sport" ? { type: "sport", sportId: summary.selection.id } : { type: "home" });
+  recordWorkspaceActivity("opened", "historical_explorer", league?.leagueId || summary.selection.id, "Opened Historical Explorer");
+});
+
+elements.closeHistoricalExplorer.addEventListener("click", (event) => {
+  event.preventDefault();
+  setHistoricalRoute(null, { focus: false });
+  elements.openHistory.focus({ preventScroll: true });
+});
+
+elements.shareHistoricalExplorer.addEventListener("click", async () => {
+  try {
+    await writeClipboardWithTimeout(window.location.href);
+    elements.historicalActionStatus.textContent = "Historical Explorer link copied.";
+  } catch (error) {
+    elements.historicalActionStatus.textContent = error?.message || "Copy is unavailable.";
+  }
+});
+
+elements.saveHistoricalExplorer.addEventListener("click", async () => {
+  await loadHistoricalModules();
+  const route = state.historyRoute || { type: "home" };
+  const scope = historicalScope(route);
+  const item = route.type === "item" ? historicalService.getItem(route.itemId) : null;
+  const coverage = historicalService.getHistoricalCoverage(scope);
+  openWorkspaceSave({
+    title: item?.title || elements.historicalExplorerTitle.textContent,
+    description: "Saved Historical Explorer snapshot with coverage and validation limits",
+    type: "saved_research", boardId: "board-stats-trends", sample: true,
+    sourceState: { mode: state.researchMode, sportId: scope.sportId, leagueId: scope.leagueId, queryText: "", structuredQuery: { historicalRoute: route } },
+    canonicalReferences: { entityIds: item?.entityIds || [], eventIds: item?.eventIds || [], marketIds: [], insightIds: [], queryId: null, visualizationId: null },
+    researchSnapshot: safeSnapshot({ route, item, coverage, savedAt: new Date().toISOString(), source: "EdgeBoard historical sample fixtures", sample: true }),
+  }).catch(reportWorkspaceError);
+});
+
+elements.historicalExplorer.addEventListener("click", async (event) => {
+  const routeLink = event.target.closest("[data-history-route]");
+  if (routeLink) {
+    event.preventDefault();
+    setHistoricalRoute(parseHistoricalRoute(new URL(routeLink.href, window.location.origin)));
+    return;
+  }
+  const research = event.target.closest("[data-history-research]");
+  if (research) {
+    const raw = historicalService.getItem(research.dataset.historyResearch);
+    elements.queryInput.value = research.dataset.historyQuery || `Explore ${raw?.title || "the available historical data"}`;
+    if (raw) state.discoveryResearchContext = {
+      itemId: raw.id, type: "historical_item", title: raw.title, entityIds: raw.entityIds, eventIds: raw.eventIds, storyIds: [], statIds: raw.statIds, marketIds: [], sportId: raw.sportId, leagueId: raw.leagueId,
+      queryTemplate: { query: elements.queryInput.value, intent: "historical_exploration" },
+      sourceSignals: raw.supportingEvidence.map((entry) => ({ type: "historical_evidence", label: entry.label, weight: 1 })),
+      sources: raw.sources, freshness: raw.freshness, validationStatus: raw.validationStatus, edgeTrust: raw.edgeTrust, researchQuality: raw.researchQuality,
+      warnings: [...raw.warnings, `Historical coverage: ${raw.coverage?.label || "unavailable"}`],
+    };
+    setHistoricalRoute(null, { focus: false });
+    elements.queryInput.dispatchEvent(new Event("input", { bubbles: true }));
+    document.querySelector("#queryForm").requestSubmit();
+    elements.queryInput.focus({ preventScroll: true });
+    return;
+  }
+  const visual = event.target.closest("[data-history-visual]");
+  if (visual) {
+    const item = historicalService.getItem(visual.dataset.historyVisual);
+    const entity = item?.resolvedEntities[0];
+    if (!item || !entity) return;
+    state.historyActive = false;
+    openVisualAnalytics({ visualizationType: "timeline", sportId: item.sportId, leagueId: item.leagueId, entityType: entity.type, entityIds: [entity.id], eventIds: item.eventIds, statIds: item.statIds, dateRange: { type: "season", value: item.season }, filters: {} });
+  }
 });
 
 elements.todayMarketGrid.addEventListener("click", (event) => {
@@ -4083,6 +4372,7 @@ function runBettingResearch(query) {
     providerName: sportsRepository.getMetadata().provider,
     storyContext: state.storyResearchContext,
     discoveryContext: state.discoveryResearchContext,
+    historicalQuery: state.historicalParsedQuery,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: state.leagueId,
       sportId: currentLeague()?.sportId || "",
@@ -4161,6 +4451,7 @@ async function runStatsResearch(query) {
     providerName: sportsRepository.getMetadata().provider,
     storyContext: state.storyResearchContext,
     discoveryContext: state.discoveryResearchContext,
+    historicalQuery: state.historicalParsedQuery,
     resolvedEntities: entityRegistry.search(query, {
       leagueId: parsed.structuredQuery.leagueId || state.leagueId,
       sportId: parsed.structuredQuery.sportId || currentLeague()?.sportId || "",
@@ -4216,6 +4507,30 @@ async function submitResearchQuery() {
     elements.queryFeedback.textContent = "Enter a sports research question.";
     renderAll();
     return;
+  }
+  const historicalRequested = /\b(history|historical|all[- ]time|championship|rivalr|dynast|comeback|upset|career timeline|season comparison|record progression|on this day|fastest finish|longest streak)\b/i.test(query);
+  if (historicalRequested) await loadHistoricalModules();
+  state.historicalParsedQuery = historicalRequested ? historicalQueryParser(query, {
+    entityRegistry, sportsRepository, sportId: currentLeague()?.sportId || "", leagueId: state.leagueId,
+  }) : null;
+  if (state.historicalParsedQuery) {
+    const parsedHistory = state.historicalParsedQuery;
+    const coverage = historicalService.getHistoricalCoverage({ sportId: parsedHistory.sportId, leagueId: parsedHistory.leagueId });
+    const result = historicalService.searchHistoricalItems({ query, sportId: parsedHistory.sportId, leagueId: parsedHistory.leagueId, entityIds: parsedHistory.entityIds, pageSize: 5 });
+    const raw = result.items[0] ? historicalService.getItem(result.items[0].id) : null;
+    const unsupportedAllTime = parsedHistory.allTimeRequested && !coverage?.allTimeClaimsSupported;
+    state.discoveryResearchContext = {
+      itemId: raw?.id || `historical-query-${Date.now()}`, type: "historical_query", title: raw?.title || "Historical research request",
+      entityIds: raw?.entityIds || parsedHistory.entityIds, eventIds: raw?.eventIds || [], storyIds: [], statIds: raw?.statIds || [], marketIds: [],
+      sportId: raw?.sportId || parsedHistory.sportId, leagueId: raw?.leagueId || parsedHistory.leagueId,
+      queryTemplate: { query, intent: parsedHistory.intent, historicalScope: parsedHistory.intendedHistoricalScope },
+      sourceSignals: raw?.supportingEvidence.map((entry) => ({ type: "historical_evidence", label: entry.label, weight: 1 })) || [{ type: "historical_coverage", label: coverage?.label || "Historical coverage unavailable", weight: 1 }],
+      sources: raw?.sources || (coverage?.source ? [coverage.source] : [{ id: "edgeboard-history-coverage", label: "EdgeBoard historical coverage", sample: true }]),
+      freshness: raw?.freshness || { state: "sample", lastUpdated: coverage?.lastSuccessfulUpdate || null },
+      validationStatus: unsupportedAllTime ? "incomplete" : raw?.validationStatus || coverage?.validationStatus || "unknown",
+      edgeTrust: raw?.edgeTrust || null, researchQuality: raw?.researchQuality || null,
+      warnings: [...(raw?.warnings || []), ...(parsedHistory.warnings || []), ...(parsedHistory.unsupportedPortions || []), `Historical coverage: ${coverage?.label || "unavailable"}`],
+    };
   }
   if (/\b(chart|map|visual|plot|telemetry|passing network|line movement|odds movement|round by round|race position|lap time)\b/i.test(query)) {
     const modules = await loadVisualizationModules();
@@ -4829,6 +5144,12 @@ function handleHomeDiscoveryQuery(event) {
   .forEach((container) => container.addEventListener("click", handleHomeDiscoveryQuery));
 
 document.addEventListener("click", (event) => {
+  const historyLink = event.target.closest("[data-history-route]");
+  if (historyLink && !historyLink.closest("#historicalExplorer")) {
+    event.preventDefault();
+    setHistoricalRoute(parseHistoricalRoute(new URL(historyLink.href, window.location.origin)));
+    return;
+  }
   const routeLink = event.target.closest("[data-discovery-route]");
   if (routeLink) {
     event.preventDefault();
@@ -6044,6 +6365,22 @@ elements.workspaceShareDialog.addEventListener("click", async (event) => {
 });
 
 window.addEventListener("popstate", () => {
+  const historicalRoute = parseHistoricalRoute();
+  state.historyRoute = historicalRoute;
+  state.historyActive = Boolean(historicalRoute);
+  if (historicalRoute?.leagueId && sportsRepository.getLeague(historicalRoute.leagueId)) {
+    const league = sportsRepository.getLeague(historicalRoute.leagueId);
+    state.navigationSelection = { type: "league", id: league.leagueId };
+    state.leagueId = league.leagueId;
+  } else if (historicalRoute?.sportId) {
+    state.navigationSelection = { type: "sport", id: historicalRoute.sportId };
+  }
+  if (historicalRoute) {
+    renderAll();
+    elements.historicalExplorer.focus({ preventScroll: true });
+    return;
+  }
+  applyHistoryVisibility();
   const params = new URLSearchParams(window.location.search);
   const discoveryRoute = parseDiscoveryRoute(params);
   state.discoveryRoute = discoveryRoute;
@@ -6222,7 +6559,8 @@ document.querySelectorAll("[data-theme-option]").forEach((button) => {
 
 document.querySelector(".brand").addEventListener("click", (event) => {
   event.preventDefault();
-  if (state.workspaceActive) closeWorkspace();
+  if (state.historyActive) setHistoricalRoute(null, { focus: false });
+  else if (state.workspaceActive) closeWorkspace();
   else if (state.visualRequest) closeVisualAnalytics();
   else if (state.profileAthleteId) closeAthleteProfile();
   else if (state.entityProfileId) closeEntityProfile();

@@ -99,6 +99,14 @@ history, import/export validation, and cross-tab update detection:
 http://127.0.0.1:9010/browser-tests/workspace.html
 ```
 
+The Historical Explorer harness covers coverage boundaries, record wording,
+performance rankings, championships, rivalries, dynasty candidates, comebacks,
+upsets, timelines, season routes, search, accessibility, and responsive layouts:
+
+```text
+http://127.0.0.1:9010/browser-tests/historical-explorer.html
+```
+
 ## Market taxonomy
 
 `src/config/market-catalog.js` is the provider-neutral source of truth for canonical market definitions and confidence bands. The sports registry declares which definitions a sport can support; the repository maps provider offers to those definitions; and the UI only promotes categories and markets that have an open or explicitly suspended provider instance.
@@ -112,6 +120,8 @@ The normalized top-navigation selection is the shared scope for active navigatio
 See [Provider integration](docs/provider-integration.md) for contracts, adapters, environment variables, freshness rules, and the live-provider checklist.
 
 See [Statistical research architecture](docs/statistical-research.md) for the historical provider contract, canonical stat flow, mode behavior, and persistence rules.
+
+See [Historical Explorer architecture and coverage](docs/historical-explorer.md) for the league-by-league sample coverage audit, validation wording, eligibility rules, routing, and known gaps.
 
 See [Athlete profiles](docs/athlete-profiles.md) for profile routing, normalized view models, sport-aware configuration, provider methods, media fallbacks, and deterministic insight rules.
 

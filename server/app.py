@@ -41,6 +41,8 @@ def create_handler(runtime: Runtime):
             ):
                 self.send_error(404)
                 return
+            if decoded_path == "/history" or decoded_path.startswith("/history/"):
+                self.path = "/index.html"
             super().do_GET()
 
         def do_POST(self):
