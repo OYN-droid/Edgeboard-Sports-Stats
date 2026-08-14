@@ -1,0 +1,56 @@
+{
+  "styleVersion": "edgeboard-illustration-v1",
+  "exportMethod": "proportional high-quality Core Graphics resampling onto a transparent 640x800 RGBA canvas",
+  "sourceDimensions": { "width": 1024, "height": 1536 },
+  "exportDimensions": { "width": 640, "height": 800 },
+  "scaleFactor": 0.5208333333333334,
+  "offset": { "x": 53.333333333333314, "y": 0 },
+  "productionStatus": "approved",
+  "reviewStatus": "approved",
+  "humanVisualApproval": "approved",
+  "styleRole": "production_proof_exemplar",
+  "exports": [
+    {
+      "canonicalEntityId": "mlb-aaron-judge",
+      "sourcePath": "/Users/davidjaycox/Downloads/aaron judge.png",
+      "sourceSha256": "42b7beb556cdfbd3dfbfe832eba5e301d2b4f79c5f9f5d93326d3d154e0d1951",
+      "assetPath": "assets/illustrations/proof/edgeboard--mlb-aaron-judge--portrait--v01.png",
+      "exportSha256": "f6373a7b6c0d10149fb4ed411272c16ece8f5007b6240245297130cecf03b6b1"
+    },
+    {
+      "canonicalEntityId": "nba-stephen-curry",
+      "sourcePath": "/Users/davidjaycox/Downloads/stephen curry.png",
+      "sourceSha256": "2e08c01a64e945763a7813dc63c454a65212aed82fdc3625b9773cba9c6daf98",
+      "assetPath": "assets/illustrations/proof/edgeboard--nba-stephen-curry--portrait--v01.png",
+      "exportSha256": "bc42a3b569f7aaf245de496a604e7fb35e6f967a1e2d9a76daf6e46060ed765c"
+    },
+    {
+      "canonicalEntityId": "ufc-islam-makhachev",
+      "sourcePath": "/Users/davidjaycox/Downloads/islam makachev.png",
+      "sourceSha256": "d0f76eb685dff7976d3bc034603232a2ce88bad41163485f7eac7a80136395c4",
+      "assetPath": "assets/illustrations/proof/edgeboard--ufc-islam-makhachev--portrait--v01.png",
+      "exportSha256": "5086f7b8b858107ad08bfd60c22ac3b5199298bedf32d6d66e796593e481a3f3"
+    },
+    {
+      "canonicalEntityId": "nhl-auston-matthews",
+      "sourcePath": "/Users/davidjaycox/Downloads/auston matthews.png",
+      "sourceSha256": "5c6df4a6fbe528ff8df48b9f459d13e46ad435a7603fdb3eb620c48abc0036db",
+      "assetPath": "assets/illustrations/proof/edgeboard--nhl-auston-matthews--portrait--v01.png",
+      "exportSha256": "590d8ae3c20d21657e58fb45c83932298937dae6498657f007828d6936bf587f"
+    },
+    {
+      "canonicalEntityId": "f1-lando-norris",
+      "sourcePath": "/Users/davidjaycox/Downloads/lando norris.png",
+      "sourceSha256": "e6fea168cfd2974ae4d1403394a80e5dce2fbe25097128762eba54765548a2db",
+      "assetPath": "assets/illustrations/proof/edgeboard--f1-lando-norris--portrait--v01.png",
+      "exportSha256": "76dd7699f255881907c81d48686a777fe7b2941d6040415e99095efa05afc328"
+    },
+    {
+      "canonicalEntityId": "wta-coco-gauff",
+      "sourcePath": "/Users/davidjaycox/Downloads/coco gauff.png",
+      "sourceSha256": "bb50d3695a89b84a5fbb6c26a0f69c28972cbb554c80256eff0acdbcb19a8a0f",
+      "assetPath": "assets/illustrations/proof/edgeboard--wta-coco-gauff--portrait--v01.png",
+      "exportSha256": "11b57b2f371e12600ffc49dfcbf838cfd7595c4bd9e780a000717984c497c9ab"
+    }
+  ]
+}

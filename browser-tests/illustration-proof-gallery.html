@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EdgeBoard illustration style proof gallery</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./illustration-proof-gallery.css">
+</head>
+<body>
+  <header class="proof-header">
+    <p class="eyebrow">Development-only quality assurance</p>
+    <h1>Illustration style proof batch</h1>
+    <p>6/6 human-approved Style v1 production exemplars. Exact portraits are active and every prior fallback remains available.</p>
+  </header>
+  <section id="styleReference" class="reference-panel" aria-labelledby="styleReferenceTitle"></section>
+  <section class="collection-panel" aria-labelledby="collectionTitle">
+    <div><p class="eyebrow">Collection preview</p><h2 id="collectionTitle">Six-proof scale and silhouette check</h2></div>
+    <div id="collectionPreview" class="collection-preview"></div>
+  </section>
+  <main id="proofGallery" class="proof-grid" aria-label="Illustration proof review gallery"></main>
+  <section class="collection-panel" aria-labelledby="nbaCollectionTitle">
+    <div><p class="eyebrow">NBA production collection</p><h2 id="nbaCollectionTitle">Stephen Curry + Batch 1</h2></div>
+    <div id="nbaCollectionPreview" class="collection-preview collection-preview--nba"></div>
+  </section>
+  <section id="nbaGallery" class="proof-grid" aria-label="Approved NBA production portrait review gallery"></section>
+  <section class="collection-panel" aria-labelledby="mlbCollectionTitle">
+    <div><p class="eyebrow">MLB production collection</p><h2 id="mlbCollectionTitle">Complete 30-team MLB portrait collection</h2></div>
+    <div id="mlbCollectionPreview" class="collection-preview collection-preview--mlb"></div>
+  </section>
+  <section id="mlbGallery" class="proof-grid" aria-label="Approved MLB production portrait review gallery"></section>
+  <pre id="results" aria-live="polite">Running…</pre>
+  <script>
+    window.testErrors = [];
+    addEventListener("error", (event) => testErrors.push(event.message));
+    addEventListener("unhandledrejection", (event) => testErrors.push(String(event.reason)));
+    setTimeout(() => {
+      const output = document.querySelector("#results");
+      if (output.textContent === "Running…") output.textContent = `ERROR\n${testErrors.join("\n") || "Harness did not complete."}`;
+    }, 20000);
+  </script>
+  <script type="module" src="./illustration-proof-gallery.js"></script>
+</body>
+</html>

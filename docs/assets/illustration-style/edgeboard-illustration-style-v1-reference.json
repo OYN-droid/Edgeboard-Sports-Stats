@@ -1,0 +1,26 @@
+{
+  "assetType": "style_reference",
+  "styleVersion": "edgeboard-illustration-v1",
+  "displayName": "EdgeBoard Illustration Style v1 approved reference",
+  "approvalStatus": "human_approved",
+  "approvedAt": "2026-08-09",
+  "repositoryPath": "docs/assets/illustration-style/edgeboard-illustration-style-v1-reference.png",
+  "ingestionStatus": "ingested",
+  "fileSizeBytes": 3049311,
+  "width": 1369,
+  "height": 1149,
+  "sha256": "223ff10408d12be286a9311d5c9d4f8dce73a7b6f8881bc034737b635ced8ae6",
+  "productionAsset": false,
+  "fallbackEligible": false,
+  "registryEligible": false,
+  "composite": true,
+  "subjectCanonicalIds": [
+    "mlb-aaron-judge",
+    "nba-stephen-curry",
+    "ufc-islam-makhachev",
+    "nhl-auston-matthews",
+    "f1-lando-norris",
+    "wta-coco-gauff"
+  ],
+  "disclosure": "This composite establishes visual direction only. It is not six production athlete assets and must never be registered, cropped automatically, or used as a fallback."
+}

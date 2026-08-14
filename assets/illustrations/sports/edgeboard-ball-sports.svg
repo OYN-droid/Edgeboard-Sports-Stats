@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="t d">
+  <title id="t">EdgeBoard ball sports illustration</title><desc id="d">Original abstract ball, field lines, and motion orbit.</desc>
+  <circle cx="320" cy="382" r="170" fill="#20232c" stroke="#ce1141" stroke-width="18"/>
+  <path fill="none" stroke="#f7f7fa" stroke-width="12" opacity=".82" d="M160 328c120 12 226 92 296 184M238 224c-2 118 40 232 130 318M480 328c-120 12-226 92-296 184"/>
+  <path fill="none" stroke="#ce1141" stroke-linecap="round" stroke-width="20" opacity=".35" d="M74 648c138 70 366 62 494-54M92 156c130-86 352-84 462 18"/>
+</svg>

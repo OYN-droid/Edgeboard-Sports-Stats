@@ -1,0 +1,51 @@
+{
+  "batchId": "edgeboard-nba-illustration-production-batch-5",
+  "styleVersion": "edgeboard-illustration-v1",
+  "styleRole": "showcase_production_portrait",
+  "portraitMode": "standard",
+  "variant": "portrait",
+  "productionStatus": "approved",
+  "reviewStatus": "approved",
+  "humanVisualApproval": "approved",
+  "sourcePreservation": "original supplied files remain unchanged at recorded source paths",
+  "exportMethod": "scripts/export_proof_portrait.swift proportional contain-fit on transparent 640x800 RGBA canvas",
+  "reviewMetadata": {
+    "identityMapping": "approved",
+    "styleConsistency": "approved",
+    "composition": "approved",
+    "athleteSpecificDetails": "approved",
+    "transparentBackground": "approved",
+    "darkModeFit": "approved",
+    "lightModeFit": "approved"
+  },
+  "exports": [
+    {
+      "canonicalEntityId": "nba-tyrese-maxey", "displayName": "Tyrese Maxey", "canonicalTeamId": "PHI",
+      "sourcePath": "/Users/davidjaycox/Downloads/Tyrese Maxey.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1876680, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "b8c8ed9a4e95fd2bb1040b18f619be269aabdd6166a991a87224a53eb0453799",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-tyrese-maxey--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 738841, "exportSha256": "cffe259c5d4d12ed44ed9b827ffc9c7136a508fcda2386ce234b02b76ad22add", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true,
+      "identityAccuracy": "final approved braided-back and broad-smile source; replaces LeBron James only as the curated Philadelphia representative"
+    },
+    {
+      "canonicalEntityId": "nba-damian-lillard", "displayName": "Damian Lillard", "canonicalTeamId": "NBA-POR",
+      "sourcePath": "/Users/davidjaycox/Downloads/Damian Lillard.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1833989, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "5e3dae5d58ecd9df0e05c4e0a7413462d50d305b356114d3b97545793a56492c",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-damian-lillard--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 710034, "exportSha256": "7b84f5314ce84d20c3b638e6037d0a08a680b73af41b9862b8383b5f8d356ec1", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true,
+      "identityAccuracy": "final approved Portland uniform and tattoo-visible source"
+    },
+    {
+      "canonicalEntityId": "nba-scottie-barnes", "displayName": "Scottie Barnes", "canonicalTeamId": "NBA-TOR",
+      "sourcePath": "/Users/davidjaycox/Downloads/Scottie Barnes.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1977354, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "f66ea4080e82a80228a91feb6fd1895c3d960c06caae2b70a6b7283c5c52e26e",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-scottie-barnes--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 749123, "exportSha256": "06f71d4e6ea8ea6772ceffa1631de6385439883d4945d79895618dde2b8bf216", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-lauri-markkanen", "displayName": "Lauri Markkanen", "canonicalTeamId": "NBA-UTA",
+      "sourcePath": "/Users/davidjaycox/Downloads/Lauri Markkanen.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1838368, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "0393b4ce2da03f36718ce7a3dce39e283539883a06dcce98e7036da02f864ad4",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-lauri-markkanen--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 700704, "exportSha256": "c269c57f4ddd3befbd0b4c5469abf98910fe38d81d15f57742d950353a2daf24", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-trae-young", "displayName": "Trae Young", "canonicalTeamId": "NBA-WAS",
+      "sourcePath": "/Users/davidjaycox/Downloads/Trae Young.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1796297, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "c5355b189dfa821e6163c60eb4a87d23602dac91fb4a32e8961ca4ba59500baf",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-trae-young--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 687773, "exportSha256": "aded5211d80b4c3b4975d08e6d245a44ee21e2e49b98a411a7ce57a6d636ece6", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true,
+      "identityAccuracy": "final approved Washington uniform source with no visible tattoos"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="t d">
+  <title id="t">EdgeBoard team context illustration</title><desc id="d">Original abstract group of sports competitors without team marks.</desc>
+  <circle cx="320" cy="192" r="86" fill="#ce1141"/><circle cx="148" cy="260" r="68" fill="#454958"/><circle cx="492" cy="260" r="68" fill="#454958"/>
+  <path fill="#20232c" d="M148 350c-82 0-122 108-126 300h252c-4-192-44-300-126-300Zm344 0c-82 0-122 108-126 300h252c-4-192-44-300-126-300Z"/>
+  <path fill="#2b2e39" d="M320 304c-112 0-170 148-176 420h352c-6-272-64-420-176-420Z"/>
+  <path fill="#ce1141" d="M298 304h44v420h-44z"/>
+</svg>

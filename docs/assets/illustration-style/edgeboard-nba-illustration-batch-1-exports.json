@@ -1,0 +1,203 @@
+{
+  "batchId": "edgeboard-nba-illustration-production-batch-1",
+  "styleVersion": "edgeboard-illustration-v1",
+  "styleRole": "showcase_production_portrait",
+  "portraitMode": "standard",
+  "variant": "portrait",
+  "productionStatus": "approved",
+  "reviewStatus": "approved",
+  "humanVisualApproval": "approved",
+  "sourcePreservation": "original supplied files remain unchanged at recorded source paths",
+  "exportMethod": "scripts/export_proof_portrait.swift proportional contain-fit on transparent 640x800 RGBA canvas",
+  "reviewMetadata": {
+    "identityMapping": "approved",
+    "styleConsistency": "approved",
+    "composition": "approved",
+    "athleteSpecificDetails": "approved",
+    "transparentBackground": "approved",
+    "darkModeFit": "approved",
+    "lightModeFit": "approved"
+  },
+  "exports": [
+    {
+      "canonicalEntityId": "nba-jayson-tatum",
+      "displayName": "Jayson Tatum",
+      "canonicalTeamId": "NBA-BOS",
+      "sourcePath": "/Users/davidjaycox/Downloads/Jayson Tatum.png",
+      "sourceDimensions": {
+        "width": 1024,
+        "height": 1536
+      },
+      "sourceColorMode": "8-bit RGBA",
+      "sourceSizeBytes": 2132630,
+      "sourceHasAlpha": true,
+      "sourceMeaningfulTransparency": true,
+      "sourceSha256": "13477539a0a3fa34c88a5a2a679b07f99aeda5982e5d788063865a9045b2612d",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-jayson-tatum--portrait--v01.png",
+      "exportDimensions": {
+        "width": 640,
+        "height": 800
+      },
+      "scaleFactor": 0.520833333,
+      "offset": {
+        "x": 53.333,
+        "y": 0.0
+      },
+      "exportSizeBytes": 620712,
+      "exportSha256": "94fc5ae0f43cb9fb51bfef35e3bd82243473e6fb8b6ef2e7eeac8e589eb53ff3",
+      "productionStatus": "approved",
+      "reviewStatus": "approved",
+      "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-nikola-jokic",
+      "displayName": "Nikola Jokić",
+      "canonicalTeamId": "NBA-DEN",
+      "sourcePath": "/Users/davidjaycox/Downloads/Nikola Jokic.png",
+      "sourceDimensions": {
+        "width": 1024,
+        "height": 1536
+      },
+      "sourceColorMode": "8-bit RGBA",
+      "sourceSizeBytes": 1935202,
+      "sourceHasAlpha": true,
+      "sourceMeaningfulTransparency": true,
+      "sourceSha256": "0475588f521a0d8ba0786e43932398a63093d81e0111b27552667a5db26ab762",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-nikola-jokic--portrait--v01.png",
+      "exportDimensions": {
+        "width": 640,
+        "height": 800
+      },
+      "scaleFactor": 0.520833333,
+      "offset": {
+        "x": 53.333,
+        "y": 0.0
+      },
+      "exportSizeBytes": 567809,
+      "exportSha256": "fe13815866e7409e96af690605a3151e45cba23ec5a922673dda4c7eaac3ef8a",
+      "productionStatus": "approved",
+      "reviewStatus": "approved",
+      "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-anthony-edwards",
+      "displayName": "Anthony Edwards",
+      "canonicalTeamId": "NBA-MIN",
+      "sourcePath": "/Users/davidjaycox/Downloads/Anthony Edwards.png",
+      "sourceDimensions": {
+        "width": 1024,
+        "height": 1536
+      },
+      "sourceColorMode": "8-bit RGBA",
+      "sourceSizeBytes": 2101709,
+      "sourceHasAlpha": true,
+      "sourceMeaningfulTransparency": true,
+      "sourceSha256": "e27999eca153edc209d7b150b10a9bbcb8a828c400f40ddee746ac93a2015b52",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-anthony-edwards--portrait--v01.png",
+      "exportDimensions": {
+        "width": 640,
+        "height": 800
+      },
+      "scaleFactor": 0.520833333,
+      "offset": {
+        "x": 53.333,
+        "y": 0.0
+      },
+      "exportSizeBytes": 612898,
+      "exportSha256": "96b467cfbc38be229b41840ac590056ffdf15e96363f65f5ab1d239803ce6bd5",
+      "productionStatus": "approved",
+      "reviewStatus": "approved",
+      "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-victor-wembanyama",
+      "displayName": "Victor Wembanyama",
+      "canonicalTeamId": "NBA-SAS",
+      "sourcePath": "/Users/davidjaycox/Downloads/Victor Wembanyama.png",
+      "sourceDimensions": {
+        "width": 1024,
+        "height": 1536
+      },
+      "sourceColorMode": "8-bit RGBA",
+      "sourceSizeBytes": 1876933,
+      "sourceHasAlpha": true,
+      "sourceMeaningfulTransparency": true,
+      "sourceSha256": "18b0d0d9fab99b3d69b4d2f16e0442d7d32d903f81afe1d8e15056ab67d48c83",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-victor-wembanyama--portrait--v01.png",
+      "exportDimensions": {
+        "width": 640,
+        "height": 800
+      },
+      "scaleFactor": 0.520833333,
+      "offset": {
+        "x": 53.333,
+        "y": 0.0
+      },
+      "exportSizeBytes": 561122,
+      "exportSha256": "0e6ffb3a778b24124bfd3533deebc1c646b4fc63707f2a2d13bba2600010d38b",
+      "productionStatus": "approved",
+      "reviewStatus": "approved",
+      "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-jalen-brunson",
+      "displayName": "Jalen Brunson",
+      "canonicalTeamId": "NBA-NYK",
+      "sourcePath": "/Users/davidjaycox/Downloads/Jalen Brunson.png",
+      "sourceDimensions": {
+        "width": 1024,
+        "height": 1536
+      },
+      "sourceColorMode": "8-bit RGBA",
+      "sourceSizeBytes": 2040843,
+      "sourceHasAlpha": true,
+      "sourceMeaningfulTransparency": true,
+      "sourceSha256": "bea454dcb4d6fea16f592c75d3b1a6e46d8a2606a0f1c2c45af09ce3b0c53bfe",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-jalen-brunson--portrait--v01.png",
+      "exportDimensions": {
+        "width": 640,
+        "height": 800
+      },
+      "scaleFactor": 0.520833333,
+      "offset": {
+        "x": 53.333,
+        "y": 0.0
+      },
+      "exportSizeBytes": 621758,
+      "exportSha256": "4a29abc63aac156ebb6b4878dd9ca6caccd6193f9d6613b193b14695353754e0",
+      "productionStatus": "approved",
+      "reviewStatus": "approved",
+      "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-keegan-murray",
+      "displayName": "Keegan Murray",
+      "canonicalTeamId": "NBA-SAC",
+      "sourcePath": "/Users/davidjaycox/Downloads/Keegan Murray.png",
+      "sourceDimensions": {
+        "width": 1024,
+        "height": 1536
+      },
+      "sourceColorMode": "8-bit RGBA",
+      "sourceSizeBytes": 2044009,
+      "sourceHasAlpha": true,
+      "sourceMeaningfulTransparency": true,
+      "sourceSha256": "94ddb2ab47dfc0f7323e79b9588b26b780eca41d1520b8e8d171e08cb113ca17",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-keegan-murray--portrait--v01.png",
+      "exportDimensions": {
+        "width": 640,
+        "height": 800
+      },
+      "scaleFactor": 0.520833333,
+      "offset": {
+        "x": 53.333,
+        "y": 0.0
+      },
+      "exportSizeBytes": 586946,
+      "exportSha256": "f382011c276bad60f906757166f560f5a986cf42e34151997cc38c9a8f93f07e",
+      "productionStatus": "approved",
+      "reviewStatus": "approved",
+      "registryEligible": true
+    }
+  ]
+}

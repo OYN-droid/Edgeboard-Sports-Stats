@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="t d">
+  <title id="t">EdgeBoard motorsport driver editorial placeholder</title><desc id="d">Original abstract helmeted driver with speed lines.</desc>
+  <path stroke="#ce1141" stroke-width="16" opacity=".3" d="M24 140h304M12 206h244M36 590h260"/>
+  <circle cx="342" cy="238" r="134" fill="#242733" stroke="#ce1141" stroke-width="18"/>
+  <path fill="#ce1141" d="M218 234c18-100 72-154 162-124 76 25 100 104 88 166-64-30-184-38-250-42Z"/>
+  <path fill="#9ba2b7" d="M228 256c80-28 170-18 232 10-20 50-66 91-126 91-56 0-94-42-106-101Z"/>
+  <path fill="#171920" d="M128 746c10-210 84-344 214-344s204 134 214 344H128Z"/>
+  <path fill="#f7f7fa" d="m282 404 60 88 60-88 54 38-114 174-114-174 54-38Z"/>
+  <path fill="#ce1141" d="M318 494h48v252h-48z"/>
+</svg>

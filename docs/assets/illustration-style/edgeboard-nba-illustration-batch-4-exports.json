@@ -1,0 +1,55 @@
+{
+  "batchId": "edgeboard-nba-illustration-production-batch-4",
+  "styleVersion": "edgeboard-illustration-v1",
+  "styleRole": "showcase_production_portrait",
+  "portraitMode": "standard",
+  "variant": "portrait",
+  "productionStatus": "approved",
+  "reviewStatus": "approved",
+  "humanVisualApproval": "approved",
+  "sourcePreservation": "original supplied files remain unchanged at recorded source paths",
+  "exportMethod": "scripts/export_proof_portrait.swift proportional contain-fit on transparent 640x800 RGBA canvas",
+  "reviewMetadata": {
+    "identityMapping": "approved",
+    "styleConsistency": "approved",
+    "composition": "approved",
+    "athleteSpecificDetails": "approved",
+    "transparentBackground": "approved",
+    "darkModeFit": "approved",
+    "lightModeFit": "approved"
+  },
+  "exports": [
+    {
+      "canonicalEntityId": "nba-tyrese-haliburton", "displayName": "Tyrese Haliburton", "canonicalTeamId": "NBA-IND",
+      "sourcePath": "/Users/davidjaycox/Downloads/Tyrese Halliburton.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1730449, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "1c6b4974b59ba9daadef85e84a3ac77673c6bf661a066e4c4168a580d10c13b4",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-tyrese-haliburton--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 686459, "exportSha256": "51f460219a0e4249ce54cae896e733da7ca90ca3c86fc7b59e1272f4a632e078", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-luka-doncic", "displayName": "Luka Doncic", "canonicalTeamId": "LAL",
+      "sourcePath": "/Users/davidjaycox/Downloads/Luka Doncic.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1806300, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "f92da5877b1fd20bfbc89985546277573f5c8c511044a2a01f3ac998c118e170",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-luka-doncic--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 706324, "exportSha256": "6f00cac341afc6a6dc5269e981d49ee2dee9835d439d0af3ea5aa2faf4abe903", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true,
+      "identityAccuracy": "final approved tattoo-free source; no alternate Luka candidate was present in the supplied source directory"
+    },
+    {
+      "canonicalEntityId": "nba-tyler-herro", "displayName": "Tyler Herro", "canonicalTeamId": "NBA-MIL",
+      "sourcePath": "/Users/davidjaycox/Downloads/Tyler Herro.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1754333, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "3049a0032de3327b06aa4e462bafaeeb70d95f83985785be1b994a2325d8e643",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-tyler-herro--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 669277, "exportSha256": "033179c02d5cd15b705100360ff164dcffcd06164f4b226dd492d1dbc52937b5", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true,
+      "identityAccuracy": "final approved buzz-cut and close-fade source; no alternate Tyler Herro candidate was present in the supplied source directory"
+    },
+    {
+      "canonicalEntityId": "nba-zion-williamson", "displayName": "Zion Williamson", "canonicalTeamId": "NBA-NOP",
+      "sourcePath": "/Users/davidjaycox/Downloads/Zion Williamson.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1867811, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "023c9ad6bd96b8fe596ebc4dfdc74c49993755249ddd223cb3882e0548b63e4f",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-zion-williamson--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 717222, "exportSha256": "4466277ab6e2c2e57ec9f03c453cb8381340b62157a28901056574ca89d9614e", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-shai-gilgeous-alexander", "displayName": "Shai Gilgeous-Alexander", "canonicalTeamId": "NBA-OKC",
+      "sourcePath": "/Users/davidjaycox/Downloads/Shai Gilgeous Alexander.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1702813, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "534b493922e3007e038924e714e80c2bf5ab27c08bdb6ba6e4bff84df8d23d12",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-shai-gilgeous-alexander--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 686172, "exportSha256": "bb8f01953bd288ca586f7153f67aa0a59ea02f66ff4114763cbce7c67796d9f9", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-devin-booker", "displayName": "Devin Booker", "canonicalTeamId": "NBA-PHX",
+      "sourcePath": "/Users/davidjaycox/Downloads/Devin Booker.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1770591, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "160bd5819ac64d5ccfd5e4c6671447ce8b5dcec7d1604c4d153030ad63d09703",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-devin-booker--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 697955, "exportSha256": "dbd1b9d2f172d1d32203dc4e38374f34e274ed7adcedbc2a3863245afb03b211", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    }
+  ]
+}

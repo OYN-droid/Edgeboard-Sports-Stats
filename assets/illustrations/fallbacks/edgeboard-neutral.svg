@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="t d">
+  <title id="t">EdgeBoard neutral illustration</title><desc id="d">Original EdgeBoard placeholder formed from layered research panels.</desc>
+  <rect x="84" y="120" width="472" height="560" rx="80" fill="#171920" stroke="#2b2e39" stroke-width="12"/>
+  <circle cx="320" cy="292" r="116" fill="#ce1141" opacity=".9"/>
+  <path fill="#f7f7fa" d="M270 218h118v42h-72v42h62v40h-62v44h76v42H270V218Z"/>
+  <path stroke="#8c91a0" stroke-linecap="round" stroke-width="18" d="M172 522h296M206 574h228"/>
+</svg>

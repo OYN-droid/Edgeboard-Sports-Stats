@@ -1,0 +1,53 @@
+{
+  "batchId": "edgeboard-nba-illustration-production-batch-3",
+  "styleVersion": "edgeboard-illustration-v1",
+  "styleRole": "showcase_production_portrait",
+  "portraitMode": "standard",
+  "variant": "portrait",
+  "productionStatus": "approved",
+  "reviewStatus": "approved",
+  "humanVisualApproval": "approved",
+  "sourcePreservation": "original supplied files remain unchanged at recorded source paths",
+  "exportMethod": "scripts/export_proof_portrait.swift proportional contain-fit on transparent 640x800 RGBA canvas",
+  "reviewMetadata": {
+    "identityMapping": "approved",
+    "styleConsistency": "approved",
+    "composition": "approved",
+    "athleteSpecificDetails": "approved",
+    "transparentBackground": "approved",
+    "darkModeFit": "approved",
+    "lightModeFit": "approved"
+  },
+  "exports": [
+    {
+      "canonicalEntityId": "nba-josh-giddey", "displayName": "Josh Giddey", "canonicalTeamId": "NBA-CHI",
+      "sourcePath": "/Users/davidjaycox/Downloads/Josh Giddey.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1869967, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "47e7948d59628756453e5d8dc1b2c744e62f95045560449626322aceea98b0db",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-josh-giddey--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 726879, "exportSha256": "f7880f21421db266ce326494fbb7de4f39085d2a7f87bc12036e2c73e3880be1", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-cade-cunningham", "displayName": "Cade Cunningham", "canonicalTeamId": "NBA-DET",
+      "sourcePath": "/Users/davidjaycox/Downloads/Cade Cunningham.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 2007493, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "35f581fa8206af5f0bcaae9fef93aa93081fbe07620dd92f202e753b567656d7",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-cade-cunningham--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 781487, "exportSha256": "924462250c945fa6d473e63544910069b23bf636f62513c720349d9a11f8be97", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-kevin-durant", "displayName": "Kevin Durant", "canonicalTeamId": "NBA-HOU",
+      "sourcePath": "/Users/davidjaycox/Downloads/Kevin Durant.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1790721, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "ba7223157dc6b9a584c91753c56089ed43f597aeb73028a8dced3cb553952fd2",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-kevin-durant--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 700122, "exportSha256": "d1dba27ebe86a6e27301ff7665f5b4295749bea32c05ddff6c0340e9eadffeca", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-kawhi-leonard", "displayName": "Kawhi Leonard", "canonicalTeamId": "NBA-LAC",
+      "sourcePath": "/Users/davidjaycox/Downloads/Kawhi Leonard.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1902911, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "ae5d6705a51d1e985550d20d5822dcb29ceba1929eae2b878edce8638d374e2a",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-kawhi-leonard--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 730614, "exportSha256": "bf9b9ae2cacb2bc470f516431cadeae3e388cb8f1d722488c38dce45c91874dc", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-ja-morant", "displayName": "Ja Morant", "canonicalTeamId": "NBA-MEM",
+      "sourcePath": "/Users/davidjaycox/Downloads/Ja Morant.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1902944, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "e8d108160ad6136534ef9dcb094895bce8bc3a7af22f8a85088c3bbf25f7ef02",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-ja-morant--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 740837, "exportSha256": "210377084f1e10673a7cb708a4a88b8577786313102176da8a2b5e22fa6f8deb", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "nba-paolo-banchero", "displayName": "Paolo Banchero", "canonicalTeamId": "NBA-ORL",
+      "sourcePath": "/Users/davidjaycox/Downloads/Paolo Banchero.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1956759, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "f3a03297205b19b9464390f751690831d9fe7511d55f91995ece09510c610ce2",
+      "assetPath": "assets/illustrations/nba/edgeboard--nba-paolo-banchero--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 760377, "exportSha256": "cefae82061210ba8f77b7db04780fc6df37591ca46b8d0f2e5ed12fcd7fddde1", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    }
+  ]
+}

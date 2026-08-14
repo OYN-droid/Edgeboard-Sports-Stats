@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800" role="img" aria-labelledby="t d">
+  <title id="t">EdgeBoard athlete editorial placeholder</title><desc id="d">Original abstract athlete silhouette with motion arcs.</desc>
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ce1141"/><stop offset="1" stop-color="#70102c"/></linearGradient></defs>
+  <path fill="none" stroke="#ce1141" stroke-width="18" opacity=".32" d="M42 680C184 508 184 216 554 88M98 754C244 584 336 202 618 160"/>
+  <circle cx="330" cy="238" r="112" fill="url(#g)"/>
+  <path fill="#222532" d="M142 742c8-204 78-342 188-342s180 138 188 342H142Z"/>
+  <path fill="#f7f7fa" opacity=".86" d="m260 402 70 86 70-86 36 34-106 144-106-144 36-34Z"/>
+  <path fill="#ce1141" d="M304 498h52v244h-52z"/>
+</svg>
