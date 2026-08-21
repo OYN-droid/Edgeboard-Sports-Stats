@@ -857,6 +857,19 @@ class HttpBoundaryTests(unittest.TestCase):
         self.assertEqual(response.getheader("X-Frame-Options"), "SAMEORIGIN")
         self.assertIn("frame-ancestors 'self'", response.getheader("Content-Security-Policy"))
 
+    def test_request_origin_is_allowed_without_weakening_configured_cors(self):
+        origin = f"http://127.0.0.1:{self.server.server_port}"
+        self.connection.request("OPTIONS", "/api/status", headers={"Origin": origin})
+        preflight = self.connection.getresponse()
+        preflight.read()
+        self.assertEqual(preflight.status, 204)
+        self.assertEqual(preflight.getheader("Access-Control-Allow-Origin"), origin)
+        self.connection.request("GET", "/api/status", headers={"Origin": origin})
+        response = self.connection.getresponse()
+        response.read()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader("Access-Control-Allow-Origin"), origin)
+
     def test_disallowed_cors_and_request_size_limit(self):
         self.connection.request("OPTIONS", "/api/status", headers={"Origin": "https://evil.example"})
         denied = self.connection.getresponse()

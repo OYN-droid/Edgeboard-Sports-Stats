@@ -83,7 +83,7 @@ def create_handler(runtime: Runtime):
 
         def do_OPTIONS(self):
             origin = self.headers.get("Origin")
-            if origin and origin not in runtime.config.allowed_origins:
+            if origin and not self._cors_origin_allowed(origin):
                 self.send_error(403)
                 return
             self.send_response(204)
@@ -91,6 +91,30 @@ def create_handler(runtime: Runtime):
             self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Request-ID, X-EdgeBoard-Admin")
             self.send_header("Access-Control-Max-Age", "600")
             self.end_headers()
+
+        def _cors_origin_allowed(self, origin: str) -> bool:
+            if origin in runtime.config.allowed_origins:
+                return True
+            parsed = urlparse(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.path not in {"", "/"}
+                or parsed.params
+                or parsed.query
+                or parsed.fragment
+                or parsed.username
+                or parsed.password
+            ):
+                return False
+            host = self.headers.get("Host", "").strip().lower()
+            if not host or any(character in host for character in "\r\n,/"):
+                return False
+            forwarded_proto = self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower()
+            scheme = forwarded_proto if forwarded_proto in {"http", "https"} else (
+                "https" if runtime.config.app_env == "production" else "http"
+            )
+            return origin == f"{scheme}://{host}"
 
         def _api(self, method: str, path: str, query: str = "", body: bytes = b""):
             status, payload, headers = api.handle(
@@ -116,7 +140,7 @@ def create_handler(runtime: Runtime):
 
         def end_headers(self):
             origin = self.headers.get("Origin")
-            if origin and origin in runtime.config.allowed_origins:
+            if origin and self._cors_origin_allowed(origin):
                 self.send_header("Access-Control-Allow-Origin", origin)
                 self.send_header("Vary", "Origin")
             self.send_header("X-Content-Type-Options", "nosniff")
