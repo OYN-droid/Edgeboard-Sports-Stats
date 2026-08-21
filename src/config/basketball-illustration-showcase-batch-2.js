@@ -87,9 +87,15 @@ const NBA_POSE_VARIATIONS = Object.freeze([
   "gaze slightly right with a focused expression and gentle shoulder angle",
 ]);
 
+const FEATURED_WNBA_PNG_IDS = new Set([
+  "wnba-aja-wilson", "wnba-sabrina-ionescu", "wnba-paige-bueckers", "wnba-angel-reese",
+  "wnba-caitlin-clark", "wnba-olivia-miles", "wnba-cameron-brink", "wnba-gabby-williams",
+]);
+
 function portraitPath(slot) {
   if (slot.canonicalAthleteId === "nba-stephen-curry") return "assets/illustrations/proof/edgeboard--nba-stephen-curry--portrait--v01.png";
   if (slot.leagueId === "nba") return `assets/illustrations/nba/edgeboard--${slot.canonicalAthleteId}--portrait--v01.png`;
+  if (FEATURED_WNBA_PNG_IDS.has(slot.canonicalAthleteId)) return `assets/illustrations/athletes/edgeboard--${slot.canonicalAthleteId}--portrait--v01.png`;
   return `assets/illustrations/athletes/edgeboard--${slot.canonicalAthleteId}--portrait--v01.svg`;
 }
 

@@ -92,9 +92,9 @@ function slugPath(canonicalAthleteId, variant) {
 }
 
 function buildSlot(slot) {
-  const portraitAssetPath = slugPath(slot.canonicalAthleteId, "portrait");
   const actionAssetPathPlaceholder = slugPath(slot.canonicalAthleteId, "action");
   const activeExact = ILLUSTRATION_REGISTRY.find((entry) => entry.status === "active" && entry.entityType === "athlete" && entry.canonicalEntityId === slot.canonicalAthleteId && entry.variant === "portrait");
+  const portraitAssetPath = activeExact?.assetPath || slugPath(slot.canonicalAthleteId, "portrait");
   const genericFallbackRegistryId = slot.leagueId === "nfl" ? "art-generic-football" : "art-generic-hockey";
   const genericLabel = slot.leagueId === "nfl" ? "generic_football" : "generic_hockey";
   const registryDraft = activeExact ? Object.freeze({ ...activeExact, status: "active_existing_reference" }) : Object.freeze({

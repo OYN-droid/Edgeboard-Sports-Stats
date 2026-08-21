@@ -52,23 +52,39 @@ export class IllustrationResolver {
     const canonicalEntityId = String(entity?.id || entity?.canonicalEntityId || "").trim();
     const sport = normalized(options.sport || entity?.sportId || entity?.sport);
     const league = normalized(options.league || entity?.leagueId || entity?.league);
-    const teamId = String(options.teamId || entity?.teamId || "").trim();
+    const entityType = normalized(entity?.entityType || entity?.type);
+    const teamId = String(options.teamId || entity?.teamId || (entityType === "team" ? canonicalEntityId : "")).trim();
     const weightClass = normalized(options.weightClass || entity?.weightClass || entity?.metadata?.weightClass);
     const series = normalized(options.series || entity?.series || entity?.metadata?.series);
     const tour = normalized(options.tour || entity?.tour || entity?.metadata?.tour || league);
     const context = options.context || "compact";
     const desiredVariant = options.desiredVariant || (context === "profile" ? "profile" : context === "story" ? "story" : "compact");
     const active = this.entries.filter((entry) => entry.status === "active");
-    const levels = [
-      ["exact", active.filter((entry) => canonicalEntityId && entry.canonicalEntityId === canonicalEntityId && !["generic_sport", "team"].includes(entry.entityType))],
-      ["team", active.filter((entry) => teamId && entry.assetType === "team_fallback" && entry.teamId === teamId)],
+    const deterministicSample = /(^|-)sample(-|$)/i.test(canonicalEntityId) || /^sample\b/i.test(String(entity?.displayName || entity?.name || ""));
+    const exactCandidates = active.filter((entry) => !deterministicSample && canonicalEntityId && entry.canonicalEntityId === canonicalEntityId && !["generic_sport", "team"].includes(entry.entityType));
+    const teamCandidates = active.filter((entry) => teamId && entry.assetType === "team_fallback" && entry.teamId === teamId);
+    const genericCandidates = active.filter((entry) => sport && entry.assetType === "generic_sport" && normalized(entry.sport) === sport);
+    const neutralCandidates = active.filter((entry) => entry.assetType === "placeholder");
+    const featuredStoryLevels = [
+      ["exact", exactCandidates],
+      ["team", teamCandidates],
+      ...(deterministicSample && ["mma", "boxing"].includes(sport)
+        ? [["weight_class", active.filter((entry) => weightClass && entry.assetType === "weight_class_fallback" && normalized(entry.weightClass) === weightClass && normalized(entry.sport) === sport)]]
+        : []),
+      ["generic_sport", genericCandidates],
+      ["neutral", neutralCandidates],
+    ];
+    const standardLevels = [
+      ["exact", exactCandidates],
+      ["team", teamCandidates],
       ["competition", active.filter((entry) => league && entry.assetType === "competition_fallback" && normalized(entry.league) === league && (!sport || normalized(entry.sport) === sport))],
       ["weight_class", active.filter((entry) => weightClass && entry.assetType === "weight_class_fallback" && normalized(entry.weightClass) === weightClass && (!sport || normalized(entry.sport) === sport))],
       ["tour", active.filter((entry) => tour && entry.assetType === "tour_fallback" && (normalized(entry.tour) === tour || normalized(entry.league) === tour) && (!sport || normalized(entry.sport) === sport))],
       ["series", active.filter((entry) => series && entry.assetType === "series_fallback" && normalized(entry.series) === series && (!sport || normalized(entry.sport) === sport))],
-      ["generic_sport", active.filter((entry) => sport && entry.assetType === "generic_sport" && normalized(entry.sport) === sport)],
-      ["neutral", active.filter((entry) => entry.assetType === "placeholder")],
+      ["generic_sport", genericCandidates],
+      ["neutral", neutralCandidates],
     ];
+    const levels = options.fallbackPolicy === "featured_story" ? featuredStoryLevels : standardLevels;
     const [fallbackLevel, entry] = levels.map(([level, candidates]) => [level, best(candidates, context, desiredVariant)]).find(([, candidate]) => candidate) || ["none", null];
     if (!entry) return null;
     const displayName = String(entity?.displayName || entity?.name || "Sports entity");

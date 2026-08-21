@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "src/config/illustration-registry.js"
 SHOWCASE_PATH = ROOT / "src/config/showcase-illustration-registry.js"
 PROOF_PATH = ROOT / "src/config/illustration-style-proof-batch.js"
+BOXING_FEATURED_PROVENANCE_PATH = ROOT / "docs/assets/illustration-style/edgeboard-boxing-featured-portrait-exports.json"
 ASSET_ROOT = ROOT / "assets/illustrations"
 
 
@@ -26,9 +27,11 @@ def extract_json(path: Path, start: str, end: str):
 
 def main() -> int:
     entries = extract_json(REGISTRY_PATH, "/* registry-json-start */", "/* registry-json-end */")
+    archived_assets = extract_json(REGISTRY_PATH, "/* archived-assets-json-start */", "/* archived-assets-json-end */")
     targets = extract_json(SHOWCASE_PATH, "/* targets-json-start */", "/* targets-json-end */")
     assignments = extract_json(SHOWCASE_PATH, "/* assignments-json-start */", "/* assignments-json-end */")
     proof_slots = extract_json(PROOF_PATH, "/* illustration-proof-json-start */", "/* illustration-proof-json-end */")
+    boxing_featured = json.loads(BOXING_FEATURED_PROVENANCE_PATH.read_text(encoding="utf-8"))
     errors: list[str] = []
     seen_ids: set[str] = set()
     seen_variants: set[tuple[str, str]] = set()
@@ -56,9 +59,19 @@ def main() -> int:
         if not asset_path or not (ROOT / asset_path).is_file():
             errors.append(f"missing asset: {entry_id} -> {asset_path or '<none>'}")
 
+    archived_paths: set[str] = set()
+    for item in archived_assets:
+        asset_path = item.get("assetPath", "")
+        if not asset_path or not (ROOT / asset_path).is_file():
+            errors.append(f"missing archived provenance asset: {asset_path or '<none>'}")
+            continue
+        if item.get("status") != "archived_provenance" or not item.get("supersededBy"):
+            errors.append(f"invalid archived provenance metadata: {asset_path}")
+        archived_paths.add(asset_path)
+
     asset_files = {str(path.relative_to(ROOT)) for path in ASSET_ROOT.rglob("*") if path.is_file()}
     proof_paths = {item["assetPath"] for item in proof_slots}
-    orphans = sorted(asset_files - registered_paths - proof_paths)
+    orphans = sorted(asset_files - registered_paths - archived_paths - proof_paths)
     if orphans:
         errors.extend(f"orphaned asset: {path}" for path in orphans)
 
@@ -74,6 +87,17 @@ def main() -> int:
     approved_proofs = sum(item.get("productionStatus") == "approved" and item.get("reviewStatus") == "approved" for item in proof_slots)
     active_proofs = sum(any(entry.get("canonicalEntityId") == item["canonicalEntityId"] and entry.get("variant") == "portrait" and entry.get("status") == "active" for entry in entries) for item in proof_slots)
     print(f"Style proof: {physical_proof_files}/{len(proof_slots)} physical · {approved_proofs}/{len(proof_slots)} human approved · {active_proofs}/{len(proof_slots)} active")
+    boxing_active = {
+        entry["canonicalEntityId"] for entry in entries
+        if entry.get("entityType") == "fighter" and entry.get("league") == "boxing"
+        and entry.get("variant") == "portrait" and entry.get("status") == "active"
+    }
+    boxing_records = boxing_featured.get("exports", [])
+    boxing_approved = {item.get("canonicalEntityId") for item in boxing_records if item.get("registryEligible")}
+    boxing_needs_revision = [item for item in boxing_records if item.get("technicalStatus") == "needs_revision"]
+    if boxing_active != boxing_approved or len(boxing_records) != 13 or boxing_needs_revision:
+        errors.append("Boxing featured portrait coverage does not match its provenance and active registry state")
+    print(f"Boxing featured exact portraits: {len(boxing_active)} active · {len(boxing_needs_revision)} needs revision · featured_partial · not complete boxing coverage")
     print("\nCoverage targets (art production plan; fallbacks remain available):")
     for target in targets:
         seeded = [item for item in assignments if item.get("active") and item.get("sport") == target["sport"]

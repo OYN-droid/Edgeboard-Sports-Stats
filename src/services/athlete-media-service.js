@@ -5,9 +5,10 @@ export function createAthleteMediaViewModel(entity, options = {}) {
   const resolved = entity?.sportId || entity?.sport ? getIllustration(entity, {
     context: options.context || "compact", desiredVariant: options.desiredVariant,
     decorative: options.decorative === true, teamId: options.teamId, weightClass: options.weightClass, series: options.series,
+    fallbackPolicy: options.fallbackPolicy,
   }) : null;
   const candidates = [
-    { type: "illustration", url: resolved?.assetPath, source: resolved?.source, variant: resolved?.variant, fallbackLevel: resolved?.fallbackLevel },
+    { type: "illustration", url: resolved?.assetPath, source: resolved?.source, variant: resolved?.variant, fallbackLevel: resolved?.fallbackLevel, registryId: resolved?.registryId },
     { type: "illustration", url: media.illustrationUrl },
     { type: "headshot", url: media.headshotUrl },
     { type: "silhouette", url: media.silhouetteUrl },

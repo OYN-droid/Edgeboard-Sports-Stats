@@ -9,6 +9,7 @@ import { MOTORSPORTS_SHOWCASE_BATCH_6, MOTORSPORTS_SHOWCASE_BATCH_6_METADATA, va
 import { TENNIS_GOLF_SHOWCASE_BATCH_7, TENNIS_GOLF_SHOWCASE_BATCH_7_METADATA, validateTennisGolfShowcaseBatch } from "../src/config/tennis-golf-illustration-showcase-batch-7.js";
 import { EDGEBOARD_ILLUSTRATION_STYLE_V1, EDGEBOARD_ILLUSTRATION_STYLE_VERSION } from "../src/config/illustration-style-v1.js";
 import { ILLUSTRATION_STYLE_PROOF_BATCH } from "../src/config/illustration-style-proof-batch.js";
+import { FEATURED_PORTRAIT_COVERAGE_METADATA, FEATURED_PORTRAIT_SELECTIONS, validateFeaturedPortraitCoverage } from "../src/config/featured-portrait-coverage.js";
 import { CANONICAL_ENTITIES } from "../src/data/canonical-entities.js";
 import { UNIFIED_CANONICAL_ENTITIES } from "../src/data/canonical-sports-entities.js";
 import { createIllustrationResolver, getIllustration, validateIllustrationRegistry } from "../src/services/illustration-service.js";
@@ -40,10 +41,18 @@ check(EDGEBOARD_ILLUSTRATION_STYLE_VERSION === "edgeboard-illustration-v1" && ED
 check(EDGEBOARD_ILLUSTRATION_STYLE_V1.portraitMode === "standard" && EDGEBOARD_ILLUSTRATION_STYLE_V1.standardPortraitPresentation.includes("non-action chest/upper-torso") && EDGEBOARD_ILLUSTRATION_STYLE_V1.promptContract.includes("action artwork is a separate optional variant"), "Style v1 defines the Aaron Judge-like standard portrait as the future default and keeps action art optional");
 check(EDGEBOARD_ILLUSTRATION_STYLE_V1.reference.assetType === "style_reference" && !EDGEBOARD_ILLUSTRATION_STYLE_V1.reference.productionAsset && !EDGEBOARD_ILLUSTRATION_STYLE_V1.reference.registryEligible && !EDGEBOARD_ILLUSTRATION_STYLE_V1.reference.fallbackEligible, "Style v1 composite is classified as reference-only");
 check(!ILLUSTRATION_REGISTRY.some((entry) => entry.assetPath === EDGEBOARD_ILLUSTRATION_STYLE_V1.reference.assetPath), "Style v1 composite is not registered as athlete art or fallback art");
+const featuredCoverage = validateFeaturedPortraitCoverage();
+check(featuredCoverage.valid && featuredCoverage.selected === 36, "featured portrait readiness validates eight WNBA, five NFL, ten UFC, and thirteen Boxing selections");
+check(featuredCoverage.coverage.every((item) => item.coverageType === "featured_partial" && item.selected === item.target) && featuredCoverage.coverage.find((item) => item.categoryId === "wnba")?.summary.startsWith("WNBA featured exact portrait coverage:"), "featured readiness is explicitly partial and never described as full league coverage");
+check(featuredCoverage.productionRequired === 0 && featuredCoverage.coverage.find((item) => item.categoryId === "wnba")?.exactActive === 8 && featuredCoverage.coverage.find((item) => item.categoryId === "nfl")?.exactActive === 5 && featuredCoverage.coverage.find((item) => item.categoryId === "ufc")?.exactActive === 10 && featuredCoverage.coverage.find((item) => item.categoryId === "boxing")?.exactActive === 13, "featured coverage reports all thirteen selected Boxing portraits active");
+check(FEATURED_PORTRAIT_SELECTIONS.every((item) => item.exactArtworkActive && item.registryStatus === "active_existing"), "every selected featured target resolves to approved exact artwork");
+check(FEATURED_PORTRAIT_SELECTIONS.every((item) => item.fallback.sportRegistryId && item.fallback.neutralRegistryId), "every featured selection has intentional sport and neutral fallback coverage");
+check(FEATURED_PORTRAIT_COVERAGE_METADATA.rankingPolicy.qualityAndEvidenceFirst && !FEATURED_PORTRAIT_COVERAGE_METADATA.rankingPolicy.artworkAffectsEligibility, "featured artwork cannot replace story quality or evidence eligibility");
 
 const exact = getIllustration({ id: "wnba-caitlin-clark", name: "Caitlin Clark", sportId: "basketball", leagueId: "wnba", teamId: "IND-W" }, { context: "profile" });
 check(exact.fallbackLevel === "exact" && exact.canonicalEntityId === "wnba-caitlin-clark", "athlete resolves through canonical identity before metadata");
-check(getIllustration({ id: "ufc-sample-fighter-a", name: "Sample Fighter A", sportId: "mma", leagueId: "ufc", weightClass: "Lightweight" }, { context: "profile" }).fallbackLevel === "exact", "fighter resolves to exact canonical illustration");
+const sampleFighter = getIllustration({ id: "ufc-sample-fighter-a", name: "Sample Fighter A", sportId: "mma", leagueId: "ufc", weightClass: "Lightweight" }, { context: "profile" });
+check(sampleFighter.fallbackLevel === "weight_class" && sampleFighter.registryId === "art-weight-mma-lightweight", "deterministic sample fighter resolves to explicit combat context instead of fabricated person art");
 check(getIllustration({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", leagueId: "f1", series: "Formula 1" }, { desiredVariant: "portrait" }).variantFallback === false, "preferred available variant resolves without fallback");
 check(getIllustration({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", leagueId: "f1", series: "Formula 1" }).fallbackLevel === "exact", "driver resolves to exact canonical illustration");
 check(exact.variantFallback && exact.requestedVariant === "profile", "missing requested rendition reports deterministic variant fallback");
@@ -68,6 +77,16 @@ check(!validateIllustrationRegistry([{ ...ILLUSTRATION_REGISTRY[0], id: "type-te
 check(!validateIllustrationRegistry([{ ...ILLUSTRATION_REGISTRY[0], id: "source-test", source: "" }]).valid, "missing source metadata fails validation");
 const injectedResolver = createIllustrationResolver(ILLUSTRATION_REGISTRY);
 check(injectedResolver.resolve({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", series: "Formula 1" })?.fallbackLevel === "exact", "resolver can be dependency-injected with the canonical registry");
+const curryEntity = { id: "nba-stephen-curry", name: "Stephen Curry", entityType: "player", sportId: "basketball", leagueId: "nba", teamId: "GSW" };
+const featuredContext = { context: "story", fallbackPolicy: "featured_story" };
+check(getIllustration(curryEntity, featuredContext)?.fallbackLevel === "exact", "featured real athlete resolves exact art first");
+const withoutCurry = ILLUSTRATION_REGISTRY.filter((entry) => entry.canonicalEntityId !== curryEntity.id);
+check(createIllustrationResolver(withoutCurry).resolve(curryEntity, featuredContext)?.fallbackLevel === "team", "featured athlete falls back from exact art to team art");
+const withoutCurryOrTeam = withoutCurry.filter((entry) => entry.teamId !== "GSW");
+check(createIllustrationResolver(withoutCurryOrTeam).resolve(curryEntity, featuredContext)?.fallbackLevel === "generic_sport", "featured athlete falls back from team art to sport art");
+const withoutBasketball = withoutCurryOrTeam.filter((entry) => !(entry.assetType === "generic_sport" && entry.sport === "basketball"));
+check(createIllustrationResolver(withoutBasketball).resolve(curryEntity, featuredContext)?.fallbackLevel === "neutral", "featured athlete falls back from sport art to neutral art");
+check(getIllustration({ id: "GSW", name: "Golden State", entityType: "team", sportId: "basketball", leagueId: "nba" }, featuredContext)?.fallbackLevel === "team", "featured team entity resolves team art without a duplicated teamId field");
 
 const assignments = getShowcaseAssignments({ season: 2026 });
 check(assignments.length >= 12 && assignments.every((item) => item.canonicalEntityId && item.seasonFrom), "showcase assignments are canonical and effective-dated");
@@ -102,7 +121,7 @@ check(basketballBatch.nbaAssigned === 30 && basketballBatch.wnbaAssigned === 15,
 check(basketballBatch.uniqueAthletes === 45 && basketballBatch.uniqueTeams === 45, "Basketball Batch 2 uses unique canonical athletes and teams");
 check(basketballBatch.portraitPrompts === 45 && basketballBatch.deferredActionPrompts === 45 && basketballBatch.registryReady === 45, "Basketball Batch 2 prepares portrait-first production and defers all action variants");
 check(BASKETBALL_SHOWCASE_BATCH_2.every((item) => item.showcaseRole === "team_representative" && ["not_started", "awaiting_asset", "approved_existing"].includes(item.generationStatus)), "basketball selections remain replaceable editorial assignments without best-player claims");
-check(basketballBatch.exactActive === 31 && BASKETBALL_SHOWCASE_BATCH_2.filter((item) => item.leagueId === "nba" && item.generationStatus === "approved_existing").length === 30, "NBA Batches 1 through 5 complete all thirty exact NBA portraits while preserving the existing WNBA exact portrait");
+check(basketballBatch.exactActive === 38 && BASKETBALL_SHOWCASE_BATCH_2.filter((item) => item.leagueId === "nba" && item.generationStatus === "approved_existing").length === 30 && BASKETBALL_SHOWCASE_BATCH_2.filter((item) => item.leagueId === "wnba" && item.generationStatus === "approved_existing").length === 8, "NBA remains complete at thirty exact portraits while WNBA adds eight explicitly featured exact portraits");
 check(BASKETBALL_SHOWCASE_BATCH_2.filter((item) => item.registryDraft.status === "planned").every((item) => approvedProofIds.has(item.canonicalAthleteId) || !ILLUSTRATION_REGISTRY.some((entry) => entry.id === item.registryDraft.id)), "planned basketball portraits remain inactive except separately approved proof exemplars");
 check(BASKETBALL_SHOWCASE_BATCH_2.every((item) => ["exact", "team"].includes(getIllustration(CANONICAL_ENTITIES.find((entity) => entity.id === item.canonicalAthleteId))?.fallbackLevel)), "all 45 basketball representatives resolve to approved exact or team artwork without broken paths");
 
@@ -185,7 +204,25 @@ await waitFor(() => homeFrame.contentDocument?.querySelector(".home-discovery-ca
 const storyArt = homeFrame.contentDocument.querySelector(".home-card-illustration img");
 check(Boolean(storyArt), "prominent deterministic discovery story can render contextual illustration");
 check(storyArt?.getAttribute("alt") === "" && storyArt?.getAttribute("aria-hidden") === "true", "story illustration is decorative when adjacent claim text identifies the entity");
-check(homeFrame.contentDocument.documentElement.scrollWidth <= homeFrame.contentDocument.documentElement.clientWidth + 1, "illustrated discovery card has no mobile viewport overflow");
+const featureCard = homeFrame.contentDocument.querySelector("#todayPulseGrid .home-discovery-card.feature");
+const featureArt = featureCard?.querySelector(".home-card-illustration");
+check(["weight_class", "generic_sport"].includes(featureArt?.dataset.illustrationLevel)
+  && /(?:mma|combat)/i.test(featureArt?.dataset.illustrationRegistryId || "")
+  && featureArt?.dataset.illustrationRegistryId !== "art-ufc-sample-fighter-profile", "UFC sample hero deliberately exposes its non-person combat fallback resolution");
+check(Boolean(homeFrame.contentDocument.querySelector("#insightDiscoveryGrid .home-discovery-card:first-child .home-card-illustration img")), "first Trending Research card uses the centralized illustration renderer");
+for (const [width, label, minimumArtWidth] of [[390, "mobile", 180], [768, "tablet", 190], [1280, "desktop", 230]]) {
+  homeFrame.style.width = `${width}px`;
+  await wait(80);
+  const doc = homeFrame.contentDocument;
+  const artBox = featureArt?.getBoundingClientRect();
+  const imageBox = featureArt?.querySelector("img")?.getBoundingClientRect();
+  check(doc.documentElement.scrollWidth <= doc.documentElement.clientWidth + 1, `illustrated discovery card has no ${label} viewport overflow`);
+  check(artBox?.width >= minimumArtWidth && imageBox?.width <= artBox.width + 1 && imageBox?.height <= artBox.height + 1, `featured ${label} visual is prominent and contained without stretching or clipping`);
+}
+homeFrame.contentDocument.querySelector('[data-theme-option="light"]')?.click();
+check(homeFrame.contentDocument.body.dataset.theme === "light" && Boolean(featureArt?.querySelector("img")), "featured illustration remains available in light mode");
+homeFrame.contentDocument.querySelector('[data-theme-option="dark"]')?.click();
+check(homeFrame.contentDocument.body.dataset.theme === "dark" && storyArt?.getAttribute("loading") === "lazy", "featured illustration remains lazy-loaded in dark mode");
 check(!homeFrame.contentDocument.querySelector(".today-market-card .home-card-illustration"), "dense market cards preserve restrained data-first presentation");
 homeFrame.remove();
 

@@ -1,0 +1,66 @@
+{
+  "batchId": "edgeboard-wnba-featured-portrait-production-batch-1",
+  "coverageType": "featured_partial",
+  "coverageDisclosure": "Eight human-approved featured WNBA portraits; this is not complete WNBA league coverage.",
+  "styleVersion": "edgeboard-illustration-v1",
+  "styleRole": "showcase_production_portrait",
+  "portraitMode": "standard",
+  "variant": "portrait",
+  "productionStatus": "approved",
+  "reviewStatus": "approved",
+  "humanVisualApproval": "approved",
+  "sourcePreservation": "Original supplied files remain unchanged at their recorded source paths.",
+  "exportMethod": "scripts/export_proof_portrait.swift proportional contain-fit on a transparent 640x800 RGBA canvas",
+  "reviewMetadata": {
+    "identityMapping": "approved",
+    "styleConsistency": "approved",
+    "composition": "approved",
+    "athleteSpecificDetails": "approved",
+    "transparentBackground": "approved",
+    "darkModeFit": "approved",
+    "lightModeFit": "approved"
+  },
+  "exports": [
+    {
+      "canonicalEntityId": "wnba-aja-wilson", "displayName": "A'ja Wilson", "canonicalTeamId": "LVA", "jerseyNumber": "22",
+      "sourcePath": "/Users/davidjaycox/Downloads/A'Ja WIlson.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1672129, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "991fe1d205da0bd234b35e2afac995e368d44351bb2c7b1321fbad120a18efff",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-aja-wilson--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 654256, "exportSha256": "5ecf666be840b3c27e8ecd63934c75bdccda0f46ef9a9aff0dacb7cb81191cbf", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "wnba-sabrina-ionescu", "displayName": "Sabrina Ionescu", "canonicalTeamId": "NYL", "jerseyNumber": "20",
+      "sourcePath": "/Users/davidjaycox/Downloads/Sabrina Ionescu.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1987107, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "fbd006ddf9a5e1bb45a7c0db10f378fa9d5d3d41288a442df02e187b81d8f2ac",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-sabrina-ionescu--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 736015, "exportSha256": "101abfa4083abd5003e11ffe49ff85b9b5baa0a4e95a8dede72d721959e5e917", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "wnba-paige-bueckers", "displayName": "Paige Bueckers", "canonicalTeamId": "WNBA-DAL", "jerseyNumber": "5",
+      "sourcePath": "/Users/davidjaycox/Downloads/Paige Bueckers.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1873176, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "c6645e1f6a0a90720bd45423a583eb12f955c05d42960a6c83c0799ee82c9375",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-paige-bueckers--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 722075, "exportSha256": "15531c38a1b85bcb6dd4557da1d1cf87250004dc8876b8e36a6ea8257e5100d9", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "wnba-angel-reese", "displayName": "Angel Reese", "canonicalTeamId": "WNBA-ATL", "jerseyNumber": "5",
+      "sourcePath": "/Users/davidjaycox/Downloads/Angel Reese.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1816662, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "147ad723b8bcb85b04cd7c3536ecf26a8d18cb6dd5d9af6d38cfaf8093a4e77e",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-angel-reese--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 692813, "exportSha256": "7866bb8d429a12fabbcadff4b59c9cf3b9f5dcd2f0b8036104029bcf32fbb95d", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "wnba-caitlin-clark", "displayName": "Caitlin Clark", "canonicalTeamId": "IND-W", "jerseyNumber": "22",
+      "sourcePath": "/Users/davidjaycox/Downloads/Caitlin Clark.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1965326, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "5a2631764c2eb08c314d7e1284847d33009c4607120cb195ac4b0c256698748f",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-caitlin-clark--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 746531, "exportSha256": "1b3c7c2e78f61c4a92cda776297dbc37d059b0cc8212b7cc309e20ca2cd88a04", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true,
+      "replacementNote": "Replaces the active exact Caitlin Clark registry asset while preserving the prior SVG file and repository history."
+    },
+    {
+      "canonicalEntityId": "wnba-olivia-miles", "displayName": "Olivia Miles", "canonicalTeamId": "WNBA-MIN", "jerseyNumber": "5",
+      "sourcePath": "/Users/davidjaycox/Downloads/Olivia Miles.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 1950306, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "bdc88ef80b6fb4286169bdbab2b7963222147079807fff72d72385aa335b487d",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-olivia-miles--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 740876, "exportSha256": "60a8f9a5d85863aa37a9c712e605565fab6b57dc9765db1407b4a720bfb12b9e", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "wnba-cameron-brink", "displayName": "Cameron Brink", "canonicalTeamId": "WNBA-LAS", "jerseyNumber": "22",
+      "sourcePath": "/Users/davidjaycox/Downloads/Cameron Brink.png", "sourceDimensions": {"width": 1122, "height": 1402}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 2079591, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "5f23c892cfa0f2a284cf81245620ff123e743b1ab7964a66ac34fb52f3882cdf",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-cameron-brink--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.570409982, "offset": {"x": 0.0, "y": 0.143}, "exportSizeBytes": 778250, "exportSha256": "a9dd154fa53425d8ed3972f21c775a5a39ec2877f1c1e435dd296690d1147812", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    },
+    {
+      "canonicalEntityId": "wnba-gabby-williams", "displayName": "Gabby Williams", "canonicalTeamId": "WNBA-GSV", "jerseyNumber": "22",
+      "sourcePath": "/Users/davidjaycox/Downloads/Gabby Williams.png", "sourceDimensions": {"width": 1024, "height": 1536}, "sourceColorMode": "8-bit RGBA", "sourceSizeBytes": 2275226, "sourceHasAlpha": true, "sourceMeaningfulTransparency": true, "sourceSha256": "bf799bd8594b2761269714cb658593ccb61a22d6b806f0557b348dbb1d1564ef",
+      "assetPath": "assets/illustrations/athletes/edgeboard--wnba-gabby-williams--portrait--v01.png", "exportDimensions": {"width": 640, "height": 800}, "scaleFactor": 0.520833333, "offset": {"x": 53.333, "y": 0.0}, "exportSizeBytes": 647195, "exportSha256": "35b94ce68b7dc9e0a6c7deaa47cb9456d33dd94d0695dd50285294f0192ec114", "productionStatus": "approved", "reviewStatus": "approved", "registryEligible": true
+    }
+  ]
+}
