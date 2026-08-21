@@ -194,7 +194,19 @@ check(app.querySelector(".profile-tab-panel")?.getAttribute("role") === "tabpane
 check(app.querySelector(".profile-tabs [aria-selected='true']")?.getAttribute("aria-controls") === "athleteProfileTabPanel"
   && app.querySelector("#athleteProfileTabPanel")?.getAttribute("aria-labelledby") === "profile-tab-overview",
 "profile tabs and tab panel have reciprocal accessible relationships");
-check(app.querySelector(".profile-media img")?.complete && app.querySelector(".profile-media img")?.naturalWidth > 0, "profile media does not render a broken image");
+const profileMediaImage = app.querySelector(".profile-media img");
+// The aggregate runner intentionally keeps its child iframe offscreen, which
+// suppresses native lazy loading. Eagerly load this one test target before
+// asserting the same production image can decode.
+if (profileMediaImage) profileMediaImage.loading = "eager";
+profileMediaImage?.scrollIntoView({ block: "center" });
+if (profileMediaImage && (!profileMediaImage.complete || !profileMediaImage.naturalWidth)) {
+  await Promise.race([
+    profileMediaImage.decode().catch(() => undefined),
+    new Promise((resolve) => setTimeout(resolve, 3000)),
+  ]);
+}
+check(profileMediaImage?.complete && profileMediaImage?.naturalWidth > 0, "profile media does not render a broken image");
 const mediaAttribution = app.querySelector(".profile-media-wrap small");
 const profileHeader = app.querySelector(".athlete-profile-header");
 check(mediaAttribution && profileHeader

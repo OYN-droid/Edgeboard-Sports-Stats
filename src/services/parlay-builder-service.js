@@ -20,6 +20,8 @@ export function normalizeParlayConstraints(input = {}) {
     minimumResearchCompleteness: Math.max(0, Math.min(100, finite(input.minimumResearchCompleteness) ?? 0)),
     maximumLegs: Math.max(1, Math.min(PARLAY_MAX_LEGS, Math.floor(finite(input.maximumLegs) ?? 4))),
     minimumOdds: finite(input.minimumOdds), maximumOdds: finite(input.maximumOdds),
+    minimumLineMovement: Math.max(0, finite(input.minimumLineMovement) ?? 0),
+    minimumPriceMovement: Math.max(0, finite(input.minimumPriceMovement) ?? 0),
     maximumResearchCorrelation: ["low", "medium", "high"].includes(input.maximumResearchCorrelation) ? input.maximumResearchCorrelation : "medium",
   };
   PARLAY_BOOLEAN_CONSTRAINTS.forEach((key) => { normalized[key] = Object.prototype.hasOwnProperty.call(input, key) ? input[key] === true : PARLAY_CONSTRAINT_DEFAULTS[key]; });
@@ -39,17 +41,25 @@ function liveCertified(record) { return record.sample === false && /live/i.test(
 export function recordMeetsParlayConstraints(record, input = {}) {
   const c = normalizeParlayConstraints(input);
   if (!record?.valid || (record.model?.status !== "available" && !(record.model?.status === "stale" && !c.freshDataOnly))) return false;
+  if (/live/i.test(clean(record.sourceMode)) && !record.liveMarketEligible) return false;
   if (!contains(c.sportIds, record.sportId) || !contains(c.leagueIds, record.leagueId)) return false;
   if (!contains(c.marketTypes, `${record.marketType} ${record.marketName}`) || !contains(c.sportsbooks, record.sportsbook)) return false;
   if (record.researchQuality < c.minimumResearchQuality || record.marketTrustScore < c.minimumEdgeTrust) return false;
   if (c.minimumResearchCompleteness && (!Number.isFinite(record.researchCompleteness) || record.researchCompleteness < c.minimumResearchCompleteness)) return false;
   if (c.minimumOdds !== null && (!Number.isFinite(record.odds) || record.odds < c.minimumOdds)) return false;
   if (c.maximumOdds !== null && (!Number.isFinite(record.odds) || record.odds > c.maximumOdds)) return false;
+  if (c.movementObservedOnly && !record.movementObserved) return false;
+  if (c.minimumLineMovement && (!Number.isFinite(record.movementMagnitude) || record.movementMagnitude < c.minimumLineMovement)) return false;
+  if (c.minimumPriceMovement && (!Number.isFinite(record.priceMovementMagnitude) || record.priceMovementMagnitude < c.minimumPriceMovement)) return false;
   if (c.freshDataOnly && record.freshness !== "fresh") return false;
   if (c.confirmedLineupsOnly && !record.lineupConfirmed) return false;
   if (c.noProviderConflicts && (record.conflictCount || record.providerAgreement === "disagreement")) return false;
   if (c.noInjuryUncertainty && record.injuryUncertain) return false;
   if (c.noWeatherConcerns && weatherConcern(record)) return false;
+  if (c.confirmedStarterOnly && !record.starterConfirmed) return false;
+  if (c.activeRosterOnly && !record.rosterActive) return false;
+  if (c.freshContextOnly && !record.contextFresh) return false;
+  if (c.noContextConflicts && record.contextConflict) return false;
   if (c.currentStoriesRequired && !record.currentStory) return false;
   if (c.historicalSupportRequired && record.historicalCoverage < 1) return false;
   if (c.visualizationAvailable && !record.relatedVisualization) return false;
@@ -62,6 +72,7 @@ export function recordMeetsParlayConstraints(record, input = {}) {
 export function explainParlayExclusion(record, input = {}) {
   const c = normalizeParlayConstraints(input); const reasons = [];
   if (!record?.valid) reasons.push("Normalized market validation failed.");
+  if (/live/i.test(clean(record?.sourceMode)) && !record?.liveMarketEligible) reasons.push("This market domain is not eligible for user-facing live use.");
   if (record?.model?.status !== "available" && !(record?.model?.status === "stale" && !c.freshDataOnly)) reasons.push(`Market is ${clean(record?.model?.status || "unavailable")}.`);
   if (!contains(c.sportIds, record?.sportId)) reasons.push("Sport is outside the selected scope.");
   if (!contains(c.leagueIds, record?.leagueId)) reasons.push("League is outside the selected scope.");
@@ -75,6 +86,10 @@ export function explainParlayExclusion(record, input = {}) {
   if (c.noProviderConflicts && (record?.conflictCount || record?.providerAgreement === "disagreement")) reasons.push("Provider disagreement is present.");
   if (c.noInjuryUncertainty && record?.injuryUncertain) reasons.push("Injury or participant-status uncertainty is present.");
   if (c.noWeatherConcerns && weatherConcern(record)) reasons.push("Weather uncertainty is present.");
+  if (c.confirmedStarterOnly && !record?.starterConfirmed) reasons.push("A provider-confirmed starting pitcher is required.");
+  if (c.activeRosterOnly && !record?.rosterActive) reasons.push("The participant is not on a provider-confirmed active roster.");
+  if (c.freshContextOnly && !record?.contextFresh) reasons.push("Fresh lineup, availability, or weather context is required.");
+  if (c.noContextConflicts && record?.contextConflict) reasons.push("Provider context conflict is present.");
   if (c.historicalSupportRequired && !record?.historicalCoverage) reasons.push("Completed historical support is unavailable.");
   if (c.currentStoriesRequired && !record?.currentStory) reasons.push("A current validated story is required.");
   if (c.visualizationAvailable && !record?.relatedVisualization) reasons.push("A supporting visualization is unavailable.");
@@ -83,6 +98,9 @@ export function explainParlayExclusion(record, input = {}) {
   if (c.onlyLiveCertifiedData && !liveCertified(record)) reasons.push("Live-certified provider data is required.");
   if (c.minimumOdds !== null && (!Number.isFinite(record?.odds) || record.odds < c.minimumOdds)) reasons.push("Current odds are below the selected range.");
   if (c.maximumOdds !== null && (!Number.isFinite(record?.odds) || record.odds > c.maximumOdds)) reasons.push("Current odds are above the selected range.");
+  if (c.movementObservedOnly && !record?.movementObserved) reasons.push("A normalized observed market change is required.");
+  if (c.minimumLineMovement && (record?.movementMagnitude ?? 0) < c.minimumLineMovement) reasons.push("Observed line movement is below the selected threshold.");
+  if (c.minimumPriceMovement && (record?.priceMovementMagnitude ?? 0) < c.minimumPriceMovement) reasons.push("Observed price movement is below the selected threshold.");
   return freeze(unique(reasons));
 }
 
@@ -119,6 +137,10 @@ function legFromRecord(record) {
   if (!Number.isFinite(record.researchCompleteness)) unknowns.push("Research completeness is unavailable.");
   if (!record.historicalCoverage) unknowns.push("No matching completed historical rows were supplied.");
   if (weatherConcern(record)) unknowns.push("Weather information contains a concern.");
+  if (record.contextReviewRequired) unknowns.push("Provider context changed or conflicts; this locked leg requires explicit review.");
+  if (record.certificationState === "limited_live") unknowns.push("This market domain is Limited Live; known coverage limitations remain.");
+  if (["degraded", "suspended"].includes(record.certificationState)) unknowns.push(`This market domain is ${record.certificationState}; current refresh is not eligible.`);
+  if (record.eventStatus && ["in_progress", "resumed", "delayed", "suspended", "final", "stale"].includes(record.eventStatus)) unknowns.push(`Event status is ${record.eventStatus.replaceAll("_", " ")}; the saved pregame price is not current.`);
   return Object.freeze({
     id: `parlay-leg:${record.selectionId}`, recordId: record.id, marketResearchId: record.marketResearchId,
     selectionId: record.selectionId, entityId: record.entityId, eventId: record.gameId,
@@ -133,11 +155,19 @@ function legFromRecord(record) {
     comparison: record.entityId ? Object.freeze({ entityId: record.entityId, label: "Compare with a supported peer using identical filters" }) : null,
     freshness: record.freshness, providerAgreement: record.providerAgreement, provider: record.provider,
     sourceMode: record.sourceMode, sample: record.sample, leagueId: record.leagueId, sportId: record.sportId,
+    certificationState: record.certificationState, certificationLabel: record.certificationLabel,
     recentForm: record.recentTrend?.phrasing?.headline || record.recentTrend?.title || "Unavailable from supplied deterministic insights.",
     opponentMatchup: record.opponentId || "Opponent matchup unavailable.", homeAway: record.homeAway || "unknown",
     currentTrend: record.historicalTrend, lineupStatus: record.lineupConfirmed ? "confirmed" : "unconfirmed or unavailable",
     injuryStatus: record.injuryUncertain ? "uncertainty present" : "no uncertainty supplied",
     marketType: record.marketType,
+    requiresReview: record.contextReviewRequired === true || record.contextConflict === true,
+    eventStatus: record.eventStatus || "unknown", trackingState: record.trackingState || "pregame",
+    pregameContextCurrent: record.pregameContextCurrent !== false,
+    reviewReasons: freeze([
+      ...(record.contextReviewRequired ? ["Availability, lineup, starter, roster, weather, or event context changed after this research selection was formed."] : []),
+      ...(["in_progress", "resumed", "delayed", "suspended", "final", "stale"].includes(record.eventStatus) ? [`Game is ${record.eventStatus.replaceAll("_", " ")}; the saved pregame price remains an immutable research snapshot.`] : []),
+    ]),
   });
 }
 
@@ -206,7 +236,9 @@ export class ParlayBuilderService {
     if (this.cache.has(key)) return this.cache.get(key);
     const allRecords = this.marketScreenerService.getRecords(options.scope || {}, now);
     const eligible = allRecords.filter((item) => recordMeetsParlayConstraints(item, constraints)).sort(deterministicOrder);
-    const locked = lockedSelectionIds.map((id) => eligible.find((item) => item.selectionId === id)).filter(Boolean);
+    // Locked research is never silently removed when new context makes it ineligible.
+    // It remains visible with exclusion/review reasons until the user explicitly replaces it.
+    const locked = lockedSelectionIds.map((id) => allRecords.find((item) => item.selectionId === id)).filter(Boolean);
     const chosen = [...locked]; const excluded = [];
     for (const record of eligible) {
       if (chosen.some((item) => item.selectionId === record.selectionId)) continue;
@@ -221,6 +253,11 @@ export class ParlayBuilderService {
       if (chosenIds.has(record.selectionId) || excluded.some((item) => item.record.selectionId === record.selectionId)) return;
       const reasons = explainParlayExclusion(record, constraints);
       excluded.push(Object.freeze({ record: legFromRecord(record), reasons: reasons.length ? reasons : freeze([chosen.length >= constraints.maximumLegs ? "Maximum leg count was reached; stronger evidence-ranked alternatives were selected first." : "Current story and supporting evidence ranked below selected alternatives."]) }));
+    });
+    locked.forEach((record) => {
+      const reasons = [...explainParlayExclusion(record, constraints)];
+      if (record.contextReviewRequired && !reasons.includes("Provider context changed; explicit review is required.")) reasons.push("Provider context changed; explicit review is required.");
+      if (reasons.length) excluded.push(Object.freeze({ record: legFromRecord(record), reasons: freeze(reasons), locked: true, requiresReview: true }));
     });
     const result = resultFromRecords(chosen, { constraints, eligibleCount: eligible.length, excluded, generatedAt: new Date(now).toISOString(), lockedSelectionIds: locked.map((item) => item.selectionId), idSeed: key.length });
     this.cache.set(key, result); return result;

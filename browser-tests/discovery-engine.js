@@ -223,7 +223,9 @@ await wait(30);
 check(app.documentElement.scrollWidth <= app.documentElement.clientWidth, "137 discovery does not overflow at 200% root text size");
 app.documentElement.style.fontSize = "";
 check(app.querySelector("#closeDiscoveryExplorer")?.tagName === "BUTTON" && app.querySelector("#discoveryExplorer")?.getAttribute("tabindex") === "-1", "138 explorer close and focus target use accessible semantics");
-check([...app.querySelectorAll("#homeDiscoverySections .sample-badge, #trendingResearch .sample-badge")].every((badge) => /sample|local/i.test(badge.textContent)), "139 discovery source mode is never color-only");
+const discoverySourceBadges = [...app.querySelectorAll("#homeDiscoverySections .sample-badge, #trendingResearch .sample-badge")];
+const invalidDiscoverySourceBadges = discoverySourceBadges.filter((badge) => !/sample|local/i.test(badge.textContent));
+check(invalidDiscoverySourceBadges.length === 0, `139 discovery source mode is never color-only${invalidDiscoverySourceBadges.length ? `: ${invalidDiscoverySourceBadges.map((badge) => `${badge.textContent.trim()}@${badge.closest("[data-home-section]")?.dataset.homeSection || badge.closest("[data-home-card]")?.dataset.homeCard || "unknown"}`).join(", ")}` : ""}`);
 check(window.testErrors.length === 0, `140 no browser console or unhandled promise errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
 
 results.dataset.status = failures.length ? "failed" : "passed";

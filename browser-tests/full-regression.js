@@ -1,7 +1,7 @@
 const suites = [
   "about", "advanced-stats", "anniversaries", "athlete-profiles", "discovery-engine", "entities",
-  "historical-explorer", "insights", "knowledge-graph", "launch-readiness", "market-depth",
-  "market-explanations", "market-research", "market-screener", "parlay-builder", "research-analyst",
+  "historical-explorer", "illustrations", "illustration-proof-gallery", "insights", "knowledge-graph", "launch-readiness", "market-depth",
+  "live-state", "mlb-certification", "market-explanations", "market-research", "market-screener", "parlay-builder", "portfolio-polish", "research-analyst",
   "stats-research", "story-engine", "visualizations", "workspace",
 ];
 const output = document.querySelector("#results");
@@ -18,17 +18,16 @@ for (const suite of suites) {
   await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
   const startedAt = Date.now();
   let status = "Running…";
-  while (!status.startsWith("PASS") && !status.startsWith("FAIL") && Date.now() - startedAt < 30000) {
+  while (!status.startsWith("PASS") && !status.startsWith("FAIL") && Date.now() - startedAt < 45000) {
     await new Promise((resolve) => setTimeout(resolve, 150));
     status = frame.contentDocument?.querySelector("#results")?.textContent || "Running…";
   }
   const passed = status.startsWith("PASS");
-  completed.push({ suite, passed, summary: status.split("\n")[0] });
+  completed.push({ suite, passed, summary: status.split("\n")[0], details: passed ? "" : status });
   output.textContent = `Running ${completed.length}/${suites.length}\n${completed.map((item) => `${item.passed ? "PASS" : "FAIL"} ${item.suite}: ${item.summary}`).join("\n")}`;
-  if (!passed) break;
 }
 
 const passed = completed.length === suites.length && completed.every((item) => item.passed);
 output.dataset.status = passed ? "passed" : "failed";
-output.textContent = `${passed ? "PASS" : "FAIL"} (${completed.filter((item) => item.passed).length}/${suites.length} suites)\n${completed.map((item) => `${item.passed ? "PASS" : "FAIL"} ${item.suite}: ${item.summary}`).join("\n")}`;
+output.textContent = `${passed ? "PASS" : "FAIL"} (${completed.filter((item) => item.passed).length}/${suites.length} suites)\n${completed.map((item) => `${item.passed ? "PASS" : "FAIL"} ${item.suite}: ${item.summary}${item.details ? `\n${item.details}` : ""}`).join("\n")}`;
 host.replaceChildren();

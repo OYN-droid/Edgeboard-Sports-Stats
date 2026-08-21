@@ -8,5 +8,4 @@ Use **Stats** for observed evidence, **Betting** for provider-confirmed markets,
 
 Open supporting data before sharing a conclusion. Check sample size, source, freshness, completion status, and counterarguments. Ambiguous identities, missing statistics, stale markets, and insufficient evidence should produce an unavailable or limited result—not a fabricated answer.
 
-Related guides: [Research sessions](research-sessions.md), [Edge Trust](edge-trust.md), [Historical Explorer](historical-explorer.md), [Parlay Builder](parlay-builder.md), and [data coverage](production-rollout.md).
-
+Related guides: [Research sessions](research-sessions.md), [Edge Trust](edge-trust.md), [Historical Explorer](historical-explorer.md), [Parlay Builder](parlay-builder.md), and [data coverage](phase10-rollout-playbook.md).

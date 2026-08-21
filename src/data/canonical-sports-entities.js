@@ -41,6 +41,8 @@ const RELATED = Object.freeze({
   RBR: ["f1-max-verstappen", "manufacturer-red-bull-powertrains", "league-f1"],
   MCL: ["f1-lando-norris", "manufacturer-mercedes", "league-f1"],
   LAL: ["coach-sample-lakers", "venue-crypto-arena", "league-nba"],
+  "NBA-NYK": ["venue-madison-square-garden", "league-nba"],
+  "NHL-NYR": ["venue-madison-square-garden", "league-nhl"],
   "IND-W": ["wnba-caitlin-clark", "coach-sample-fever", "league-wnba"],
   NYY: ["mlb-aaron-judge", "mlb-gerrit-cole", "venue-yankee-stadium", "league-mlb"],
   MIA: ["mls-lionel-messi", "league-mls"],
@@ -135,7 +137,7 @@ export const ADDITIONAL_CANONICAL_ENTITIES = Object.freeze([
   entity({ id: "competition-nba-playoffs", type: ENTITY_TYPES.COMPETITION, name: "NBA Playoffs", aliases: ["nba postseason"], sportId: "basketball", leagueId: "nba", relatedEntityIds: ["league-nba"] }),
   entity({ id: "competition-olympics", type: ENTITY_TYPES.COMPETITION, name: "Olympic Games", aliases: ["olympics"], sportId: "olympic-sports", leagueId: "olympic-sports", relatedEntityIds: ["league-olympic-sports", "national-team-usa-basketball"] }),
   entity({ id: "competition-wimbledon", type: ENTITY_TYPES.COMPETITION, name: "Wimbledon", aliases: ["the championships"], sportId: "tennis", leagueId: "atp", relatedEntityIds: ["league-atp", "league-wta", "venue-wimbledon"] }),
-  entity({ id: "venue-madison-square-garden", type: ENTITY_TYPES.VENUE, name: "Madison Square Garden", aliases: ["msg", "the garden"], sportId: "multi-sport", relatedEntityIds: ["league-nba", "league-nhl"], metadata: { location: "New York, New York", venueType: "Arena" } }),
+  entity({ id: "venue-madison-square-garden", type: ENTITY_TYPES.VENUE, name: "Madison Square Garden", aliases: ["msg", "the garden"], sportId: "multi-sport", relatedEntityIds: ["NBA-NYK", "NHL-NYR"], metadata: { location: "New York, New York", venueType: "Arena", sharedVenue: true } }),
   entity({ id: "venue-crypto-arena", type: ENTITY_TYPES.VENUE, name: "Los Angeles Sample Arena", aliases: ["lakers arena"], sportId: "basketball", leagueId: "nba", relatedEntityIds: ["LAL"], metadata: { location: "Los Angeles, California", venueType: "Arena" } }),
   entity({ id: "venue-yankee-stadium", type: ENTITY_TYPES.VENUE, name: "Yankee Stadium", aliases: ["yankee stadium"], sportId: "baseball", leagueId: "mlb", relatedEntityIds: ["NYY"], metadata: { location: "Bronx, New York", venueType: "Stadium" } }),
   entity({ id: "venue-silverstone", type: ENTITY_TYPES.VENUE, name: "Silverstone Circuit", aliases: ["silverstone"], sportId: "motorsport", leagueId: "f1", relatedEntityIds: ["league-f1"], metadata: { location: "Silverstone, England", venueType: "Circuit", surface: "Asphalt" } }),
@@ -152,7 +154,7 @@ const LEAGUE_ENTITIES = SPORTS_REGISTRY.map((league) => entity({
   leagueId: league.leagueId,
   active: league.enabled,
   relatedEntityIds: [
-    ...CANONICAL_ENTITIES.filter((item) => item.leagueId === league.leagueId).slice(0, 12).map((item) => item.id),
+    ...CANONICAL_ENTITIES.filter((item) => item.leagueId === league.leagueId && item.entityType === "team").map((item) => item.id),
     ...ADDITIONAL_CANONICAL_ENTITIES.filter((item) => item.leagueId === league.leagueId).slice(0, 12).map((item) => item.id),
   ],
   metadata: {

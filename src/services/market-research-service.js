@@ -28,7 +28,12 @@ function thresholdPerformance(rows, statId, line, side) {
   const observed = rows.map((row) => finite(row.stats?.[statId])).filter((value) => value !== null);
   if (!observed.length) return Object.freeze({ supported: false, hits: null, sampleSize: 0, rate: null, message: "No completed source rows match this canonical statistic." });
   const hits = observed.filter((value) => side === "over" ? value > threshold : value < threshold).length;
-  return Object.freeze({ supported: true, hits, sampleSize: observed.length, rate: Math.round((hits / observed.length) * 100), message: `${hits} of ${observed.length} completed sample rows cleared the selected ${side} condition.` });
+  const pushes = observed.filter((value) => value === threshold).length;
+  const decisionSampleSize = observed.length - pushes;
+  const misses = decisionSampleSize - hits;
+  return Object.freeze({ supported: decisionSampleSize > 0, hits, misses, pushes, sampleSize: observed.length,
+    decisionSampleSize, rate: decisionSampleSize ? Math.round((hits / decisionSampleSize) * 100) : null,
+    message: decisionSampleSize ? `${hits} of ${decisionSampleSize} decided completed sample rows cleared the selected ${side} condition${pushes ? `; ${pushes} push${pushes === 1 ? " was" : "es were"} excluded` : ""}.` : "Completed source rows only matched the line; pushes are excluded from the hit-rate denominator." });
 }
 
 function average(values) {
@@ -159,6 +164,7 @@ function impactFor({ movement, relatedMarkets, stories, insights, researchChange
 }
 
 function statusFor(market, selection) {
+  if (selection.pregameContextCurrent === false || ["in_progress", "resumed", "delayed", "suspended", "final", "stale"].includes(selection.eventStatus)) return "event_started";
   if (!market || !selection) return "unavailable";
   if (market.status === "suspended" || selection.suspended) return "suspended";
   if (selection.stale) return "stale";
@@ -235,11 +241,11 @@ export class MarketResearchService {
   }
 
   buildModel(market, selection) {
-    const key = `${market.id}:${selection.id}:${selection.lastUpdatedAt || "none"}:${this.statsRepository.updatedAt || "none"}`;
+    const key = `${market.id}:${selection.id}:${selection.lastUpdatedAt || "none"}:${selection.availabilityStatus}:${selection.rosterStatus}:${selection.lineupStatus}:${selection.starterStatus}:${selection.contextFreshness}:${selection.contextConflict}:${selection.eventStatus}:${selection.trackingState}:${this.statsRepository.updatedAt || "none"}`;
     if (this.cache.has(key)) return this.cache.get(key);
     const league = this.sportsRepository.getLeague(market.leagueId);
     const entity = this.resolveEntity(selection, market.leagueId);
-    const statId = getMarketDefinition(market.canonicalMarketId) ? market.canonicalMarketId : "";
+    const statId = selection.canonicalStatId || (getMarketDefinition(market.canonicalMarketId) ? market.canonicalMarketId : "");
     const summary = entity ? this.statsRepository.getPlayerSummary(entity.id, { statIds: statId ? [statId] : [], aggregation: "average" }) : null;
     const rows = [...(summary?.rows || [])].sort((left, right) => new Date(right.event_date) - new Date(left.event_date));
     const historicalPerformance = Object.freeze({
@@ -278,8 +284,8 @@ export class MarketResearchService {
     if (!event?.startsAt) reasonsAgainst.push("The normalized provider did not supply a confirmed event time.");
     const verifiedLineup = movement.contributingEvents.find((item) => item.type === "lineup");
     const verifiedInjury = movement.contributingEvents.find((item) => item.type === "injury");
-    const lineupStatus = verifiedLineup?.summary || clean(event?.teamGame?.lineup_status || event?.teamGame?.lineupStatus) || "Unavailable from provider";
-    const injuryStatus = verifiedInjury?.summary || clean(event?.teamGame?.injuries_status || event?.teamGame?.injuriesStatus) || "Unavailable from provider";
+    const lineupStatus = verifiedLineup?.summary || clean(selection.starterStatus !== "unavailable" ? selection.starterStatus : selection.lineupStatus) || clean(event?.teamGame?.lineup_status || event?.teamGame?.lineupStatus) || "Unavailable from provider";
+    const injuryStatus = verifiedInjury?.summary || clean(selection.availabilityStatus) || clean(event?.teamGame?.injuries_status || event?.teamGame?.injuriesStatus) || "Unavailable from provider";
     if (/unavailable|pending|unknown/i.test(`${lineupStatus} ${injuryStatus}`)) reasonsAgainst.push("Lineup or injury confirmation is incomplete and no effect is assumed.");
     const researchChange = researchChangeFor(selection, movement, edgeTrust.researchQuality);
     const impact = impactFor({ movement, relatedMarkets, stories, insights, researchChange, entity, event });
@@ -318,10 +324,18 @@ export class MarketResearchService {
       providerHistoricalLabel: selection.hitRate, dataQualityWarning: selection.dataQualityWarning,
       historicalPerformance, priceComparison, movement, researchChange, impact, marketExplainer, supportingEvidence,
       edgeTrust, marketTrust: edgeTrust, researchQuality: edgeTrust.researchQuality, currentStory,
-      lineupStatus, injuryStatus, weatherStatus: clean(event?.race?.weather || event?.weather) || "Unavailable from provider",
+      lineupStatus, injuryStatus, weatherStatus: clean(selection.weatherStatus) || clean(event?.race?.weather || event?.weather) || "Unavailable from provider",
+      rosterStatus: selection.rosterStatus || "unknown", contextFreshness: selection.contextFreshness || "unavailable",
+      lineupState: selection.lineupStatus || "unavailable", starterStatus: selection.starterStatus || "unavailable",
+      availabilityState: selection.availabilityStatus || "unknown",
+      contextConflict: selection.contextConflict === true, contextReviewRequired: selection.contextReviewRequired === true,
+      eventStatus: selection.eventStatus || event?.status || "unknown",
+      trackingState: selection.trackingState || "pregame",
+      pregameContextCurrent: selection.pregameContextCurrent !== false,
+      certification: selection.certification || market.certification || null,
       reasonsFor: freeze(reasonsFor), reasonsAgainst: freeze(reasonsAgainst),
       counterarguments: freeze([...reasonsAgainst]), stories: freeze(stories), insights: freeze(insights), relatedMarkets: freeze(relatedMarkets),
-      source: Object.freeze({ provider: selection.source || market.source || selection.sportsbook, sportsbook: selection.sportsbook, mode: selection.sourceMode || market.sourceMode || "sample", sample: !["live_verified", "live_partial"].includes(selection.sourceMode || market.sourceMode), updatedAt: selection.lastUpdatedAt }),
+      source: Object.freeze({ provider: selection.source || market.source || selection.sportsbook, sportsbook: selection.sportsbook, mode: selection.sourceMode || market.sourceMode || "sample", sample: !["live_verified", "live_partial"].includes(selection.sourceMode || market.sourceMode), updatedAt: selection.lastUpdatedAt, certified: (selection.certification || market.certification)?.certified === true, liveEligible: (selection.certification || market.certification)?.liveEligible === true }),
       disclosures: freeze(["EdgeBoard is a research platform, not a sportsbook.", "Research Quality is source trust, not win probability.", movement.causeDisclosure, priceComparison.disclosure]),
     };
     model.score = deterministicScore(model);

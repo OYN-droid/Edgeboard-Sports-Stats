@@ -397,11 +397,27 @@ export class DeterministicInsightService {
   } = {}) {
     const leagues = new Set(leagueIds);
     const sports = new Set(sportIds);
+    const entitiesWithCompletedEvidence = new Set(this.statsProvider.rows
+      .filter((row) => row.status === "completed")
+      .map((row) => row.entity_id));
     const entities = this.statsProvider.entities.filter((entity) =>
       entity.active
+      && entitiesWithCompletedEvidence.has(entity.id)
       && (leagues.size ? leagues.has(entity.leagueId) : true)
       && (sports.size ? sports.has(entity.sportId) : true));
-    const candidates = entities.slice(0, 18).flatMap((entity) =>
+    const groups = [...entities.reduce((bySport, entity) => {
+      const group = bySport.get(entity.sportId) || [];
+      group.push(entity);
+      bySport.set(entity.sportId, group);
+      return bySport;
+    }, new Map()).values()];
+    const featuredEntities = [];
+    for (let index = 0; featuredEntities.length < 18 && groups.some((group) => group[index]); index += 1) {
+      groups.forEach((group) => {
+        if (group[index] && featuredEntities.length < 18) featuredEntities.push(group[index]);
+      });
+    }
+    const candidates = featuredEntities.flatMap((entity) =>
       this.generateEntityInsightCandidates(entity, {
         limit: 2,
         includeBettingContext,

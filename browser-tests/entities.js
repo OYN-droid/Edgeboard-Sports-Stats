@@ -102,6 +102,12 @@ check(registry.getRelatedEntities("constructor-ferrari").some((entity) => entity
   "37 constructors expose linked manufacturers");
 check(registry.getRelatedEntities("competition-world-cup").some((entity) => entity.type === "organization"),
   "38 competitions expose linked organizations");
+check(registry.getRelatedEntities("NHL-NYR").some((entity) => entity.id === "venue-madison-square-garden")
+  && registry.getRelatedEntities("NBA-NYK").some((entity) => entity.id === "venue-madison-square-garden"),
+  "38a Rangers and Knicks share Madison Square Garden through team-to-home-venue relationships");
+check(registry.getRelatedEntities("league-nhl").some((entity) => entity.id === "NHL-NYR")
+  && registry.getRelatedEntities("league-nba").some((entity) => entity.id === "NBA-NYK"),
+  "38b leagues contain their canonical New York teams without claiming venue ownership");
 
 const resolvedEntities = registry.search("Tell me about Ferrari");
 const entityPlan = createResearchPlan({

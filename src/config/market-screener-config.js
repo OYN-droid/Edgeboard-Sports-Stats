@@ -3,14 +3,15 @@ export const MARKET_SCREENER_SCHEMA_VERSION = 1;
 export const MARKET_SCREENER_FILTER_KEYS = Object.freeze([
   "sportIds", "leagueIds", "competitions", "gameIds", "playerIds", "teamIds",
   "fighterIds", "driverIds", "marketTypes", "sportsbooks", "currentLineMin",
-  "currentLineMax", "openingLineMin", "openingLineMax", "movementMin", "oddsMin",
+  "currentLineMax", "openingLineMin", "openingLineMax", "movementMin", "priceMovementMin", "oddsMin",
   "oddsMax", "researchQualityMin", "edgeTrustMin", "historicalCoverageMin",
   "historicalHitRateMin", "projectionMin", "projectionAboveLine", "edgeMin",
   "confidenceMin", "researchCompletenessMin", "providers", "freshness",
   "upcomingOnly", "homeAway", "opponentIds", "positions", "weightClasses",
   "tracks", "surfaces", "freshOnly", "confirmedLineupOnly", "noInjuryUncertainty",
-  "currentStoriesOnly", "milestoneOnly", "streakOnly", "recentTrendOnly",
+  "currentStoriesOnly", "milestoneOnly", "streakOnly", "recentTrendOnly", "movementObservedOnly",
   "noProviderConflicts",
+  "confirmedStarterOnly", "activeRosterOnly", "freshContextOnly", "noContextConflicts",
 ]);
 
 export const MARKET_SCREENER_ARRAY_FILTERS = Object.freeze([
@@ -20,7 +21,7 @@ export const MARKET_SCREENER_ARRAY_FILTERS = Object.freeze([
 ]);
 
 export const MARKET_SCREENER_NUMERIC_FILTERS = Object.freeze([
-  "currentLineMin", "currentLineMax", "openingLineMin", "openingLineMax", "movementMin",
+  "currentLineMin", "currentLineMax", "openingLineMin", "openingLineMax", "movementMin", "priceMovementMin",
   "oddsMin", "oddsMax", "researchQualityMin", "edgeTrustMin", "historicalCoverageMin",
   "historicalHitRateMin", "projectionMin", "edgeMin", "confidenceMin",
   "researchCompletenessMin",
@@ -29,7 +30,8 @@ export const MARKET_SCREENER_NUMERIC_FILTERS = Object.freeze([
 export const MARKET_SCREENER_BOOLEAN_FILTERS = Object.freeze([
   "projectionAboveLine", "upcomingOnly", "freshOnly", "confirmedLineupOnly",
   "noInjuryUncertainty", "currentStoriesOnly", "milestoneOnly", "streakOnly",
-  "recentTrendOnly", "noProviderConflicts",
+  "recentTrendOnly", "movementObservedOnly", "noProviderConflicts",
+  "confirmedStarterOnly", "activeRosterOnly", "freshContextOnly", "noContextConflicts",
 ]);
 
 export const MARKET_SCREENER_SORTS = Object.freeze([

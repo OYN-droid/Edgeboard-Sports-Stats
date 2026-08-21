@@ -32,6 +32,8 @@ The graph can create a link only from one of these supported facts:
 
 Same-league membership, similar names, shared sport, popularity, betting confidence, and inferred narrative relationships are insufficient. Empty evidence sections remain absent instead of being filled with unrelated cards.
 
+Team membership and home venues use directed, machine-readable edge semantics. A league emits `contains_team`; the team emits `member_of_league`. A team emits `home_venue`; a shared venue emits `home_team` for each canonical tenant. Leagues do not own or directly contain venues. For example, the NHL connects to the New York Rangers, and the Rangers connect to Madison Square Garden. The New York Knicks independently connect to the same venue, so the arena remains multi-sport rather than league-exclusive.
+
 ## Data flow
 
 ```text

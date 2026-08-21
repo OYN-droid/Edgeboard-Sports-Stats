@@ -191,6 +191,8 @@ export function buildScreenerRecord(model, currentDate = new Date()) {
     openingLineDisplay: model.movement?.opening?.lineDisplay || "Unavailable",
     movement: finite(model.movement?.lineDelta),
     movementMagnitude: Math.abs(finite(model.movement?.lineDelta) ?? 0),
+    priceMovement: finite(model.movement?.oddsDelta),
+    priceMovementMagnitude: Math.abs(finite(model.movement?.oddsDelta) ?? 0),
     movementObserved: Boolean(model.movement?.observed),
     movementVerified: Boolean(model.movement?.observed && model.movement?.timeline?.length && model.movement.timeline.every((item) => item.verification === "verified")),
     odds: finite(model.currentOdds),
@@ -213,8 +215,16 @@ export function buildScreenerRecord(model, currentDate = new Date()) {
     lastUpdatedAt: model.lastUpdatedAt,
     startsAt,
     upcoming: Number.isFinite(startsTime) && startsTime >= new Date(currentDate).getTime(),
-    lineupConfirmed: /^confirmed/i.test(model.lineupStatus),
-    injuryUncertain: /unavailable|pending|unknown|probable|questionable|doubtful/i.test(model.injuryStatus || "unavailable"),
+    lineupConfirmed: /^confirmed/i.test(model.lineupState || model.lineupStatus),
+    starterConfirmed: /^confirmed/i.test(model.starterStatus) && /pitcher/i.test(`${model.marketName} ${model.canonicalMarketId}`),
+    rosterActive: model.rosterStatus === "active",
+    contextFresh: model.contextFreshness === "fresh",
+    contextConflict: model.contextConflict === true,
+    contextReviewRequired: model.contextReviewRequired === true,
+    eventStatus: model.eventStatus || model.event?.status || "unknown",
+    trackingState: model.trackingState || "pregame",
+    pregameContextCurrent: model.pregameContextCurrent !== false,
+    injuryUncertain: /unavailable|pending|unknown|probable|questionable|doubtful/i.test(model.availabilityState || model.injuryStatus || "unavailable"),
     currentStory: model.currentStory || null,
     currentStreak: streak,
     currentMilestone: milestone,
@@ -225,6 +235,10 @@ export function buildScreenerRecord(model, currentDate = new Date()) {
     conflictCount: model.edgeTrust?.conflicts?.length || 0,
     opportunityScore,
     sourceMode: model.source?.mode || model.sourceMode || "sample",
+    certificationState: model.certification?.state || "unknown",
+    certificationLabel: model.certification?.publicLabel || "Unavailable",
+    liveMarketEligible: model.certification?.liveEligible === true && model.source?.liveEligible === true,
+    certifiedLive: model.certification?.certified === true && model.source?.certified === true,
     sample: model.source?.sample !== false,
     valid: model.status !== "error" && Boolean(model.selectionId && model.marketId && model.source?.provider),
   };
@@ -260,6 +274,7 @@ export function recordMatchesScreenerFilters(record, input = {}) {
   if (!within(record.currentLine, filters.currentLineMin, filters.currentLineMax)) return false;
   if (!within(record.openingLine, filters.openingLineMin, filters.openingLineMax)) return false;
   if (filters.movementMin !== undefined && (!Number.isFinite(record.movementMagnitude) || record.movementMagnitude < filters.movementMin)) return false;
+  if (filters.priceMovementMin !== undefined && (!Number.isFinite(record.priceMovementMagnitude) || record.priceMovementMagnitude < filters.priceMovementMin)) return false;
   if (!within(record.odds, filters.oddsMin, filters.oddsMax)) return false;
   if (filters.researchQualityMin !== undefined && record.researchQuality < filters.researchQualityMin) return false;
   if (filters.edgeTrustMin !== undefined && record.marketTrustScore < filters.edgeTrustMin) return false;
@@ -282,7 +297,12 @@ export function recordMatchesScreenerFilters(record, input = {}) {
   if (filters.milestoneOnly && !record.currentMilestone) return false;
   if (filters.streakOnly && !record.currentStreak) return false;
   if (filters.recentTrendOnly && !record.recentTrend) return false;
+  if (filters.movementObservedOnly && !record.movementObserved) return false;
   if (filters.noProviderConflicts && (record.conflictCount > 0 || record.providerAgreement === "disagreement")) return false;
+  if (filters.confirmedStarterOnly && !record.starterConfirmed) return false;
+  if (filters.activeRosterOnly && !record.rosterActive) return false;
+  if (filters.freshContextOnly && !record.contextFresh) return false;
+  if (filters.noContextConflicts && record.contextConflict) return false;
   return true;
 }
 

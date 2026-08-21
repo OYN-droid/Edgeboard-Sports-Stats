@@ -271,16 +271,22 @@ function eventCandidate(event, league, dependencies) {
     eventIds: [event.id],
     sportId: event.sportId || league.sportId,
     leagueId: event.leagueId || league.leagueId,
-    claimData: { eventName: title, startsAt: event.startsAt, status: event.status },
+    claimData: { eventName: title, startsAt: event.startsAt, status: event.status,
+      score: event.liveState?.score || null, period: event.liveState?.period || null },
     scope: { season: "", dateRange: { start: event.startsAt, end: event.startsAt }, competition: event.competitionId || event.leagueId },
-    supportingEvidence: [{ id: `schedule-${event.id}`, type: "normalized_schedule", label: title, eventId: event.id, occurredAt: event.startsAt, values: { status: event.status }, sourceId: event.source?.provider || league.dataProvider, status: event.status }],
+    supportingEvidence: [{ id: `schedule-${event.id}`, type: "normalized_schedule", label: title, eventId: event.id, occurredAt: event.startsAt, values: { status: event.status }, sourceId: (typeof event.source === "string" ? event.source : event.source?.provider) || league.dataProvider, status: event.status }],
     validationStatus: event.dataQualityStatus === "error" ? "invalid" : "dataset_only",
     lifecycleState: "active",
-    freshness: { state: event.stale ? "stale" : "sample", lastUpdated: event.lastUpdatedAt || league.lastUpdatedAt },
-    sources: [{ id: event.source?.provider || league.dataProvider, label: event.source?.provider || league.dataProvider || "EdgeBoard sample schedule", sample: event.sample !== false }],
-    warnings: ["Fixture-backed normalized schedule; not a current real-world report."],
-    createdAt: event.lastUpdatedAt || league.lastUpdatedAt,
-    expiresAt: event.status === "live" ? null : event.startsAt,
+    freshness: { state: event.stale ? "stale" : event.sourceMode || "unknown", lastUpdated: event.sourceUpdatedAt || event.lastUpdatedAt || league.lastUpdatedAt },
+    sources: [{
+      id: (typeof event.source === "string" ? event.source : event.source?.provider) || league.dataProvider,
+      label: (typeof event.source === "string" ? event.source : event.source?.provider) || league.dataProvider || "Source unavailable",
+      mode: event.sourceMode || "unknown",
+      sample: ["sample", "fixture"].includes(event.sourceMode),
+    }],
+    warnings: [event.sourceMode === "fixture" ? "Validated fixture schedule; not live data." : "Verify current provider status before relying on this schedule."],
+    createdAt: event.sourceUpdatedAt || event.lastUpdatedAt || league.lastUpdatedAt,
+    expiresAt: ["live", "in_progress", "resumed", "delayed", "suspended", "final"].includes(event.status) ? null : event.startsAt,
   }, dependencies);
 }
 
@@ -343,7 +349,6 @@ export function scoreStoryCandidate(candidate, context = {}) {
     + (candidate.edgeTrust.researchQuality.score / 100) * weights.edgeTrust
     + (candidate.researchQuality.score / 100) * weights.researchQuality
     + .7 * weights.novelty
-    + Number(Boolean(candidate.primaryEntity?.media)) * weights.visualSupport
     + Math.min(1, candidate.supportingEvidence.length / 3) * weights.evidenceSupport
     + Number(Boolean(context.mode !== "stats" && candidate.bettingContext)) * weights.marketRelevance
     - Number(Boolean(context.duplicate)) * weights.duplicatePenalty
@@ -353,10 +358,24 @@ export function scoreStoryCandidate(candidate, context = {}) {
   return clamp(Number(raw.toFixed(1)));
 }
 
+function exactPresentationArtwork(candidate) {
+  if (!candidate?.primaryEntity) return 0;
+  const media = createAthleteMediaViewModel(candidate.primaryEntity, {
+    context: "story", desiredVariant: "story", fallbackPolicy: "featured_story",
+  });
+  return Number(media?.illustration?.fallbackLevel === "exact");
+}
+
+export function compareStoryCandidates(left, right) {
+  return Number(right?.storyScore || 0) - Number(left?.storyScore || 0)
+    || exactPresentationArtwork(right) - exactPresentationArtwork(left)
+    || clean(left?.id).localeCompare(clean(right?.id));
+}
+
 export function deduplicateStories(candidates, limit = Infinity) {
   const selected = [];
   const byKey = new Map();
-  [...(candidates || [])].sort((left, right) => right.storyScore - left.storyScore || left.id.localeCompare(right.id)).forEach((candidate) => {
+  [...(candidates || [])].sort(compareStoryCandidates).forEach((candidate) => {
     const key = [candidate.entityIds.join(","), candidate.storyFamily, candidate.statIds.join(","), candidate.eventIds.join(","), JSON.stringify(candidate.scope?.dateRange || {}), candidate.claimData.threshold ?? ""].join("|");
     const existing = byKey.get(key);
     if (existing) {
@@ -414,8 +433,13 @@ export function phraseStory(candidate) {
     headline = `${name}'s available ${statLabel} sample is worth exploring`;
     summary = claim.count ? `${name} recorded ${plural(claim.count, statLabel)} in ${plural(claim.sampleSize, "completed event")}.` : summary;
   } else if (candidate.storyType === "upcoming_event") {
-    headline = `${claim.eventName || name} is next on the sample schedule`;
-    summary = claim.startsAt ? `Scheduled for ${new Date(claim.startsAt).toLocaleString()}; verify the current provider before relying on the time.` : "The source did not provide a valid event time.";
+    if (["live", "in_progress", "resumed"].includes(claim.status)) {
+      headline = `${claim.eventName || name} is reported in progress`;
+      summary = claim.score ? `The validated ${candidate.sample ? "fixture" : "provider"} state reports ${claim.score.away}–${claim.score.home}${claim.period ? ` in the ${claim.period.half} of inning ${claim.period.inning}` : ""}.` : "The event is reported in progress; a supported score is unavailable.";
+    } else {
+      headline = `${claim.eventName || name} is next on the ${candidate.sources.some((source) => source.mode === "fixture") ? "fixture" : candidate.sample ? "sample" : "provider"} schedule`;
+      summary = claim.startsAt ? `Scheduled for ${new Date(claim.startsAt).toLocaleString()}; verify the current provider before relying on the time.` : "The source did not provide a valid event time.";
+    }
   } else if (candidate.storyType === "data_update") {
     headline = `${name}'s sample ${claim.field || "statistic"} was corrected`;
     summary = `The retained audit changes the value from ${claim.oldValue} to ${claim.newValue}.`;
@@ -425,10 +449,11 @@ export function phraseStory(candidate) {
     summary = insightSummary || summary;
   }
   const scope = [candidate.scope.season, candidate.leagueId.toUpperCase()].filter(Boolean).join(" ");
+  const fixtureOnly = candidate.sources.length > 0 && candidate.sources.every((source) => source.mode === "fixture");
   const disclosure = candidate.validationStatus === "provider_asserted"
-    ? `Provider-asserted sample · ${scope}`
-    : candidate.validationStatus === "dataset_only" ? `Available sample dataset only · ${scope}`
-      : `${candidate.sample ? "Sample data · " : ""}${candidate.validationStatus.replaceAll("_", " ")} · ${scope}`;
+    ? `Provider-asserted ${fixtureOnly ? "fixture" : "sample"} · ${scope}`
+    : candidate.validationStatus === "dataset_only" ? `Available ${fixtureOnly ? "fixture" : "sample"} dataset only · ${scope}`
+      : `${fixtureOnly ? "Fixture data · " : candidate.sample ? "Sample data · " : ""}${candidate.validationStatus.replaceAll("_", " ")} · ${scope}`;
   const prohibited = /\b(guaranteed|lock|can'?t miss|unstoppable|record-breaking|all-time|because of|wanted it more)\b/i;
   if (prohibited.test(`${headline} ${summary}`)) throw new Error("Story phrasing contains unsupported language.");
   return Object.freeze({
@@ -438,7 +463,7 @@ export function phraseStory(candidate) {
     evidenceSummary: `${plural(candidate.supportingEvidence.length, "supporting item")} retained.`,
     uncertaintyDisclosure: disclosure,
     sourceLabel: candidate.sources.map((source) => source.label).join(" + "),
-    shareCaption: `${headline}. ${summary} ${disclosure}. Sample data.`,
+    shareCaption: `${headline}. ${summary} ${disclosure}. ${fixtureOnly ? "Fixture data; not live." : candidate.sample ? "Sample data." : "Provider data."}`,
   });
 }
 
@@ -486,6 +511,7 @@ export function buildStoryViewModel(candidate, { presentation = "standard", mode
     validationLabel: candidate.validationStatus === "dataset_only" ? "Dataset only"
       : candidate.validationStatus === "provider_asserted" ? "Provider asserted" : candidate.validationStatus.replaceAll("_", " "),
     sourceLabel: phrasing.sourceLabel,
+    sourceMode: candidate.sources.length && candidate.sources.every((source) => source.mode === candidate.sources[0].mode) ? candidate.sources[0].mode : "mixed",
     freshnessLabel: candidate.freshness.state === "sample" ? "Sample snapshot" : candidate.freshness.state,
     lastUpdated: candidate.freshness.lastUpdated,
     primaryAction: storyActions(candidate, mode)[0] || null,
@@ -539,9 +565,25 @@ export class DeterministicStoryEngine {
     const leagueIds = unique(scope.leagueIds || []);
     const sportIds = unique(scope.sportIds || []);
     const now = options.now instanceof Date ? options.now : this.clock();
-    const scopedEntities = this.statsRepository.entities.filter((entity) => entity.active
+    const entitiesWithCompletedEvidence = new Set(this.statsRepository.rows
+      .filter((row) => row.status === "completed")
+      .map((row) => row.entity_id));
+    const eligibleEntities = this.statsRepository.entities.filter((entity) => entity.active
+      && entitiesWithCompletedEvidence.has(entity.id)
       && (!leagueIds.length || leagueIds.includes(entity.leagueId))
-      && (!sportIds.length || sportIds.includes(entity.sportId))).slice(0, 18);
+      && (!sportIds.length || sportIds.includes(entity.sportId)));
+    const entityGroups = [...eligibleEntities.reduce((bySport, entity) => {
+      const group = bySport.get(entity.sportId) || [];
+      group.push(entity);
+      bySport.set(entity.sportId, group);
+      return bySport;
+    }, new Map()).values()];
+    const scopedEntities = [];
+    for (let index = 0; scopedEntities.length < 18 && entityGroups.some((group) => group[index]); index += 1) {
+      entityGroups.forEach((group) => {
+        if (group[index] && scopedEntities.length < 18) scopedEntities.push(group[index]);
+      });
+    }
     const insights = scope.liveOnly ? [] : this.insightService.deduplicateInsights(scopedEntities.flatMap((entity) =>
       this.insightService.generateEntityInsightCandidates(entity, {
         limit: 6,
@@ -562,12 +604,12 @@ export class DeterministicStoryEngine {
       .map((candidate) => ({ ...candidate, storyScore: scoreStoryCandidate(candidate, { ...options, now, leagueId: leagueIds.length === 1 ? leagueIds[0] : "", sportId: sportIds.length === 1 ? sportIds[0] : "" }) }));
     const visibleLeagues = options.visibleLeagues || leagueIds.map((id) => this.sportsRepository.getLeague(id)).filter(Boolean);
     const eventCandidates = visibleLeagues.flatMap((league) => this.sportsRepository.getEvents(league.leagueId)
-      .filter((event) => scope.liveOnly ? event.status === "live" : scope.todayOnly ? localDateKey(event.startsAt) === localDateKey(now) : ["live", "scheduled"].includes(event.status))
+      .filter((event) => scope.liveOnly ? ["live", "in_progress", "resumed"].includes(event.status) && event.liveState?.freshness?.state !== "stale" : scope.todayOnly ? localDateKey(event.startsAt) === localDateKey(now) : ["live", "in_progress", "resumed", "scheduled", "pregame"].includes(event.status))
       .map((event) => eventCandidate(event, league, this.dependencies)))
       .map((candidate) => ({ ...candidate, storyScore: scoreStoryCandidate(candidate, { ...options, now, leagueId: leagueIds.length === 1 ? leagueIds[0] : "", sportId: sportIds.length === 1 ? sportIds[0] : "" }) }));
     let candidates = [...insightCandidates, ...fixtureCandidates, ...eventCandidates]
       .map((candidate) => this.applyLifecycleOverride(candidate, options.ignoreLifecycleOverrides === true));
-    if (scope.liveOnly) candidates = candidates.filter((candidate) => candidate.storyType === "upcoming_event" && candidate.claimData.status === "live");
+    if (scope.liveOnly) candidates = candidates.filter((candidate) => candidate.storyType === "upcoming_event" && ["live", "in_progress", "resumed"].includes(candidate.claimData.status));
     if (scope.todayOnly) {
       const recentCutoff = now.getTime() - 7 * 86400000;
       candidates = candidates.filter((candidate) => {
@@ -591,7 +633,7 @@ export class DeterministicStoryEngine {
   getStoriesForScope(scope = {}, options = {}) {
     return this.generateStoryCandidates(scope, options)
       .filter((candidate) => validateStoryCandidate(candidate, { now: options.now || this.clock(), forHomepage: options.forHomepage === true }).valid)
-      .sort((left, right) => right.storyScore - left.storyScore || left.id.localeCompare(right.id));
+      .sort(compareStoryCandidates);
   }
 
   getFeaturedStories(scope = {}, options = {}) {
@@ -671,7 +713,7 @@ export class DeterministicStoryEngine {
       .filter((item) => !states.length || states.includes(item.lifecycleState))
       .filter((item) => !filters.date || localDateKey(item.scope?.dateRange?.end || item.createdAt) === localDateKey(filters.date))
       .filter((item) => !text || [phraseStory(item).headline, item.primaryEntity?.name, item.sportId, item.leagueId, item.storyType, ...item.statIds].some((value) => clean(value).toLowerCase().includes(text)))
-      .sort((left, right) => right.storyScore - left.storyScore || left.id.localeCompare(right.id))
+      .sort(compareStoryCandidates)
       .slice(Number(filters.offset) || 0, (Number(filters.offset) || 0) + (filters.limit || storyLimit("archivePage")))
       .map((candidate) => buildStoryViewModel(candidate, { presentation: "compact", mode: filters.mode || "stats" }));
   }

@@ -15,6 +15,7 @@ import { createResearchPlan } from "../src/services/research-planner-service.js"
 import { buildResearchAnswer } from "../src/services/research-answer-service.js";
 import {
   buildStoryViewModel,
+  compareStoryCandidates,
   createStoryEngine,
   deduplicateStories,
   phraseStory,
@@ -70,6 +71,11 @@ check(!validateStoryCandidate({ ...valid, bettingContext: { available: true, sta
 // Scoring and deduplication.
 const baseScore = scoreStoryCandidate(valid, { now: fixedNow, leagueId: valid.leagueId, mode: "stats" });
 check(Number.isFinite(baseScore) && baseScore >= 0 && baseScore <= 100, "17 score is deterministic and bounded");
+check(scoreStoryCandidate({ ...valid, primaryEntity: { ...valid.primaryEntity, media: null } }, { now: fixedNow }) === scoreStoryCandidate({ ...valid, primaryEntity: { ...valid.primaryEntity, media: { url: "art.png" } } }, { now: fixedNow }), "story score is independent of artwork availability");
+const exactArtTieCandidate = { ...valid, id: "exact-art-tie", storyScore: 50, primaryEntity: { id: "wnba-caitlin-clark", name: "Caitlin Clark", sportId: "basketball", leagueId: "wnba", teamId: "IND-W" } };
+const fallbackArtTieCandidate = { ...valid, id: "fallback-art-tie", storyScore: 50, primaryEntity: { id: "unknown-wnba-player", name: "Unknown WNBA player", sportId: "basketball", leagueId: "wnba", teamId: "IND-W" } };
+check([fallbackArtTieCandidate, exactArtTieCandidate].sort(compareStoryCandidates)[0].id === "exact-art-tie", "exact artwork only breaks an otherwise equal story-score tie");
+check([{ ...fallbackArtTieCandidate, storyScore: 51 }, exactArtTieCandidate].sort(compareStoryCandidates)[0].id === "fallback-art-tie", "stronger factual story score outranks exact artwork");
 check(scoreStoryCandidate({ ...valid, freshness: { state: "stale" } }, { now: fixedNow }) < baseScore, "18 stale penalty lowers score");
 check(scoreStoryCandidate({ ...valid, storyType: "milestone_reached" }, { now: fixedNow }) > scoreStoryCandidate({ ...valid, storyType: "fun_fact" }, { now: fixedNow }), "19 milestone importance raises score");
 check(scoreStoryCandidate(valid, { now: fixedNow, leagueId: valid.leagueId }) > scoreStoryCandidate(valid, { now: fixedNow, leagueId: "other" }), "20 selected-league relevance raises score");

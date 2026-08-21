@@ -18,8 +18,14 @@ function profileAction(entity) {
 }
 
 function relationLabel(center, related, reverse = false) {
-  if (reverse) return `${related.displayName} explicitly references ${center.displayName}`;
   const pair = new Set([center.type, related.type]);
+  if (pair.has("team") && pair.has("venue")) return center.type === "team"
+    ? "Canonical team home venue relationship"
+    : "Canonical home team relationship for this shared venue";
+  if (pair.has("team") && pair.has("league")) return center.type === "league"
+    ? "League contains this canonical team"
+    : "Canonical team league membership";
+  if (reverse) return `${related.displayName} explicitly references ${center.displayName}`;
   if (pair.has("athlete") && pair.has("team")) return "Canonical player and team relationship";
   if ((pair.has("fighter") || pair.has("boxer")) && pair.has("promotion")) return "Canonical competitor and promotion relationship";
   if (pair.has("driver") && pair.has("constructor")) return "Canonical driver and constructor relationship";
@@ -29,6 +35,13 @@ function relationLabel(center, related, reverse = false) {
   if (pair.has("competition")) return "Canonical competition relationship";
   if (pair.has("manufacturer")) return "Canonical manufacturer relationship";
   return "Explicit canonical registry relationship";
+}
+
+function relationEdgeType(center, related, reverse = false) {
+  const pair = new Set([center.type, related.type]);
+  if (pair.has("team") && pair.has("venue")) return center.type === "team" ? "home_venue" : "home_team";
+  if (pair.has("team") && pair.has("league")) return center.type === "league" ? "contains_team" : "member_of_league";
+  return reverse ? "explicit_reverse_relationship" : "explicit_relationship";
 }
 
 function eventTitle(event) {
@@ -107,7 +120,7 @@ export class KnowledgeGraphService {
       if (seen.has(related.id)) return [];
       seen.add(related.id);
       const reason = relationLabel(center, related, reverse);
-      return [node({ id: `entity:${related.id}`, type: "entity", label: related.displayName, description: getEntityTypeDefinition(related.type).label, reason, score: KNOWLEDGE_GRAPH_SCORES.explicit_relationship, sportId: related.sportId, leagueId: related.leagueId, entityIds: [related.id], edgeType: reverse ? "explicit_reverse_relationship" : "explicit_relationship", source: { id: "edgeboard-canonical-entity-registry", label: "EdgeBoard canonical entity registry", sample: related.metadata?.sample !== false }, action: profileAction(related) })];
+      return [node({ id: `entity:${related.id}`, type: "entity", label: related.displayName, description: getEntityTypeDefinition(related.type).label, reason, score: KNOWLEDGE_GRAPH_SCORES.explicit_relationship, sportId: related.sportId, leagueId: related.leagueId, entityIds: [related.id], edgeType: relationEdgeType(center, related, reverse), source: { id: "edgeboard-canonical-entity-registry", label: "EdgeBoard canonical entity registry", sample: related.metadata?.sample !== false }, action: profileAction(related) })];
     });
   }
 

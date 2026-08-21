@@ -24,7 +24,7 @@ const storyEngine=createStoryEngine({insightService,sportsRepository,statsReposi
 const graphService=createKnowledgeGraphService({entityRegistry,sportsRepository,statsRepository,insightService,storyEngine});
 
 check(KNOWLEDGE_GRAPH_NODE_TYPES.includes("entity")&&KNOWLEDGE_GRAPH_NODE_TYPES.includes("research_session")&&KNOWLEDGE_GRAPH_NODE_TYPES.includes("workspace"),"1 graph schema covers canonical entities and existing research systems");
-check(KNOWLEDGE_GRAPH_EDGE_TYPES.includes("explicit_relationship")&&KNOWLEDGE_GRAPH_EDGE_TYPES.includes("has_current_market"),"2 graph edge vocabulary is normalized");
+check(KNOWLEDGE_GRAPH_EDGE_TYPES.includes("explicit_relationship")&&KNOWLEDGE_GRAPH_EDGE_TYPES.includes("has_current_market")&&KNOWLEDGE_GRAPH_EDGE_TYPES.includes("contains_team")&&KNOWLEDGE_GRAPH_EDGE_TYPES.includes("home_venue"),"2 graph edge vocabulary includes normalized league membership and home-venue semantics");
 check(!Object.keys(KNOWLEDGE_GRAPH_SCORES).some((key)=>/confidence|probability|edge$/i.test(key)),"3 deterministic ranking excludes betting confidence and probability");
 
 const lakers=graphService.getEntityGraph("LAL",{mode:"stats",currentDate:new Date(2026,7,3)});
@@ -48,9 +48,17 @@ check(!ufc.nodes.some((item)=>item.entityIds.includes("boxing-sample-boxer-a")),
 const f1=graphService.getEntityGraph("f1-max-verstappen",{mode:"both",currentDate:new Date(2026,7,3)});
 check(f1.nodes.some((item)=>item.id==="entity:RBR"),"18 driver connects to canonical constructor");
 check(!f1.nodes.some((item)=>item.entityIds.includes("nascar-sample-driver")),"19 Formula 1 graph excludes unrelated motorsports entities");
-const nhl=graphService.getEntityGraph("league-nhl",{mode:"stats",currentDate:new Date(2026,7,3)});
-check(nhl.nodes.some((item)=>item.id==="entity:venue-madison-square-garden"),"20 reverse traversal requires an explicit incoming registry reference");
-check(nhl.edges.some((item)=>item.to==="entity:venue-madison-square-garden"&&item.type==="explicit_reverse_relationship"),"20a reverse canonical relationship remains explicit in the edge model");
+const nhl=graphService.getEntityGraph("league-nhl",{mode:"stats",currentDate:new Date(2026,7,3),limit:60});
+const rangers=graphService.getEntityGraph("NHL-NYR",{mode:"stats",currentDate:new Date(2026,7,3)});
+const knicks=graphService.getEntityGraph("NBA-NYK",{mode:"stats",currentDate:new Date(2026,7,3)});
+const msg=graphService.getEntityGraph("venue-madison-square-garden",{mode:"stats",currentDate:new Date(2026,7,3)});
+check(entityRegistry.getEntity("league-nhl").relatedEntityIds.includes("NHL-NYR")&&nhl.nodes.some((item)=>item.id==="entity:NHL-NYR"),"20 NHL contains the canonical New York Rangers team");
+check(rangers.nodes.some((item)=>item.id==="entity:venue-madison-square-garden"&&item.reason==="Canonical team home venue relationship"&&item.edgeType==="home_venue"),"20a Rangers connect directly to Madison Square Garden as their home venue");
+check(rangers.nodes.some((item)=>item.id==="entity:league-nhl"&&item.reason==="Canonical team league membership"&&item.edgeType==="member_of_league"),"20b Rangers retain canonical NHL membership");
+check(entityRegistry.getEntity("league-nba").relatedEntityIds.includes("NBA-NYK")&&knicks.nodes.some((item)=>item.id==="entity:venue-madison-square-garden"&&item.reason==="Canonical team home venue relationship"&&item.edgeType==="home_venue"),"20c NBA contains the Knicks and the Knicks connect to Madison Square Garden");
+check(msg.nodes.some((item)=>item.id==="entity:NHL-NYR"&&item.edgeType==="home_team")&&msg.nodes.some((item)=>item.id==="entity:NBA-NYK"&&item.edgeType==="home_team"),"20d Madison Square Garden is shared by canonical NHL and NBA teams");
+check(!entityRegistry.getEntity("venue-madison-square-garden").relatedEntityIds.some((id)=>id==="league-nhl"||id==="league-nba")&&!nhl.nodes.some((item)=>item.id==="entity:venue-madison-square-garden"),"20e no direct league-to-venue shortcut or league-exclusive ownership is fabricated");
+check(nhl.nodes.some((item)=>item.id==="entity:NHL-NYR"&&item.edgeType==="contains_team")&&nhl.edges.some((item)=>item.to==="entity:NHL-NYR"&&item.type==="contains_team"),"20f league-to-team semantics survive normalized node and edge generation");
 check(graphService.getEntityGraph("missing-entity").status==="not-found","21 invalid canonical center fails safely");
 check(entityRegistry.resolveProviderEntity("phi",{leagueId:"nba"})?.id==="PHI","21a provider ID reconciliation returns one canonical scoped entity");
 check(entityRegistry.resolveProviderEntity("ferrari")===null,"21b ambiguous provider identity never merges silently");

@@ -19,8 +19,8 @@ function eventTitle(event) {
     || "Event name unavailable";
 }
 
-function sourceMeta(source, updatedAt, sample = true) {
-  return Object.freeze({ source: clean(source) || "Source unavailable", updatedAt: updatedAt || null, sample });
+function sourceMeta(source, updatedAt, sample = true, mode = sample ? "sample" : "live") {
+  return Object.freeze({ source: clean(source) || "Source unavailable", updatedAt: updatedAt || null, sample, mode });
 }
 
 function queryAction(label, query, kind = "research") {
@@ -67,20 +67,30 @@ function insightCard(insight, mode, contextLabel, kind) {
 
 function eventCard(event, league, mode, kind = "game") {
   const title = eventTitle(event);
+  const liveState = event.liveState;
+  const liveDetail = liveState?.score
+    ? `${liveState.score.away}–${liveState.score.home}${liveState.period ? ` · ${liveState.period.half} ${liveState.period.inning}` : ""}${liveState.outs !== null ? ` · ${liveState.outs} out${liveState.outs === 1 ? "" : "s"}` : ""}`
+    : "";
   const actions = [queryAction("Research game", `Research ${title}`, "research")];
   if (mode !== "stats") actions.push(queryAction("Markets", `Show available markets for ${title}`, "market"));
   return Object.freeze({
     id: `home-${kind}-${event.id}`,
     kind,
     title,
-    summary: `${league?.leagueDisplayName || event.leagueId || "League unavailable"} · ${event.status || "status unavailable"}`,
-    eyebrow: event.status === "live" ? "Live now" : "Today's game",
+    summary: `${league?.leagueDisplayName || event.leagueId || "League unavailable"} · ${event.status || "status unavailable"}${liveDetail ? ` · ${liveDetail}` : ""}${liveState?.freshness?.state === "stale" ? " · last validated state is stale" : ""}`,
+    eyebrow: event.liveBadgeEligible ? "Live now" : liveState?.freshness?.state === "stale" ? "Delayed update" : "Today's game",
     leagueId: event.leagueId,
     sportId: event.sportId || league?.sportId,
     eventTime: event.startsAt || null,
     classification: "current_provider_data",
-    validationStatus: event.dataQualityStatus || league?.dataQualityStatus || "unknown",
-    source: sourceMeta(event.source?.provider || league?.dataProvider || "EdgeBoard sample provider", event.lastUpdatedAt || league?.lastUpdatedAt, event.sample !== false),
+    validationStatus: liveState?.freshness?.state === "stale" ? "stale" : event.dataQualityStatus || event.sourceMode || league?.dataQualityStatus || "unknown",
+    edgeTrust: liveState?.edgeTrust || null,
+    source: sourceMeta(
+      typeof event.source === "string" ? event.source : event.source?.provider || league?.dataProvider || "Source unavailable",
+      event.sourceUpdatedAt || event.lastUpdatedAt || league?.lastUpdatedAt,
+      event.sourceMode === "sample",
+      event.sourceMode || "unknown",
+    ),
     actions: Object.freeze(actions),
   });
 }
@@ -216,8 +226,9 @@ export function createHomeDiscoveryModel({
   const todayKey = localDateKey(currentDate);
   const todayEvents = allEvents.filter(({ event }) => localDateKey(event.startsAt) === todayKey
     && !["cancelled", "postponed"].includes(event.status));
-  const scopedTodayEvents = liveOnly ? todayEvents.filter(({ event }) => event.status === "live") : todayEvents;
-  const storyEvents = liveOnly ? allEvents.filter(({ event }) => event.status === "live") : scopedTodayEvents;
+  const isCurrentLive = (event) => event.liveBadgeEligible === true;
+  const scopedTodayEvents = liveOnly ? todayEvents.filter(({ event }) => isCurrentLive(event)) : todayEvents;
+  const storyEvents = liveOnly ? allEvents.filter(({ event }) => isCurrentLive(event)) : scopedTodayEvents;
 
   const storyInsights = storyEngine || liveOnly ? [] : takeInsights(() => true, 2);
   const engineStories = storyEngine ? storyEngine.getFeaturedStories({
@@ -241,7 +252,7 @@ export function createHomeDiscoveryModel({
     sampleSize: story.supportingEvidence.length,
     classification: story.classification,
     validationStatus: story.validationLabel,
-    source: sourceMeta(story.sourceLabel, story.lastUpdated, story.sample),
+    source: sourceMeta(story.sourceLabel, story.lastUpdated, story.sample && story.sourceMode !== "fixture", story.sourceMode),
     edgeTrust: story.edgeTrust,
     researchQuality: story.researchQuality,
     entity: story.primaryEntity,
@@ -294,9 +305,25 @@ export function createHomeDiscoveryModel({
       limit: 4,
     }).map((item) => discoveryCard(item, "continue"))
     : [];
-  const changed = discoveryService
+  const liveChanges = (sportsRepository.getLiveStateChanges?.() || []).flatMap((change) => {
+    const event = visibleLeagues.flatMap((league) => sportsRepository.getEvents(league.leagueId).map((item) => ({ event: item, league }))).find((item) => item.event.id === change.eventId);
+    if (!event) return [];
+    return [Object.freeze({
+      id: `home-live-change-${change.id}`, kind: "change", title: eventTitle(event.event),
+      summary: change.summary, eyebrow: "Recently changed", leagueId: event.league.leagueId,
+      eventId: change.eventId,
+      sportId: event.league.sportId, classification: "current_provider_data",
+      validationStatus: change.verification, eventTime: change.occurredAt,
+      source: sourceMeta(change.source, change.occurredAt, change.sourceMode !== "live", change.sourceMode),
+      actions: Object.freeze([queryAction("Research change", `What changed in ${eventTitle(event.event)}?`, "research")]),
+      change: Object.freeze({ oldValue: change.previousStatus, newValue: change.currentStatus }),
+      whyNotable: "A validated event-status transition changed the current game context.",
+    })];
+  });
+  const discoveryChanges = discoveryService
     ? discoveryService.getRecentlyChanged(discoveryScope, { ...discoveryOptions, limit: 5 }).map((item) => discoveryCard(item, "change"))
     : [];
+  const changed = [...liveChanges, ...discoveryChanges.filter((item) => !liveChanges.some((live) => live.eventId && live.eventId === item.eventId))].slice(0, 5);
   const explore = discoveryService
     ? discoveryService.getDiscoveryItems(discoveryScope, discoveryOptions)
       .filter((item) => ["research_topic", "market_topic"].includes(item.type))

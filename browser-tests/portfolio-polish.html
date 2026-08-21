@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>EdgeBoard portfolio visual-system browser tests</title>
+  <link rel="icon" href="data:," />
+  <body>
+    <h1>EdgeBoard portfolio visual-system browser tests</h1>
+    <pre id="results">Running…</pre>
+    <script>
+      localStorage.removeItem("edgeboard-onboarding-v1.6-complete");
+      window.testErrors = [];
+      window.addEventListener("error", (event) => window.testErrors.push(`${event.message} (${event.filename || "unknown"}:${event.lineno || 0})`));
+      window.addEventListener("unhandledrejection", (event) => window.testErrors.push(String(event.reason)));
+    </script>
+    <iframe id="app" src="/?mode=both&amp;scope=all&amp;testOnboarding=1&amp;testFixtureTimestamp=2026-01-15T12:00:00.000Z" title="EdgeBoard portfolio presentation under test" style="width:390px;height:900px;border:0"></iframe>
+    <script type="module" src="./portfolio-polish.js"></script>
+  </body>
+</html>

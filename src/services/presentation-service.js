@@ -1,4 +1,4 @@
-const unavailable = "Unavailable from sample provider";
+const unavailable = "Unavailable from configured source";
 const valueOrUnavailable = (value) => value === null || value === undefined || value === "" ? unavailable : String(value);
 
 function marketCatalog(markets, definitions) {
@@ -44,6 +44,8 @@ function common(event, league, markets, kind) {
     startsAt: event.startsAt,
     sourceMode: event.sourceMode,
     live: event.live,
+    liveCertification: event.liveCertification,
+    liveBadgeEligible: event.liveBadgeEligible === true,
     venue: event.venue,
     dataQualityWarning: league.dataQualityStatus === "good"
       ? "Sample provider data — verify event status and market rules"

@@ -39,7 +39,9 @@ export const STORY_SCORE_WEIGHTS = Object.freeze({
   edgeTrust: 7,
   researchQuality: 7,
   novelty: 5,
-  visualSupport: 3,
+  // Artwork is presentation support, not factual story quality. Exact art is used
+  // only as a deterministic final tie-breaker after the calculated story score.
+  visualSupport: 0,
   evidenceSupport: 5,
   marketRelevance: 4,
   duplicatePenalty: 22,

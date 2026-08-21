@@ -87,3 +87,48 @@ export class EntityRegistry {
 export function createEntityRegistry(entities = UNIFIED_CANONICAL_ENTITIES) {
   return new EntityRegistry(entities);
 }
+
+function providerMedia(entity) {
+  const name = String(entity?.displayName || entity?.name || "Entity");
+  return Object.freeze({
+    illustrationUrl: "", headshotUrl: "", silhouetteUrl: "assets/athlete-silhouette.svg",
+    fallbackInitials: name.split(/\s+/).map((part) => part[0]).join("").slice(0, 3).toUpperCase(),
+    altText: `${name} profile placeholder`, attribution: "EdgeBoard fallback asset",
+    rightsStatus: "original-placeholder", approvedForCommercialUse: true,
+    source: "EdgeBoard assets", updatedAt: entity?.providerUpdatedAt || null,
+  });
+}
+
+export function mergeProviderEntities(providerEntities, baseEntities = UNIFIED_CANONICAL_ENTITIES) {
+  if (!Array.isArray(providerEntities) || !providerEntities.length) return baseEntities;
+  const merged = new Map(baseEntities.map((entity) => [entity.id, entity]));
+  providerEntities.forEach((raw) => {
+    const id = String(raw?.canonicalEntityId || raw?.id || "").trim();
+    const name = String(raw?.displayName || raw?.name || "").trim();
+    if (!id || !name) return;
+    const existing = merged.get(id) || {};
+    const type = String(raw.entityType || raw.type || existing.type || "athlete");
+    merged.set(id, Object.freeze({
+      ...existing,
+      id, type,
+      entityType: ["athlete", "player"].includes(type) ? "player" : type,
+      name, displayName: name,
+      aliases: Object.freeze(Array.isArray(raw.aliases) ? raw.aliases.filter(Boolean) : existing.aliases || []),
+      sportId: String(raw.sportId || existing.sportId || "baseball"),
+      sport: String(raw.sportId || existing.sportId || "baseball"),
+      leagueId: String(raw.leagueId || existing.leagueId || "mlb"),
+      league: String(raw.leagueId || existing.leagueId || "mlb"),
+      teamId: String(raw.teamId || existing.teamId || ""),
+      active: raw.active !== false,
+      activeStatus: raw.active === false ? "inactive" : "active",
+      position: String(raw.position || existing.position || ""),
+      providerIds: Object.freeze({}),
+      media: existing.media || providerMedia(raw),
+      relatedEntityIds: Object.freeze(existing.relatedEntityIds || []),
+      metadata: Object.freeze({ ...(existing.metadata || {}), ...(raw.metadata || {}), sample: false, sourceMode: raw.sourceMode || "fixture", edgeTrust: raw.edgeTrust || null }),
+      statistics: existing.statistics || Object.freeze({}), historicalData: existing.historicalData || Object.freeze({}),
+      insights: existing.insights || Object.freeze([]), links: existing.links || Object.freeze({ canonicalProfile: true }),
+    }));
+  });
+  return Object.freeze([...merged.values()]);
+}

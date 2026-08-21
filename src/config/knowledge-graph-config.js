@@ -1,4 +1,4 @@
-export const KNOWLEDGE_GRAPH_SCHEMA_VERSION = 1;
+export const KNOWLEDGE_GRAPH_SCHEMA_VERSION = 2;
 
 export const KNOWLEDGE_GRAPH_NODE_TYPES = Object.freeze([
   "entity", "event", "story", "visualization", "comparison", "leaderboard", "insight",
@@ -7,6 +7,7 @@ export const KNOWLEDGE_GRAPH_NODE_TYPES = Object.freeze([
 
 export const KNOWLEDGE_GRAPH_EDGE_TYPES = Object.freeze([
   "explicit_relationship", "explicit_reverse_relationship", "participates_in", "team_schedule",
+  "contains_team", "member_of_league", "home_venue", "home_team",
   "league_schedule", "supported_by_story", "supported_by_insight", "supported_by_history",
   "anniversary_of", "has_current_market", "can_visualize", "can_compare", "can_rank",
   "can_research", "can_save",

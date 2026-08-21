@@ -49,13 +49,13 @@ function normalizePriceSnapshot(raw, fallback = {}) {
 function normalizeMarketEvent(raw) {
   const occurredAt = normalizeTimestamp(raw?.occurred_at || raw?.updated_at);
   const type = fallbackText(raw?.event_type, "unknown").toLowerCase();
-  const verification = fallbackText(raw?.verification, "unverified").toLowerCase();
+  const verification = fallbackText(raw?.verification, "unverified").toLowerCase().replaceAll("_", "-");
   return Object.freeze({
     id: fallbackText(raw?.event_id, ""), type, occurredAt,
     provider: fallbackText(raw?.provider, "Provider unavailable"),
     verification,
     verified: verification === "verified",
-    causalRelationship: fallbackText(raw?.causal_relationship, "related").toLowerCase(),
+    causalRelationship: fallbackText(raw?.causal_relationship, "related").toLowerCase().replaceAll("_", "-"),
     summary: fallbackText(raw?.summary, "Event summary unavailable"),
     entityId: fallbackText(raw?.entity_id, ""),
     valid: Boolean(occurredAt) && ["lineup", "injury", "weather", "schedule", "opponent_change", "provider_correction"].includes(type),
@@ -128,10 +128,36 @@ function normalizeParticipant(participant, index) {
   };
 }
 
-function normalizeEvent(raw) {
+function normalizeLiveState(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const score = raw.score && Number.isInteger(Number(raw.score.away)) && Number.isInteger(Number(raw.score.home))
+    ? Object.freeze({ away: Number(raw.score.away), home: Number(raw.score.home) }) : null;
+  const period = raw.period && Number.isInteger(Number(raw.period.inning))
+    ? Object.freeze({ sport: "baseball", inning: Number(raw.period.inning), half: fallbackText(raw.period.half, "unknown") }) : null;
+  const freshness = raw.freshness && typeof raw.freshness === "object" ? Object.freeze({
+    state: fallbackText(raw.freshness.state, "unavailable"),
+    ageSeconds: Number.isFinite(Number(raw.freshness.ageSeconds)) ? Math.max(0, Number(raw.freshness.ageSeconds)) : null,
+    providerDelaySeconds: Number.isFinite(Number(raw.freshness.providerDelaySeconds)) ? Math.max(0, Number(raw.freshness.providerDelaySeconds)) : null,
+  }) : Object.freeze({ state: "unavailable", ageSeconds: null, providerDelaySeconds: null });
+  return Object.freeze({
+    id: fallbackText(raw.id, ""), eventId: fallbackText(raw.eventId, ""),
+    status: fallbackText(raw.status, "unknown"), score, period,
+    outs: Number.isInteger(Number(raw.outs)) ? Number(raw.outs) : null,
+    count: raw.count && typeof raw.count === "object" ? Object.freeze({ ...raw.count }) : null,
+    bases: raw.bases && typeof raw.bases === "object" ? Object.freeze({ ...raw.bases }) : null,
+    currentBatterId: fallbackText(raw.currentBatterId, ""), currentPitcherId: fallbackText(raw.currentPitcherId, ""),
+    providerUpdatedAt: normalizeTimestamp(raw.providerUpdatedAt), fetchedAt: normalizeTimestamp(raw.fetchedAt),
+    freshness, warnings: Object.freeze(Array.isArray(raw.warnings) ? raw.warnings.map(String) : []),
+    source: fallbackText(raw.source, "Source unavailable"), sourceMode: fallbackText(raw.sourceMode, "fixture"),
+    edgeTrust: raw.edgeTrust || null,
+  });
+}
+
+function normalizeEvent(raw, liveCertification = null) {
   const participants = Array.isArray(raw?.participants) ? raw.participants.map(normalizeParticipant) : [];
   const away = participants.find((participant) => participant.role === "away");
   const home = participants.find((participant) => participant.role === "home");
+  const liveState = normalizeLiveState(raw?.live_state);
   return Object.freeze({
     id: fallbackText(raw?.event_id, "unknown-event"),
     leagueId: fallbackText(raw?.league_key, "unknown-league"),
@@ -140,6 +166,14 @@ function normalizeEvent(raw) {
     sourceMode: fallbackText(raw?.source_mode, "sample"),
     source: fallbackText(raw?.source, "EdgeBoard sample provider"),
     sourceUpdatedAt: normalizeTimestamp(raw?.provider_updated_at),
+    liveState,
+    liveCertification,
+    liveBadgeEligible: Boolean(
+      liveCertification?.liveEligible
+      && ["healthy", "impaired"].includes(liveCertification?.providerHealth)
+      && ["live", "in_progress", "resumed"].includes(fallbackText(raw?.status, "unknown"))
+      && liveState?.freshness?.state === "fresh"
+    ),
     live: raw?.live && typeof raw.live === "object" ? {
       period: fallbackText(raw.live.period, ""),
       clock: fallbackText(raw.live.clock, ""),
@@ -169,7 +203,16 @@ function normalizeEvent(raw) {
   });
 }
 
-function normalizeMarket(raw, eventMap, leagueMap) {
+function certificationDomainForMarket(canonicalMarketId, marketType) {
+  const value = `${canonicalMarketId || ""} ${marketType || ""}`.toLowerCase();
+  if (/player|pitcher|batter|hits|runs|strikeout|walk/.test(value)) return "player_props";
+  if (/moneyline|winner/.test(value)) return "moneyline";
+  if (/run.line|spread/.test(value)) return "run_line";
+  if (/total/.test(value)) return "totals";
+  return "market_status";
+}
+
+function normalizeMarket(raw, eventMap, leagueMap, certificationMap) {
   const event = eventMap.get(raw?.event_id) || null;
   const leagueId = fallbackText(raw?.league_key, event?.leagueId || "unknown-league");
   const league = leagueMap.get(leagueId);
@@ -179,6 +222,9 @@ function normalizeMarket(raw, eventMap, leagueMap) {
     { sportId: league?.sportId, leagueId, eventType: event?.eventType },
   );
   const definition = getMarketDefinition(canonicalMarketId);
+  const certification = leagueId === "mlb"
+    ? certificationMap.get(certificationDomainForMarket(canonicalMarketId, raw?.market_type)) || null
+    : null;
   const selections = (Array.isArray(raw?.selections) ? raw.selections : []).map((selection, index) => {
     const odds = normalizeOdds(selection?.american_odds);
     const participantName = fallbackText(selection?.participant?.name, fallbackText(selection?.label, "Unknown participant"));
@@ -239,7 +285,20 @@ function normalizeMarket(raw, eventMap, leagueMap) {
       team: fallbackText(selection?.team_id, ""),
       opponent: fallbackText(selection?.opponent_id, ""),
       propType: fallbackText(selection?.prop_type, "other"),
+      canonicalStatId: fallbackText(selection?.canonical_stat_id, ""),
       confirmed: selection?.confirmed === true,
+      availabilityStatus: fallbackText(selection?.availability_status, "unknown"),
+      rosterStatus: fallbackText(selection?.roster_status, "unknown"),
+      lineupStatus: fallbackText(selection?.lineup_status, "unavailable"),
+      starterStatus: fallbackText(selection?.starter_status, "unavailable"),
+      contextFreshness: fallbackText(selection?.context_freshness, "unavailable"),
+      weatherStatus: fallbackText(selection?.weather_status, "unavailable"),
+      contextConflict: selection?.context_conflict === true,
+      contextReviewRequired: selection?.context_review_required === true,
+      eventStatus: fallbackText(selection?.event_status, event?.status || "unknown"),
+      pregameContextCurrent: selection?.pregame_context_current !== false,
+      trackingState: fallbackText(selection?.tracking_state, "pregame"),
+      certification,
       available: raw?.status === "open" && selection?.available !== false && odds !== null,
       suspended: raw?.status === "suspended" || selection?.suspended === true,
       priceHistory: Object.freeze(priceHistory),
@@ -272,12 +331,24 @@ function normalizeMarket(raw, eventMap, leagueMap) {
     openedAt: normalizeTimestamp(raw?.opened_at),
     lastUpdatedAt: normalizeTimestamp(raw?.last_updated_at),
     status: fallbackText(raw?.status, "unavailable"),
+    certification,
     available: raw?.status === "open" && selections.some((selection) => selection.available),
     selections,
   });
 }
 
 export function createSportsRepository(payload = mockProviderPayload) {
+  const certificationMap = new Map(
+    (Array.isArray(payload?.mlb_certification?.domains) ? payload.mlb_certification.domains : [])
+      .map((domain) => [domain?.domain, Object.freeze({
+        domain: fallbackText(domain?.domain, "unknown"), state: fallbackText(domain?.state, "unknown"),
+        publicLabel: fallbackText(domain?.publicLabel, "Unavailable"),
+        providerHealth: fallbackText(domain?.providerHealth, "unavailable"),
+        liveEligible: ["limited_live", "certified_live"].includes(domain?.state),
+        certified: domain?.state === "certified_live",
+        knownLimitations: Object.freeze(Array.isArray(domain?.knownLimitations) ? domain.knownLimitations.map(String) : []),
+      })]),
+  );
   const providerStatuses = new Map(
     (Array.isArray(payload?.league_statuses) ? payload.league_statuses : [])
       .map((status) => [status?.league_key, status]),
@@ -285,11 +356,19 @@ export function createSportsRepository(payload = mockProviderPayload) {
   const leagues = SPORTS_REGISTRY
     .map((entry) => normalizeLeague(entry, providerStatuses.get(entry.leagueId)))
     .sort((a, b) => a.priorityTier - b.priorityTier);
-  const events = (Array.isArray(payload?.events) ? payload.events : []).map(normalizeEvent);
+  const liveCertification = certificationMap.get("live_score") || null;
+  const events = (Array.isArray(payload?.events) ? payload.events : []).map((event) => normalizeEvent(event, liveCertification));
   const eventMap = new Map(events.map((event) => [event.id, event]));
   const leagueMap = new Map(leagues.map((league) => [league.leagueId, league]));
-  const markets = (Array.isArray(payload?.offers) ? payload.offers : []).map((market) => normalizeMarket(market, eventMap, leagueMap));
+  const markets = (Array.isArray(payload?.offers) ? payload.offers : []).map((market) => normalizeMarket(market, eventMap, leagueMap, certificationMap));
   const aliases = payload?.aliases && typeof payload.aliases === "object" ? payload.aliases : {};
+  const liveStateChanges = (Array.isArray(payload?.live_state_events) ? payload.live_state_events : []).map((item) => Object.freeze({
+    id: fallbackText(item?.id, ""), eventId: fallbackText(item?.eventId, ""), type: fallbackText(item?.type, "unknown"),
+    previousStatus: fallbackText(item?.previousStatus, "unknown"), currentStatus: fallbackText(item?.currentStatus, "unknown"),
+    occurredAt: normalizeTimestamp(item?.occurredAt), source: fallbackText(item?.source, "Source unavailable"),
+    sourceMode: fallbackText(item?.sourceMode, "fixture"), verification: fallbackText(item?.verification, "unavailable"),
+    summary: fallbackText(item?.summary, "Game status changed."),
+  })).filter((item) => item.id && item.eventId && item.occurredAt);
 
   return Object.freeze({
     getLeagues: ({ enabledOnly = true } = {}) => leagues.filter((league) => !enabledOnly || league.enabled),
@@ -315,6 +394,8 @@ export function createSportsRepository(payload = mockProviderPayload) {
       });
     },
     getMarketBySelectionId: (selectionId) => markets.find((market) => market.selections.some((selection) => selection.id === selectionId)) || null,
+    getLiveStateChanges: () => [...liveStateChanges],
+    getCertification: (domainId) => certificationMap.get(domainId) || null,
     getAliases: () => ({ ...aliases }),
     getMetadata: () => {
       const status = payload?.provider_status && typeof payload.provider_status === "object" ? payload.provider_status : {};

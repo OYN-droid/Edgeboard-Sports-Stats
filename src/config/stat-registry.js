@@ -126,8 +126,14 @@ const baseball = [
   ["baseball-slugging-percentage", "Slugging percentage", "SLG", {
     ...percentage, unit: "ratio", derivedFrom: ["baseball-total-bases", "baseball-at-bats"], formula: "total bases / at-bats",
   }],
+  ["baseball-ops", "On-base plus slugging", "OPS", {
+    ...percentage, unit: "ratio", derivedFrom: ["baseball-on-base-percentage", "baseball-slugging-percentage"],
+    formula: "on-base percentage + slugging percentage",
+  }],
   ["baseball-innings-pitched", "Innings pitched", "IP", { unit: "innings" }],
+  ["baseball-pitcher-wins", "Pitcher wins", "W"],
   ["baseball-pitcher-strikeouts", "Pitcher strikeouts", "K", { searchTerms: ["pitching strikeouts"] }],
+  ["baseball-saves", "Saves", "SV"],
   ["baseball-strikeouts-per-nine", "Strikeouts per nine innings", "K/9", {
     unit: "rate", derivedFrom: ["baseball-pitcher-strikeouts", "baseball-innings-pitched"],
     formula: "strikeouts / innings × 9",

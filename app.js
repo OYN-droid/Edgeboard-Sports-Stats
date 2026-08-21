@@ -27,10 +27,11 @@ import {
   RESEARCH_MODES,
 } from "./src/services/research-mode-service.js";
 import { createAthleteProfileRepository } from "./src/services/athlete-profile-service.js";
+import { createAthleteMediaViewModel } from "./src/services/athlete-media-service.js";
 import { createInsightService } from "./src/services/insight-service.js";
 import { createResearchPlan } from "./src/services/research-planner-service.js";
 import { buildResearchAnswer } from "./src/services/research-answer-service.js";
-import { createEntityRegistry } from "./src/services/entity-registry-service.js";
+import { createEntityRegistry, mergeProviderEntities } from "./src/services/entity-registry-service.js";
 import { createEntityProfileRepository } from "./src/services/entity-profile-service.js";
 import {
   advancedResultToCsv,
@@ -91,7 +92,7 @@ const testFixtureTimestamp = document.referrer.includes("/browser-tests/")
 const statsRepository = createStatsRepository(undefined, { generatedAt: testFixtureTimestamp });
 const insightService = createInsightService(statsRepository, sportsRepository);
 const athleteProfileRepository = createAthleteProfileRepository(statsRepository, sportsRepository, insightService);
-const entityRegistry = createEntityRegistry();
+const entityRegistry = createEntityRegistry(mergeProviderEntities(providerPayload?.entities));
 const storyEngine = createStoryEngine({ insightService, sportsRepository, statsRepository, entityRegistry });
 const discoveryService = createDiscoveryService({ sportsRepository, statsRepository, insightService, storyEngine, entityRegistry });
 const knowledgeGraphService = createKnowledgeGraphService({ entityRegistry, sportsRepository, statsRepository, insightService, storyEngine });
@@ -230,8 +231,8 @@ function loadResearchState() {
   const queryFromUrl = params.get("q");
   return {
     mode: normalizeResearchMode(params.get("mode") || saved.mode, "betting"),
-    queryText: queryFromUrl === null ? String(saved.queryText || "") : queryFromUrl,
-    selectedEntityId: String(params.get("entity") || saved.selectedEntityId || ""),
+    queryText: queryFromUrl === null ? "" : queryFromUrl,
+    selectedEntityId: String(params.get("entity") || ""),
     resultTab: ["summary", "game-log"].includes(params.get("resultTab") || saved.resultTab)
       ? params.get("resultTab") || saved.resultTab
       : "summary",
@@ -1541,7 +1542,7 @@ function renderPresentationDetails(details = []) {
   return details.map(([label, value]) => `
     <div class="presentation-detail">
       <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value ?? "Unavailable from sample provider")}</strong>
+      <strong>${escapeHtml(value ?? "Unavailable from configured source")}</strong>
     </div>
   `).join("");
 }
@@ -1605,10 +1606,13 @@ function renderEventPresentation(presentation) {
   const providerDelay = Number.isFinite(Number(presentation.live?.delaySeconds))
     ? Math.max(0, Math.round(Number(presentation.live.delaySeconds)))
     : null;
-  const liveLabel = presentation.live?.connectionState === "reconnecting"
+  const liveEligible = presentation.liveBadgeEligible === true;
+  const liveLabel = !liveEligible
+    ? ["sample", "fixture"].includes(presentation.sourceMode) ? sourceModeLabel(presentation.sourceMode) : "Delayed update"
+    : presentation.live?.connectionState === "reconnecting"
     ? "Reconnecting"
     : providerDelay > 0 ? `Delayed ${providerDelay}s` : "Live";
-  const liveSourceMode = presentation.live?.connectionState === "connected" && providerDelay === 0
+  const liveSourceMode = !liveEligible ? "fixture" : presentation.live?.connectionState === "connected" && providerDelay === 0
     ? "live_verified" : "live_partial";
   const liveStatus = presentation.live
     ? `<span class="source-mode-badge ${liveSourceMode}">${escapeHtml(liveLabel)}</span>
@@ -1701,7 +1705,7 @@ function renderDataStatus() {
   elements.dataStatus.className = `data-status ${escapeHtml(state)}`;
   elements.dataStatus.innerHTML = `
     <span class="data-status-dot" aria-hidden="true"></span>
-    <span><strong>${escapeHtml(labels[state] || state)}</strong><small>${escapeHtml(metadata.provider)} · ${escapeHtml(updated)}</small></span>
+    <span><strong>${escapeHtml(labels[state] || state)}</strong><small>${metadata.sample ? "Deterministic demo" : escapeHtml(metadata.provider)} · ${escapeHtml(updated)}</small></span>
   `;
   elements.dataStatus.title = `${metadata.sources.length} source domain${metadata.sources.length === 1 ? "" : "s"} · ${metadata.errors.length} provider error${metadata.errors.length === 1 ? "" : "s"}${metadata.sample ? " · no live provider configured" : ""}`;
   const sourceRows = metadata.sources.length
@@ -1744,7 +1748,7 @@ elements.closeDataStatusDialog.addEventListener("click", () => {
 function sourceModeLabel(value) {
   return ({
     live_verified: "Live", live_partial: "Partial", cached_fresh: "Delayed",
-    cached_stale: "Delayed", fixture: "Sample", sample: "Sample", unavailable: "Unavailable",
+    cached_stale: "Delayed", fixture: "Fixture", sample: "Sample", unavailable: "Unavailable",
   })[value] || "Unavailable";
 }
 
@@ -1852,9 +1856,9 @@ async function openCoverageView() {
     <article class="coverage-card">
       <header><div><span class="coverage-sport">${escapeHtml(league.sportId)} · Group ${league.certificationGroup || "—"}</span><h3>${escapeHtml(league.displayName)}</h3></div><span class="source-mode-badge ${escapeHtml(league.dataMode)}">${escapeHtml(league.certificationState || league.rolloutState.replaceAll("_", " "))}</span></header>
       <div class="coverage-quality"><span>Research Quality</span><strong>${escapeHtml(league.edgeTrust.researchQuality.label)}</strong><span>${league.edgeTrust.researchQuality.score}%</span></div>
-      <p>${escapeHtml(league.provider)} · last validation ${formatDateTime(league.edgeTrust.lastValidation, "not available")} · last update ${formatDateTime(league.lastUpdatedAt, "not available")}</p>
-      <div class="table-scroll"><table><thead><tr><th>Domain</th><th>Coverage</th><th>Updated</th></tr></thead><tbody>
-        ${league.domains.map((domain) => `<tr><th scope="row">${escapeHtml(domain.label)}</th><td><span class="source-mode-badge ${escapeHtml(domain.sourceMode)}">${escapeHtml(domain.publicStatus || sourceModeLabel(domain.sourceMode))}</span></td><td>${escapeHtml(formatDateTime(domain.lastUpdatedAt, "Not available"))}</td></tr>`).join("")}
+      <p>${escapeHtml(league.provider)} · last validation ${formatDateTime(league.edgeTrust.lastValidation, "not available")} · last certification ${formatDateTime(league.lastCertification, "not available")} · last update ${formatDateTime(league.lastUpdatedAt, "not available")}</p>
+      <div class="table-scroll"><table><thead><tr><th>Domain</th><th>Coverage</th><th>Updated</th><th>Known limitations</th></tr></thead><tbody>
+        ${(league.certificationDomains || league.domains).map((domain) => `<tr><th scope="row">${escapeHtml(domain.label)}</th><td><span class="source-mode-badge ${escapeHtml(domain.state || domain.sourceMode)}">${escapeHtml(domain.publicLabel || domain.publicStatus || sourceModeLabel(domain.sourceMode))}</span></td><td>${escapeHtml(formatDateTime(domain.lastCertifiedAt || domain.lastUpdatedAt, "Not certified"))}</td><td>${escapeHtml((domain.knownLimitations || domain.limitations || [])[0] || "No published limitation")}</td></tr>`).join("")}
       </tbody></table></div>
       <details class="coverage-trust-details"><summary>Edge Trust details</summary>${renderEdgeTrustDetails(league.edgeTrust)}</details>
       ${league.knownLimitations?.length ? `<details><summary>Known limitations</summary><ul>${league.knownLimitations.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul></details>` : ""}
@@ -1912,10 +1916,11 @@ function renderAthleteMedia(media, { large = false } = {}) {
   if (!media) return "";
   const candidates = media.candidates || (media.imageUrl ? [{ type: media.imageType, url: media.imageUrl }] : []);
   const encodedCandidates = encodeURIComponent(JSON.stringify(candidates));
-  const fallback = `<span class="athlete-media-fallback" role="img" aria-label="${escapeHtml(media.altText)}" ${candidates.length ? "hidden" : ""}>${escapeHtml(media.fallbackInitials)}</span>`;
+  const decorative = media.illustration?.decorative === true;
+  const fallback = `<span class="athlete-media-fallback" aria-label="${escapeHtml(media.altText)}" ${decorative ? 'aria-hidden="true"' : 'role="img"'} ${candidates.length ? "hidden" : ""}>${escapeHtml(media.fallbackInitials)}</span>`;
   return `
     <div class="athlete-media${large ? " profile-media" : ""}" data-media-type="${escapeHtml(media.imageType)}">
-      ${candidates.length ? `<img src="${escapeHtml(candidates[0].url)}" alt="${escapeHtml(media.altText)}" data-athlete-image data-media-index="0" data-media-candidates="${escapeHtml(encodedCandidates)}" />` : ""}
+      ${candidates.length ? `<img src="${escapeHtml(candidates[0].url)}" alt="${decorative ? "" : escapeHtml(media.altText)}" ${decorative ? 'aria-hidden="true"' : ""} loading="lazy" decoding="async" data-athlete-image data-media-index="0" data-media-candidates="${escapeHtml(encodedCandidates)}" />` : ""}
       ${fallback}
     </div>
   `;
@@ -2147,8 +2152,22 @@ function renderHomeDiscoveryAction(action) {
 
 function renderHomeDiscoveryCard(card, { feature = false } = {}) {
   const trust = homeDiscoveryTrust(card);
-  return `<article class="home-discovery-card${feature ? " feature" : ""}${card.insightId ? " insight-card" : ""}" data-home-card="${escapeHtml(card.id)}" data-card-kind="${escapeHtml(card.kind)}" data-classification="${escapeHtml(card.classification)}" data-league-id="${escapeHtml(card.leagueId || "")}" data-sport-id="${escapeHtml(card.sportId || "")}"${card.insightId ? ` data-insight-card="${escapeHtml(card.insightId)}"` : ""}>
-    <div class="home-card-kickers"><span>${escapeHtml(card.eyebrow)}</span><span class="validation-label">${escapeHtml((card.validationStatus || "validation unavailable").replaceAll("_", " "))}</span><span class="sample-badge">${card.localOnly ? "Local only" : "Sample"}</span></div>
+  const sourceLabel = card.localOnly ? "Local only" : card.source?.mode === "fixture" ? "Fixture sample" : card.source?.sample ? "Sample" : "Provider";
+  const illustrationEntity = card.entity?.id ? entityRegistry.getEntity(card.entity.id) || card.entity : {
+    id: `story-context-${card.leagueId || card.sportId || "multi-sport"}`,
+    name: card.leagueId ? `${String(card.leagueId).toUpperCase()} story context` : `${card.sportId || "Multi-sport"} story context`,
+    entityType: card.leagueId ? "competition" : "sport",
+    sportId: card.sportId || "multi-sport",
+    leagueId: card.leagueId || "",
+  };
+  const illustrationMedia = createAthleteMediaViewModel(illustrationEntity, {
+    context: "story", desiredVariant: feature ? "story" : "compact", decorative: true,
+    fallbackPolicy: "featured_story",
+  });
+  const illustration = illustrationMedia?.candidates?.length ? `<div class="home-card-illustration" aria-hidden="true" data-illustration-level="${escapeHtml(illustrationMedia.illustration?.fallbackLevel || "none")}" data-illustration-registry-id="${escapeHtml(illustrationMedia.illustration?.registryId || "")}">${renderAthleteMedia(illustrationMedia)}</div>` : "";
+  return `<article class="home-discovery-card${feature ? " feature" : ""}${card.insightId ? " insight-card" : ""}${illustration ? " has-illustration" : ""}" data-home-card="${escapeHtml(card.id)}" data-card-kind="${escapeHtml(card.kind)}" data-classification="${escapeHtml(card.classification)}" data-league-id="${escapeHtml(card.leagueId || "")}" data-sport-id="${escapeHtml(card.sportId || "")}"${card.insightId ? ` data-insight-card="${escapeHtml(card.insightId)}"` : ""}>
+    <div class="home-card-kickers"><span>${escapeHtml(card.eyebrow)}</span><span class="validation-label">${escapeHtml((card.validationStatus || "validation unavailable").replaceAll("_", " "))}</span><span class="sample-badge">${sourceLabel}</span></div>
+    ${illustration}
     <h3>${escapeHtml(card.title)}</h3>
     <p>${escapeHtml(card.summary)}</p>
     ${card.whyNotable ? `<p class="discovery-why"><strong>Why notable:</strong> ${escapeHtml(card.whyNotable)}</p>` : ""}
@@ -2200,8 +2219,12 @@ function renderKnowledgeGraph(entityId, { context = "page", limit = 30 } = {}) {
 }
 
 function renderHomeSection(section) {
+  const sourceModes = new Set(section.cards.map((card) => card.source?.mode).filter(Boolean));
+  const sourceLabel = section.cards.length && section.cards.every((card) => card.localOnly) ? "Local activity"
+    : sourceModes.size === 1 && sourceModes.has("fixture") ? "Fixture sample data"
+    : sourceModes.size === 1 && sourceModes.has("live") ? "Provider data" : "Sample data";
   return `<section class="home-discovery-section" data-home-section="${escapeHtml(section.id)}" aria-labelledby="home-${escapeHtml(section.id)}-title">
-    <div class="today-board-heading"><div><p class="eyebrow">Deterministic discovery</p><h2 id="home-${escapeHtml(section.id)}-title">${escapeHtml(section.title)}</h2><p>${escapeHtml(section.description)}</p></div><span class="sample-badge">Sample data</span></div>
+    <div class="today-board-heading"><div><p class="eyebrow">Deterministic discovery</p><h2 id="home-${escapeHtml(section.id)}-title">${escapeHtml(section.title)}</h2><p>${escapeHtml(section.description)}</p></div><span class="sample-badge">${sourceLabel}</span></div>
     <div class="home-discovery-grid">${section.cards.length ? section.cards.map((card) => renderHomeDiscoveryCard(card)).join("") : `<div class="discovery-empty" role="status">${escapeHtml(section.emptyMessage)}</div>`}</div>
   </section>`;
 }
@@ -2383,12 +2406,14 @@ function renderMarketScreenerForm(result) {
   const booleanLabel = {
     projectionAboveLine: "Projection above line", upcomingOnly: "Upcoming events only", freshOnly: "Fresh data only",
     confirmedLineupOnly: "Confirmed lineup only", noInjuryUncertainty: "No injury uncertainty", currentStoriesOnly: "Current stories attached",
-    milestoneOnly: "Upcoming milestone", streakOnly: "Active streak", recentTrendOnly: "Recent trend", noProviderConflicts: "No conflicting providers",
+    confirmedStarterOnly: "Confirmed starter only", activeRosterOnly: "Active roster only", freshContextOnly: "Fresh context only", noContextConflicts: "No context conflicts",
+    milestoneOnly: "Upcoming milestone", streakOnly: "Active streak", recentTrendOnly: "Recent trend",
+    movementObservedOnly: "Observed market change required", noProviderConflicts: "No conflicting providers",
   };
   const numberFields = [
     ["currentLineMin", "Current line minimum"], ["currentLineMax", "Current line maximum"],
     ["openingLineMin", "Opening line minimum"], ["openingLineMax", "Opening line maximum"],
-    ["movementMin", "Minimum absolute movement"], ["oddsMin", "Odds minimum"], ["oddsMax", "Odds maximum"],
+    ["movementMin", "Minimum absolute line movement"], ["priceMovementMin", "Minimum absolute price movement"], ["oddsMin", "Odds minimum"], ["oddsMax", "Odds maximum"],
     ["researchQualityMin", "Research Quality minimum"], ["edgeTrustMin", "Market Trust minimum"],
     ["historicalCoverageMin", "Historical rows minimum"], ["historicalHitRateMin", "Historical hit rate minimum %"],
     ["projectionMin", "Projection minimum"], ["edgeMin", "Projected edge minimum"], ["confidenceMin", "Model confidence minimum"],
@@ -2457,15 +2482,16 @@ function parlayConstraintForm(result) {
   const checks = {
     confirmedLineupsOnly: "Confirmed lineups only", freshDataOnly: "Fresh data only", noProviderConflicts: "No provider conflicts",
     noInjuryUncertainty: "No injury uncertainty", noWeatherConcerns: "No weather concerns", allowSameGame: "Allow same game",
+    confirmedStarterOnly: "Confirmed starter only", activeRosterOnly: "Active roster only", freshContextOnly: "Fresh context only", noContextConflicts: "No context conflicts",
     currentStoriesRequired: "Current stories required", historicalSupportRequired: "Historical support required",
     visualizationAvailable: "Visualization available", currentMilestone: "Current milestone", currentStreak: "Current streak",
-    onlyLiveCertifiedData: "Only live certified data",
+    onlyLiveCertifiedData: "Only live certified data", movementObservedOnly: "Observed market change required",
   };
   const number = (name, label, min = "", max = "") => `<label>${label}<input type="number" name="${name}" value="${state.parlayConstraints[name] ?? ""}" ${min !== "" ? `min="${min}"` : ""} ${max !== "" ? `max="${max}"` : ""}></label>`;
   return `<form id="parlayBuilderForm" class="parlay-builder-form">
     <section aria-labelledby="parlayStep1"><p class="eyebrow">Step 1</p><h2 id="parlayStep1">Choose sports</h2><div class="parlay-form-grid"><label>Sports<select name="sportIds" multiple size="4">${values("sportId").map((value) => `<option value="${escapeHtml(value)}"${selected("sportIds", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><label>Current and seasonal leagues<select name="leagueIds" multiple size="4">${values("leagueId").map((value) => `<option value="${escapeHtml(value)}"${selected("leagueIds", value)}>${escapeHtml(sportsRepository.getLeague(value)?.leagueDisplayName || value)}</option>`).join("")}</select></label></div></section>
     <section aria-labelledby="parlayStep2"><p class="eyebrow">Step 2</p><h2 id="parlayStep2">Choose verified market types</h2><label>Available normalized markets<select name="marketTypes" multiple size="6">${values("marketType").map((value) => `<option value="${escapeHtml(value)}"${selected("marketTypes", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><p>Future provider-confirmed market types appear automatically through the normalized market registry.</p></section>
-    <section aria-labelledby="parlayStep3"><p class="eyebrow">Step 3</p><h2 id="parlayStep3">Research constraints</h2><div class="parlay-form-grid">${number("minimumResearchQuality", "Minimum Research Quality", 0, 100)}${number("minimumEdgeTrust", "Minimum Edge Trust", 0, 100)}${number("minimumResearchCompleteness", "Minimum Research Completeness", 0, 100)}${number("maximumLegs", "Maximum legs", 1, 12)}${number("minimumOdds", "Minimum American odds")}${number("maximumOdds", "Maximum American odds")}<label>Preferred sportsbooks<select name="sportsbooks" multiple size="3">${values("sportsbook").map((value) => `<option value="${escapeHtml(value)}"${selected("sportsbooks", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><label>Maximum research correlation<select name="maximumResearchCorrelation">${["low", "medium", "high"].map((value) => `<option value="${value}"${state.parlayConstraints.maximumResearchCorrelation === value ? " selected" : ""}>${value}</option>`).join("")}</select></label></div><fieldset class="parlay-constraint-checks"><legend>Evidence requirements</legend>${PARLAY_BOOLEAN_CONSTRAINTS.map((key) => `<label><input type="checkbox" name="${key}"${state.parlayConstraints[key] ? " checked" : ""}> ${escapeHtml(checks[key])}</label>`).join("")}</fieldset></section>
+    <section aria-labelledby="parlayStep3"><p class="eyebrow">Step 3</p><h2 id="parlayStep3">Research constraints</h2><div class="parlay-form-grid">${number("minimumResearchQuality", "Minimum Research Quality", 0, 100)}${number("minimumEdgeTrust", "Minimum Edge Trust", 0, 100)}${number("minimumResearchCompleteness", "Minimum Research Completeness", 0, 100)}${number("minimumLineMovement", "Minimum observed line movement", 0)}${number("minimumPriceMovement", "Minimum observed price movement", 0)}${number("maximumLegs", "Maximum legs", 1, 12)}${number("minimumOdds", "Minimum American odds")}${number("maximumOdds", "Maximum American odds")}<label>Preferred sportsbooks<select name="sportsbooks" multiple size="3">${values("sportsbook").map((value) => `<option value="${escapeHtml(value)}"${selected("sportsbooks", value)}>${escapeHtml(value)}</option>`).join("")}</select></label><label>Maximum research correlation<select name="maximumResearchCorrelation">${["low", "medium", "high"].map((value) => `<option value="${value}"${state.parlayConstraints.maximumResearchCorrelation === value ? " selected" : ""}>${value}</option>`).join("")}</select></label></div><fieldset class="parlay-constraint-checks"><legend>Evidence requirements</legend>${PARLAY_BOOLEAN_CONSTRAINTS.map((key) => `<label><input type="checkbox" name="${key}"${state.parlayConstraints[key] ? " checked" : ""}> ${escapeHtml(checks[key])}</label>`).join("")}</fieldset></section>
     <div class="screener-form-actions"><button class="primary-action" type="submit">Build research set</button><button class="text-button" type="button" data-parlay-reset>Reset</button><button class="text-button" type="button" data-parlay-save-preset>Save constraints</button></div>
     <div class="screener-presets" aria-label="Constraint presets">${parlayBuilderService.getPresets().map((preset) => `<button class="text-button" type="button" data-parlay-preset="${escapeHtml(preset.id)}">${escapeHtml(preset.title)}</button>`).join("")}</div>
   </form>`;
@@ -2474,9 +2500,15 @@ function parlayConstraintForm(result) {
 function renderParlayLeg(leg, index) {
   const story = leg.currentStory ? screenerStoryLabel(leg.currentStory) : "No exact current story";
   const favorite = state.parlayFavoriteSelectionIds.includes(leg.selectionId); const locked = state.parlayBuilderResult?.lockedSelectionIds?.includes(leg.selectionId);
-  return `<article class="parlay-leg${locked ? " locked" : ""}" data-parlay-leg="${escapeHtml(leg.id)}"><header><div><p class="eyebrow">Research leg ${index + 1}${locked ? " · locked foundation" : ""}</p><h3>${escapeHtml(leg.participantName)} · ${escapeHtml(leg.marketName)}</h3><p>${escapeHtml(leg.currentLine)} · ${formatOdds(leg.currentOdds)} · ${escapeHtml(leg.sportsbook)}</p></div><span class="sample-badge">${leg.sample ? "Sample" : "Provider"}</span></header>
-    <dl class="parlay-leg-metrics"><div><dt>Best available price</dt><dd>${leg.bestAvailablePrice ? `${escapeHtml(leg.bestAvailablePrice.sportsbook)} · ${formatOdds(leg.bestAvailablePrice.odds)}` : "Unavailable"}</dd></div><div><dt>Research Quality</dt><dd>${leg.researchQuality}% · not probability</dd></div><div><dt>Edge Trust</dt><dd>${leg.edgeTrust}% · not probability</dd></div><div><dt>Research Completeness</dt><dd>${Number.isFinite(leg.researchCompleteness) ? `${leg.researchCompleteness}%` : "Unavailable"}</dd></div><div><dt>Historical coverage</dt><dd>${leg.historicalCoverage} completed rows</dd></div><div><dt>Freshness</dt><dd>${escapeHtml(leg.freshness)}</dd></div><div><dt>Provider agreement</dt><dd>${escapeHtml(leg.providerAgreement)}</dd></div><div><dt>Lineup / injury</dt><dd>${escapeHtml(leg.lineupStatus)} · ${escapeHtml(leg.injuryStatus)}</dd></div></dl>
-    <details><summary>Why this leg?</summary><div class="market-argument-grid"><section><h4>Supporting evidence</h4><ul>${leg.supportingEvidence.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No positive conclusion is supported by supplied evidence.</li>"}</ul><dl class="parlay-reason-grid"><div><dt>Historical support</dt><dd>${escapeHtml(leg.historicalPerformance)}</dd></div><div><dt>Recent form</dt><dd>${escapeHtml(leg.recentForm)}</dd></div><div><dt>Opponent matchup</dt><dd>${escapeHtml(leg.opponentMatchup)}</dd></div><div><dt>Home / away</dt><dd>${escapeHtml(leg.homeAway)}</dd></div><div><dt>Current story</dt><dd>${escapeHtml(story)}</dd></div><div><dt>Historical story</dt><dd>${escapeHtml(leg.historicalStory || "Unavailable from supplied evidence.")}</dd></div><div><dt>Current trend</dt><dd>${escapeHtml(leg.currentTrend)}</dd></div><div><dt>Sportsbook</dt><dd>${escapeHtml(leg.sportsbook)}</dd></div></dl><p><strong>Milestone:</strong> ${escapeHtml(screenerInsightLabel(leg.milestone, "None supported"))}</p><p><strong>Streak:</strong> ${escapeHtml(screenerInsightLabel(leg.streak, "None supported"))}</p></section><section><h4>Counterarguments</h4><ul>${leg.counterarguments.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><h4>Current unknowns</h4><ul>${leg.currentUnknowns.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No additional unknown was identified in supplied fields; unobserved uncertainty remains possible.</li>"}</ul></section></div></details>
+  const illustrationEntity = leg.entityId ? entityRegistry.getEntity(leg.entityId) : null;
+  const illustrationMedia = illustrationEntity ? createAthleteMediaViewModel(illustrationEntity, {
+    context: "parlay", desiredVariant: "compact", decorative: true,
+  }) : null;
+  const illustration = illustrationMedia?.candidates?.length
+    ? `<aside class="parlay-leg-illustration" aria-hidden="true"><span>Entity context</span>${renderAthleteMedia(illustrationMedia)}</aside>` : "";
+  return `<article class="parlay-leg${locked ? " locked" : ""}" data-parlay-leg="${escapeHtml(leg.id)}"><header><div><p class="eyebrow">Research leg ${index + 1}${locked ? " · locked foundation" : ""}</p><h3>${escapeHtml(leg.participantName)} · ${escapeHtml(leg.marketName)}</h3><p>${escapeHtml(leg.currentLine)} · ${formatOdds(leg.currentOdds)} · ${escapeHtml(leg.sportsbook)}</p></div><span class="sample-badge">${leg.sample ? "Sample" : "Provider"}</span></header>${leg.requiresReview ? `<div class="data-warning" role="status"><strong>Review required</strong><p>${escapeHtml(leg.reviewReasons?.[0] || "Provider context changed. This locked research leg remains visible until you explicitly replace or remove it.")}</p></div>` : ""}
+    <dl class="parlay-leg-metrics"><div><dt>Best available price</dt><dd>${leg.bestAvailablePrice ? `${escapeHtml(leg.bestAvailablePrice.sportsbook)} · ${formatOdds(leg.bestAvailablePrice.odds)}` : "Unavailable"}</dd></div><div><dt>Research Quality</dt><dd>${leg.researchQuality}% · not probability</dd></div><div><dt>Edge Trust</dt><dd>${leg.edgeTrust}% · not probability</dd></div><div><dt>Research Completeness</dt><dd>${Number.isFinite(leg.researchCompleteness) ? `${leg.researchCompleteness}%` : "Unavailable"}</dd></div><div><dt>Historical coverage</dt><dd>${leg.historicalCoverage} completed rows</dd></div><div><dt>Freshness</dt><dd>${escapeHtml(leg.freshness)}</dd></div><div><dt>Provider agreement</dt><dd>${escapeHtml(leg.providerAgreement)}</dd></div><div><dt>Lineup / injury</dt><dd>${escapeHtml(leg.lineupStatus)} · ${escapeHtml(leg.injuryStatus)}</dd></div><div><dt>Event tracking</dt><dd>${escapeHtml((leg.eventStatus || "unknown").replaceAll("_", " "))}${leg.pregameContextCurrent === false ? " · saved pregame snapshot only" : ""}</dd></div></dl>
+    <details><summary>Why this leg?</summary>${illustration}<div class="market-argument-grid"><section><h4>Supporting evidence</h4><ul>${leg.supportingEvidence.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No positive conclusion is supported by supplied evidence.</li>"}</ul><dl class="parlay-reason-grid"><div><dt>Historical support</dt><dd>${escapeHtml(leg.historicalPerformance)}</dd></div><div><dt>Recent form</dt><dd>${escapeHtml(leg.recentForm)}</dd></div><div><dt>Opponent matchup</dt><dd>${escapeHtml(leg.opponentMatchup)}</dd></div><div><dt>Home / away</dt><dd>${escapeHtml(leg.homeAway)}</dd></div><div><dt>Current story</dt><dd>${escapeHtml(story)}</dd></div><div><dt>Historical story</dt><dd>${escapeHtml(leg.historicalStory || "Unavailable from supplied evidence.")}</dd></div><div><dt>Current trend</dt><dd>${escapeHtml(leg.currentTrend)}</dd></div><div><dt>Sportsbook</dt><dd>${escapeHtml(leg.sportsbook)}</dd></div></dl><p><strong>Milestone:</strong> ${escapeHtml(screenerInsightLabel(leg.milestone, "None supported"))}</p><p><strong>Streak:</strong> ${escapeHtml(screenerInsightLabel(leg.streak, "None supported"))}</p></section><section><h4>Counterarguments</h4><ul>${leg.counterarguments.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><h4>Current unknowns</h4><ul>${leg.currentUnknowns.map((item) => `<li>${escapeHtml(item)}</li>`).join("") || "<li>No additional unknown was identified in supplied fields; unobserved uncertainty remains possible.</li>"}</ul></section></div></details>
     <details><summary>Related research</summary><div class="card-actions"><a class="text-button" href="${escapeHtml(marketResearchHref({ type: "detail", leagueId: leg.leagueId, marketId: leg.marketResearchId, selectionId: leg.selectionId }))}" data-open-market="${escapeHtml(leg.selectionId)}" data-market-league="${escapeHtml(leg.leagueId)}">Related markets and props</a>${leg.entityId ? `<button class="text-button" type="button" data-open-visual="market_line_chart" data-visual-entity="${escapeHtml(leg.entityId)}">Related visualization</button><button class="text-button" type="button" data-market-query="Compare ${escapeHtml(leg.participantName)} using identical filters">Related comparison</button>` : ""}<button class="text-button" type="button" data-parlay-query="Research related stories, milestones, streaks, and markets for ${escapeHtml(leg.participantName)}.">Edge Intelligence research</button></div></details>
     <div class="card-actions"><button class="primary-action" type="button" data-parlay-build-around="${escapeHtml(leg.id)}">Build Around This Leg</button><button class="text-button" type="button" data-parlay-replace="${escapeHtml(leg.id)}">Replace This Leg</button><button class="text-button" type="button" aria-pressed="${favorite}" data-parlay-favorite="${escapeHtml(leg.selectionId)}">${favorite ? "Favorited" : "Favorite leg"}</button></div></article>`;
 }
@@ -3081,7 +3113,7 @@ function renderStoryDetail(story, { updateUrl = true } = {}) {
         ${renderAthleteMedia(view.media, { large: true })}
         <div><p class="eyebrow">${escapeHtml(view.storyType.replaceAll("_", " "))}</p><h3>${escapeHtml(view.headline)}</h3><p>${escapeHtml(view.summary)}</p></div>
       </header>
-      <div class="story-detail-badges"><span class="validation-label">${escapeHtml(view.validationLabel)}</span><span class="sample-badge">${view.sample ? "Sample data" : "Provider data"}</span><span>${escapeHtml(view.lifecycleState)}</span></div>
+      <div class="story-detail-badges"><span class="validation-label">${escapeHtml(view.validationLabel)}</span><span class="sample-badge">${view.sourceMode === "fixture" ? "Fixture data" : view.sample ? "Sample data" : "Provider data"}</span><span>${escapeHtml(view.lifecycleState)}</span></div>
       <section aria-labelledby="storyKeyStats"><h4 id="storyKeyStats">Key statistics and scope</h4><div class="insight-chips">${view.statChips.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}<span>${escapeHtml(view.scopeLabel)}</span></div><p>${escapeHtml(view.expandedExplanation)}</p></section>
       <section aria-labelledby="storyTrust"><h4 id="storyTrust">Edge Trust and Research Quality</h4><div class="market-research-quality"><span>${escapeHtml(view.edgeTrust.publicStatus)}</span><strong>${escapeHtml(view.researchQuality.label)} · ${view.researchQuality.score}%</strong></div><p>${escapeHtml(view.edgeTrust.summary)}</p></section>
       <section aria-labelledby="storyEvidence" tabindex="-1" data-story-evidence-panel><h4 id="storyEvidence">Supporting evidence</h4>
@@ -5063,7 +5095,7 @@ function screenerFiltersFromForm(form) {
 function parlayConstraintsFromForm(form) {
   const data = new FormData(form); const input = {};
   ["sportIds", "leagueIds", "marketTypes", "sportsbooks"].forEach((key) => { const values = data.getAll(key).filter(Boolean); if (values.length) input[key] = values; });
-  ["minimumResearchQuality", "minimumEdgeTrust", "minimumResearchCompleteness", "maximumLegs", "minimumOdds", "maximumOdds"].forEach((key) => { const value = String(data.get(key) || "").trim(); if (value !== "" && Number.isFinite(Number(value))) input[key] = Number(value); });
+  ["minimumResearchQuality", "minimumEdgeTrust", "minimumResearchCompleteness", "minimumLineMovement", "minimumPriceMovement", "maximumLegs", "minimumOdds", "maximumOdds"].forEach((key) => { const value = String(data.get(key) || "").trim(); if (value !== "" && Number.isFinite(Number(value))) input[key] = Number(value); });
   input.maximumResearchCorrelation = data.get("maximumResearchCorrelation");
   PARLAY_BOOLEAN_CONSTRAINTS.forEach((key) => { input[key] = data.has(key); });
   return normalizeParlayConstraints(input);
@@ -6930,9 +6962,10 @@ elements.closeInsightDialog.addEventListener("click", () => {
 });
 elements.insightDialog.addEventListener("close", () => {
   const activeId = state.activeStoryId || state.activeInsightId;
-  const fallback = state.activeStoryId
-    ? document.querySelector(`[data-view-story="${CSS.escape(activeId)}"]`)
-    : document.querySelector(`[data-view-insight="${CSS.escape(activeId)}"]`);
+  const returnSelector = state.activeStoryId
+    ? `[data-view-story="${CSS.escape(activeId)}"]`
+    : `[data-view-insight="${CSS.escape(activeId)}"]`;
+  const fallback = document.querySelector(returnSelector);
   const returnTarget = insightReturnFocus?.isConnected ? insightReturnFocus : fallback;
   if (state.activeStoryId && new URLSearchParams(window.location.search).has("story")) setStoryUrl("", { replace: true });
   insightReturnFocus = null;
@@ -6940,7 +6973,10 @@ elements.insightDialog.addEventListener("close", () => {
   state.activeStoryId = "";
   state.sharedStoryId = "";
   state.sharedStoryOpened = false;
-  window.setTimeout(() => returnTarget?.focus({ preventScroll: true }), 0);
+  window.setTimeout(() => {
+    const currentTarget = returnTarget?.isConnected ? returnTarget : document.querySelector(returnSelector);
+    currentTarget?.focus({ preventScroll: true });
+  }, 0);
 });
 elements.insightDialog.addEventListener("click", (event) => {
   if (event.target.closest("[data-focus-story-evidence]")) {

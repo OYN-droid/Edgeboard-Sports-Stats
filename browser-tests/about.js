@@ -72,7 +72,43 @@ const headings = [...app.querySelectorAll("#aboutView h1, #aboutView h2, #aboutV
 check(headings[0] === 1 && headings.every((level, index) => index === 0 || level <= headings[index - 1] + 1), "28 visible heading hierarchy does not skip levels");
 app.querySelector("#aboutView [data-about-research]")?.focus();
 check(app.activeElement === app.querySelector("#aboutView [data-about-research]"), "29 keyboard focus reaches About actions");
-check(window.testErrors.length === 0, `30 no browser console errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
+
+const launchRoute = async (route, width = 1280) => {
+  const routeFrame = document.createElement("iframe");
+  routeFrame.title = `Startup route ${route}`;
+  routeFrame.style.cssText = `width:${width}px;height:900px;border:0`;
+  const loaded = new Promise((resolve) => routeFrame.addEventListener("load", resolve, { once: true }));
+  routeFrame.src = route;
+  document.body.append(routeFrame);
+  await loaded;
+  routeFrame.contentWindow.addEventListener("error", (event) => window.testErrors.push(`route ${route}: ${event.message}`));
+  routeFrame.contentWindow.addEventListener("unhandledrejection", (event) => window.testErrors.push(`route ${route}: ${String(event.reason)}`));
+  await wait(1000);
+  return routeFrame;
+};
+
+view.localStorage.setItem("edgeboard-research-state", JSON.stringify({ mode: "stats", queryText: "Show Stephen Curry's last 5 games", selectedEntityId: "nba-stephen-curry", resultTab: "game-log" }));
+view.localStorage.setItem("edgeboard-startup-test-preference", "preserve-me");
+const priorRoute = await launchRoute("/markets?mode=both&testFixtureTimestamp=2026-01-15T12:00:00.000Z");
+check(priorRoute.contentWindow.location.pathname === "/markets" && !priorRoute.contentDocument.querySelector("#marketResearchView")?.hidden, "30 explicit Markets deep link remains refresh-safe");
+priorRoute.remove();
+
+const rootLaunch = await launchRoute("/?testFixtureTimestamp=2026-01-15T12:00:00.000Z");
+check(rootLaunch.contentWindow.location.pathname === "/" && !rootLaunch.contentDocument.querySelector("#todayPulse")?.hidden, "31 independent root launch always opens Home after a prior surface");
+check(rootLaunch.contentDocument.querySelector("#queryInput")?.value !== "Show Stephen Curry's last 5 games" && rootLaunch.contentDocument.querySelector("#researchAnswer")?.hidden, "32 root launch does not hydrate or auto-submit a saved research route");
+check(rootLaunch.contentWindow.localStorage.getItem("edgeboard-startup-test-preference") === "preserve-me", "33 root launch preserves unrelated local preferences");
+rootLaunch.remove();
+
+const storiesRoute = await launchRoute("/stories?mode=stats&testFixtureTimestamp=2026-01-15T12:00:00.000Z");
+check(storiesRoute.contentWindow.location.pathname === "/stories" && Boolean(storiesRoute.contentDocument.querySelector("#todayPulseGrid .home-discovery-card")), "34 explicit Stories route opens discovery content");
+const storiesReloaded = new Promise((resolve) => storiesRoute.addEventListener("load", resolve, { once: true }));
+storiesRoute.contentWindow.location.reload();
+await storiesReloaded;
+await wait(900);
+check(storiesRoute.contentWindow.location.pathname === "/stories" && Boolean(storiesRoute.contentDocument.querySelector("#todayPulseGrid .home-discovery-card")), "35 Stories route survives direct refresh");
+storiesRoute.remove();
+view.localStorage.removeItem("edgeboard-startup-test-preference");
+check(window.testErrors.length === 0, `36 no browser console errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
 
 results.dataset.status = failures.length ? "failed" : "passed";
 results.textContent = failures.length ? `FAIL (${failures.length}/${checks.length})\n${failures.join("\n")}` : `PASS (${checks.length} checks)\n${checks.join("\n")}`;
