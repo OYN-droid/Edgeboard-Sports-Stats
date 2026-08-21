@@ -81,7 +81,7 @@ frame.style.width = "390px";
 app.documentElement.style.fontSize = "150%";
 await wait(100);
 check(app.documentElement.scrollWidth <= app.documentElement.clientWidth + 1, "large text does not create document overflow");
-check(app.querySelector("#todayPulse")?.scrollHeight > 0 && app.querySelector("#queryForm")?.scrollHeight > 0, "large text preserves discovery and research content");
+check(app.querySelector("#homeCommandCenter")?.scrollHeight > 0 && app.querySelector("#queryForm")?.scrollHeight > 0, "large text preserves discovery and research content");
 app.documentElement.style.fontSize = "";
 
 app.querySelector('[data-theme-option="light"]')?.click();

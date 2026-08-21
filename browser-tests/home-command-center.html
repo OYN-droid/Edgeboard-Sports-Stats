@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>EdgeBoard Home command center browser tests</title>
+  <link rel="icon" href="data:," />
+  <body>
+    <h1>EdgeBoard Home command center browser tests</h1>
+    <pre id="results">Running…</pre>
+    <script>
+      localStorage.setItem("edgeboard-onboarding-v1.6-complete", "true");
+      localStorage.removeItem("edgeboard-navigation-selection");
+      window.testErrors = [];
+      window.addEventListener("error", (event) => window.testErrors.push(`${event.message} (${event.filename || "unknown"}:${event.lineno || 0})`));
+      window.addEventListener("unhandledrejection", (event) => window.testErrors.push(String(event.reason)));
+    </script>
+    <iframe id="app" src="/?mode=both&amp;scope=system%3Aall&amp;testFixtureTimestamp=2026-07-28T15:20:00.000Z" title="EdgeBoard Home command center under test" style="width:1280px;height:900px;border:0"></iframe>
+    <script type="module" src="./home-command-center.js?v=phase5a"></script>
+  </body>
+</html>

@@ -62,6 +62,7 @@ import {
   edgeLabToMarkdown,
 } from "./src/services/edge-lab-service.js";
 import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js?v=portfolio-narrative-20260821-2";
+import { createHomeCommandCenterModel } from "./src/services/home-command-center-service.js?v=home-command-center-20260821";
 import { createStoryEngine } from "./src/services/story-engine.js?v=portfolio-narrative-20260821-2";
 import { createDiscoveryService } from "./src/services/discovery-service.js";
 import { createKnowledgeGraphService } from "./src/services/knowledge-graph-service.js";
@@ -608,6 +609,7 @@ const elements = {
   todayPulseTitle: document.querySelector("#todayPulseTitle"),
   todayPulseSummary: document.querySelector("#todayPulseSummary"),
   todayPulseGrid: document.querySelector("#todayPulseGrid"),
+  homeCommandCenter: document.querySelector("#homeCommandCenter"),
   homeDiscoverySections: document.querySelector("#homeDiscoverySections"),
   discoveryExplorer: document.querySelector("#discoveryExplorer"),
   discoveryExplorerTitle: document.querySelector("#discoveryExplorerTitle"),
@@ -669,6 +671,7 @@ const elements = {
   edgeLabStatus: document.querySelector("#edgeLabStatus"),
   onboarding: document.querySelector("#edgeboardOnboarding"),
   onboardingSteps: document.querySelector("#onboardingSteps"),
+  toggleOnboarding: document.querySelector("#toggleOnboarding"),
   dismissOnboarding: document.querySelector("#dismissOnboarding"),
   aboutView: document.querySelector("#aboutView"),
   aboutVersion: document.querySelector("#aboutVersion"),
@@ -2964,6 +2967,104 @@ function replaceHomeDiscoveryContent(container, content) {
   return true;
 }
 
+function commandCenterStoryMedia(story, className = "") {
+  const illustration = story.media?.illustration;
+  return `<div class="command-story-media ${escapeHtml(className)}" aria-hidden="true" data-illustration-level="${escapeHtml(illustration?.fallbackLevel || "none")}" data-illustration-registry-id="${escapeHtml(illustration?.registryId || "")}">${renderAthleteMedia(story.media)}</div>`;
+}
+
+function commandCenterEventTitle(event) {
+  return event.display?.title
+    || (event.participants || []).map((participant) => participant.shortName || participant.name).filter(Boolean).join(" vs ")
+    || event.card?.event_name || event.race?.event_name || event.tournament?.name || "Fixture event";
+}
+
+function renderCommandScheduleItem({ event, league }) {
+  const startsAt = new Date(event.startsAt);
+  const date = Number.isNaN(startsAt.getTime()) ? "Time unavailable" : startsAt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const time = Number.isNaN(startsAt.getTime()) ? "" : startsAt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `<li class="command-schedule-item" data-schedule-sport="${escapeHtml(league.sportId)}" data-schedule-league="${escapeHtml(league.leagueId)}">
+    <div><span class="command-sport-mark" aria-hidden="true">${escapeHtml(league.leagueDisplayName.slice(0, 2).toUpperCase())}</span><strong>${escapeHtml(league.leagueDisplayName)}</strong><span>${escapeHtml(date)}</span></div>
+    <p>${escapeHtml(commandCenterEventTitle(event))}</p>
+    <small>${escapeHtml(time)} · ${escapeHtml(event.sourceMode === "live" ? "Provider" : "Fixture sample")}</small>
+  </li>`;
+}
+
+function renderCommandFeaturedStory(story) {
+  if (!story) return '<div class="discovery-empty" role="status">No supported featured story is available.</div>';
+  const researchAction = story.secondaryActions.find((action) => action.type === "research-story");
+  return `<article class="command-feature-card" data-command-feature="${escapeHtml(story.id)}" data-league-id="${escapeHtml(story.leagueId)}" data-sport-id="${escapeHtml(story.sportId)}">
+    <div class="command-feature-copy">
+      <div class="home-card-kickers"><span>Featured story</span><span class="sample-badge">Fixture sample</span></div>
+      <h1>${escapeHtml(story.headline)}</h1>
+      <p>${escapeHtml(story.summary)}</p>
+      <div class="home-card-meta"><span>${escapeHtml(story.leagueId.toUpperCase())}</span>${story.statChips.slice(0, 2).map((chip) => `<span>${escapeHtml(chip)}</span>`).join("")}</div>
+      <div class="command-quality" title="Research Quality measures evidence support, not probability."><span>Research Quality</span><strong>${escapeHtml(story.researchQuality.label)} · ${story.researchQuality.score}%</strong><meter min="0" max="100" value="${story.researchQuality.score}">${story.researchQuality.score}%</meter></div>
+      <div class="home-card-actions" aria-label="Explore ${escapeHtml(story.headline)}">
+        <button class="primary-action" type="button" data-view-story="${escapeHtml(story.id)}">Open story</button>
+        ${story.primaryAction ? renderHomeDiscoveryAction(story.primaryAction) : ""}
+        ${researchAction ? renderHomeDiscoveryAction(researchAction) : ""}
+      </div>
+    </div>
+    ${commandCenterStoryMedia(story, "command-feature-art")}
+  </article>`;
+}
+
+function renderCommandHeadline(story, index) {
+  return `<li><button type="button" data-view-story="${escapeHtml(story.id)}"><span class="command-headline-index" aria-hidden="true">${String(index + 1).padStart(2, "0")}</span><span><strong>${escapeHtml(story.headline)}</strong><small>${escapeHtml(story.leagueId.toUpperCase())} · ${escapeHtml(story.sourceMode === "fixture" ? "Fixture sample" : story.sourceLabel)}</small></span><span aria-hidden="true">→</span></button></li>`;
+}
+
+function renderCommandStoryCard(story) {
+  return `<article class="command-story-card" data-command-story="${escapeHtml(story.id)}" data-sport-id="${escapeHtml(story.sportId)}" data-league-id="${escapeHtml(story.leagueId)}">
+    <div class="home-card-kickers"><span>${escapeHtml(story.leagueId.toUpperCase())}</span><span class="sample-badge">Sample</span></div>
+    ${commandCenterStoryMedia(story, "command-card-art")}
+    <h3>${escapeHtml(story.headline)}</h3>
+    <p>${escapeHtml(story.summary)}</p>
+    <div class="command-card-metric"><strong>${escapeHtml(story.statChips[0] || `${story.supportingEvidence.length} evidence`)}</strong><span>${story.supportingEvidence.length} retained item${story.supportingEvidence.length === 1 ? "" : "s"}</span></div>
+    <div class="command-card-quality"><span>Research Quality</span><strong>${escapeHtml(story.researchQuality.label)} · ${story.researchQuality.score}%</strong></div>
+    <div class="home-card-actions"><button type="button" class="text-button" data-view-story="${escapeHtml(story.id)}">Open story</button>${story.primaryAction ? renderHomeDiscoveryAction(story.primaryAction) : ""}</div>
+  </article>`;
+}
+
+function renderCommandMarketCard(record) {
+  const movement = record.movementObserved && Number.isFinite(record.movement)
+    ? `${record.movement > 0 ? "+" : ""}${record.movement}` : "No observed move";
+  return `<article class="command-market-card" data-command-market="${escapeHtml(record.id)}" data-market-league="${escapeHtml(record.leagueId)}">
+    <div class="home-card-kickers"><span>${escapeHtml(record.leagueName)}</span><span class="sample-badge">Sample market</span></div>
+    <h3>${escapeHtml(record.participantName)} · ${escapeHtml(record.marketName)}</h3>
+    <p>${escapeHtml(record.gameLabel)}</p>
+    <dl><div><dt>Current line</dt><dd>${escapeHtml(record.currentLineDisplay)}</dd></div><div><dt>Price</dt><dd>${Number.isFinite(record.odds) ? formatOdds(record.odds) : "Unavailable"}</dd></div><div><dt>Movement</dt><dd>${escapeHtml(movement)}</dd></div><div><dt>Research Quality</dt><dd>${record.researchQuality}%</dd></div></dl>
+    <a class="text-button" href="${escapeHtml(marketResearchHref(record.model))}" data-open-market="${escapeHtml(record.selectionId)}" data-market-league="${escapeHtml(record.leagueId)}">Research market</a>
+  </article>`;
+}
+
+function renderCommandQuickAction(action) {
+  const content = `<span class="command-quick-icon" aria-hidden="true">${escapeHtml(action.label.slice(0, 1))}</span><span><strong>${escapeHtml(action.label)}</strong><small>${escapeHtml(action.description)}</small></span><span aria-hidden="true">→</span>`;
+  if (action.type === "profile") return `<a href="${escapeHtml(profileUrl(action.entityId))}" data-open-athlete="${escapeHtml(action.entityId)}">${content}</a>`;
+  if (action.type === "route") return `<a href="${escapeHtml(action.href)}">${content}</a>`;
+  return `<button type="button" data-home-query="${escapeHtml(action.query)}" data-home-action="${escapeHtml(action.kind)}">${content}</button>`;
+}
+
+function renderHomeCommandCenter(model) {
+  const featured = model.featuredStory;
+  return `<div class="command-center-shell" data-command-center-version="${model.schemaVersion}">
+    <section class="command-schedule" aria-labelledby="commandScheduleTitle">
+      <div class="command-section-heading"><div><p class="eyebrow">Featured schedule</p><h2 id="commandScheduleTitle">Fixture board</h2></div><span class="sample-badge">Sample data</span></div>
+      <div class="command-scroll-region" tabindex="0" role="region" aria-label="Horizontally scrollable multi-sport fixture schedule"><ul>${model.schedule.map(renderCommandScheduleItem).join("")}</ul></div>
+    </section>
+    <div class="command-lead-grid">
+      ${renderCommandFeaturedStory(featured)}
+      <aside class="command-headlines" aria-labelledby="commandHeadlinesTitle"><div class="command-section-heading"><div><p class="eyebrow">EdgeBoard research</p><h2 id="commandHeadlinesTitle">Top Headlines</h2></div><span>${model.headlines.length}</span></div><ol>${model.headlines.map(renderCommandHeadline).join("")}</ol></aside>
+    </div>
+    <section class="command-stories" aria-labelledby="commandStoriesTitle"><div class="command-section-heading"><div><p class="eyebrow">Multi-sport intelligence</p><h2 id="commandStoriesTitle">Top Stories &amp; Insights</h2></div><span class="sample-badge">Deterministic sample</span></div><div class="command-story-grid">${model.topStories.map(renderCommandStoryCard).join("")}</div></section>
+    <section class="command-markets" aria-labelledby="commandMarketsTitle"><div class="command-section-heading"><div><p class="eyebrow">Edge Markets</p><h2 id="commandMarketsTitle">Sample market research</h2><p>Normalized fixture markets for evidence review—not betting advice or a live feed.</p></div><a class="text-button" href="/markets/screener">Open Market Screener →</a></div><div class="command-market-grid">${model.markets.map(renderCommandMarketCard).join("")}</div></section>
+    <div class="command-utility-grid">
+      <section class="command-quick" aria-labelledby="commandQuickTitle"><div class="command-section-heading"><div><p class="eyebrow">Quick Research</p><h2 id="commandQuickTitle">Start with a focused path</h2></div></div><div>${model.quickResearch.map(renderCommandQuickAction).join("")}</div></section>
+      <section class="command-intelligence" aria-labelledby="commandIntelligenceTitle"><div class="command-section-heading"><div><p class="eyebrow">EdgeBoard Intelligence</p><h2 id="commandIntelligenceTitle">Research you can inspect</h2></div></div><div>${model.intelligence.map((item, index) => `<article><span aria-hidden="true">0${index + 1}</span><div><h3>${escapeHtml(item.label)}</h3><p>${escapeHtml(item.description)}</p></div></article>`).join("")}</div></section>
+    </div>
+    <p class="command-disclosure"><span class="sample-badge">Sample data</span>${escapeHtml(model.disclosure)}</p>
+  </div>`;
+}
+
 function renderHomeDiscovery() {
   const summary = getSelectionSummary(state.navigationSelection);
   const portfolioLaunch = summary.selection.type === "system" && summary.selection.id === "all";
@@ -2985,6 +3086,21 @@ function renderHomeDiscovery() {
   const sections = new Map(model.sections.map((item) => [item.id, item]));
   const stories = sections.get("stories");
   const trending = sections.get("trending");
+  elements.homeCommandCenter.hidden = !portfolioLaunch;
+  document.querySelectorAll(".legacy-home-section").forEach((section) => { section.hidden = portfolioLaunch; });
+  if (portfolioLaunch) {
+    const storyViews = storyEngine.getFeaturedStories({}, {
+      limit: 30,
+      mode: state.researchMode,
+      now: new Date(testFixtureTimestamp || Date.now()),
+      visibleLeagues: summary.visibleLeagues,
+      canonicalStoryId: "story-fixture-ended-streak",
+    });
+    const eventEntries = summary.visibleLeagues.flatMap((league) => sportsRepository.getEvents(league.leagueId).map((event) => ({ event, league })));
+    const marketRecords = marketScreenerService.getRecords({ leagueIds: summary.visibleLeagues.map((league) => league.leagueId) }, new Date(testFixtureTimestamp || Date.now()));
+    const commandModel = createHomeCommandCenterModel({ storyViews, eventEntries, marketRecords });
+    replaceHomeDiscoveryContent(elements.homeCommandCenter, renderHomeCommandCenter(commandModel));
+  }
   elements.todayPulse.dataset.scope = serializeNavigationSelection(summary.selection);
   elements.todayPulseTitle.textContent = stories.title;
   elements.todayPulseSummary.textContent = `${stories.description} ${model.disclaimer}`;
@@ -6330,7 +6446,7 @@ function handleHomeDiscoveryQuery(event) {
   document.querySelector("#queryForm").requestSubmit();
 }
 
-[elements.todayPulse, elements.insightDiscovery, elements.homeDiscoverySections, elements.discoveryExplorer]
+[elements.homeCommandCenter, elements.todayPulse, elements.insightDiscovery, elements.homeDiscoverySections, elements.discoveryExplorer]
   .forEach((container) => container.addEventListener("click", handleHomeDiscoveryQuery));
 
 document.addEventListener("click", async (event) => {
@@ -7924,6 +8040,13 @@ elements.dismissOnboarding?.addEventListener("click", () => {
   } catch {
     elements.queryFeedback.textContent = "The guide is hidden for this visit, but browser storage is unavailable so the preference cannot be saved.";
   }
+});
+
+elements.toggleOnboarding?.addEventListener("click", () => {
+  const expanded = elements.toggleOnboarding.getAttribute("aria-expanded") === "true";
+  elements.toggleOnboarding.setAttribute("aria-expanded", String(!expanded));
+  elements.toggleOnboarding.textContent = expanded ? "Show guide" : "Hide guide";
+  elements.onboardingSteps.hidden = expanded;
 });
 
 elements.openCommandPalette?.addEventListener("click", openCommandPalette);

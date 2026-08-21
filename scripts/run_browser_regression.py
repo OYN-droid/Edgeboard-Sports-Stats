@@ -158,6 +158,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=0, help="application port; an available port is selected by default")
     parser.add_argument("--timeout", type=int, default=900, help="maximum browser-suite runtime in seconds")
+    parser.add_argument("--suite", default="full-regression", help="browser-tests harness name without the .html suffix")
     args = parser.parse_args()
     app_port = args.port or available_port()
     debug_port = available_port()
@@ -202,7 +203,10 @@ def main() -> int:
         targets = json.load(urllib.request.urlopen(f"http://127.0.0.1:{debug_port}/json/list"))
         page = next(item for item in targets if item.get("type") == "page")
         connection = connect_devtools(page["webSocketDebuggerUrl"])
-        devtools_call(connection, 1, "Page.navigate", {"url": f"http://127.0.0.1:{app_port}/browser-tests/full-regression.html"})
+        suite = "".join(character for character in args.suite if character.isalnum() or character in {"-", "_"})
+        if not suite:
+            raise ValueError("Browser suite name is invalid")
+        devtools_call(connection, 1, "Page.navigate", {"url": f"http://127.0.0.1:{app_port}/browser-tests/{suite}.html"})
 
         deadline = time.monotonic() + args.timeout
         request_id = 2

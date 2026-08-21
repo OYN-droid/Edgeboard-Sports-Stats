@@ -7,7 +7,7 @@
     <title>EdgeBoard Sports Stats</title>
     <meta name="description" content="Discover sports statistics, stories, history, visual analytics, and market research with transparent supporting evidence." />
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="styles.css?v=portfolio-narrative-20260821-2" />
+    <link rel="stylesheet" href="styles.css?v=home-command-center-20260821" />
   </head>
   <body>
     <div class="app-shell">
@@ -40,9 +40,9 @@
       <aside class="onboarding-card" id="edgeboardOnboarding" aria-labelledby="onboardingTitle" hidden>
         <div class="onboarding-heading">
           <div><p class="eyebrow">First visit</p><h2 id="onboardingTitle">Make EdgeBoard yours</h2><p>Choose a lane now; you can switch modes at any time without losing your query.</p></div>
-          <button type="button" class="text-button" id="dismissOnboarding" aria-label="Dismiss first-visit guide permanently">Got it</button>
+          <div class="onboarding-actions"><button type="button" class="text-button" id="toggleOnboarding" aria-controls="onboardingSteps" aria-expanded="false">Show guide</button><button type="button" class="text-button" id="dismissOnboarding" aria-label="Dismiss first-visit guide permanently">Got it</button></div>
         </div>
-        <div class="onboarding-steps" id="onboardingSteps"></div>
+        <div class="onboarding-steps" id="onboardingSteps" hidden></div>
       </aside>
 
       <nav class="research-intent-nav" id="researchIntentNav" aria-label="Research by intent">
@@ -190,7 +190,9 @@
           </section>
         </article>
 
-        <section class="today-pulse discovery-story-hero" id="todayPulse" aria-labelledby="todayPulseTitle">
+        <div class="home-command-center" id="homeCommandCenter" aria-live="polite" hidden></div>
+
+        <section class="today-pulse discovery-story-hero legacy-home-section" id="todayPulse" aria-labelledby="todayPulseTitle">
           <div class="today-board-heading">
             <div><p class="eyebrow">Evidence-backed sports intelligence</p><h1 id="todayPulseTitle">Stories behind the numbers</h1><p id="todayPulseSummary">Explore evidence-backed stories, athlete research, comparisons, and market context across sports.</p></div>
             <span class="sample-badge">Sample data</span>
@@ -198,7 +200,7 @@
           <div class="today-pulse-grid" id="todayPulseGrid" aria-live="polite"></div>
         </section>
 
-        <section class="insight-discovery" id="insightDiscovery" aria-labelledby="insightDiscoveryTitle">
+        <section class="insight-discovery legacy-home-section" id="insightDiscovery" aria-labelledby="insightDiscoveryTitle">
           <div class="today-board-heading">
             <div>
               <p class="eyebrow">Prioritized, not popularity-tracked</p>
@@ -263,7 +265,7 @@
           <p id="marketResearchStatus" role="status" aria-live="polite"></p>
         </section>
 
-        <div class="home-discovery-sections" id="homeDiscoverySections" aria-live="polite"></div>
+        <div class="home-discovery-sections legacy-home-section" id="homeDiscoverySections" aria-live="polite"></div>
 
         <section class="personal-workspace-view" id="personalWorkspaceView" aria-label="Personal Workspace" aria-live="polite" hidden>
           <div class="profile-loading" id="workspaceLoading" role="status" hidden>
@@ -626,6 +628,6 @@
       </div>
     </dialog>
 
-    <script type="module" src="app.js?v=portfolio-narrative-20260821-2"></script>
+    <script type="module" src="app.js?v=home-command-center-20260821"></script>
   </body>
 </html>
