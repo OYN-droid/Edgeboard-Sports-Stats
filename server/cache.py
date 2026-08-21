@@ -6,6 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from .provider_contracts import canonical_domain
+
 
 @dataclass
 class CacheEntry:
@@ -98,18 +100,23 @@ class MemoryCache:
 
 class CachePolicy:
     TTL_SECONDS = {
-        "league_availability": 3600,
+        "availability": 3600,
         "league_catalog": 86400,
         "schedules": 300,
-        "live_status": 8,
+        "event_status": 8,
+        "live_scores": 8,
+        "inning_state": 8,
         "event_details": 120,
-        "profiles": 3600,
+        "entities": 3600,
         "standings": 600,
-        "historical_stats": 86400,
+        "historical_statistics": 86400,
         "leaderboards": 900,
         "injuries": 180,
-        "lineups": 45,
-        "pregame_odds": 45,
+        "rosters": 900,
+        "projected_lineups": 45,
+        "confirmed_lineups": 30,
+        "weather": 300,
+        "odds": 45,
         "live_odds": 5,
         "line_movement": 15,
         "completed_events": 604800,
@@ -122,12 +129,13 @@ class CachePolicy:
         self.maximum_ttl = max(1, maximum_ttl)
 
     def ttl(self, domain: str, *, event_status: str = "", provider_maximum: int | None = None) -> int:
+        policy_domain = canonical_domain(domain) or domain
         if event_status == "live":
-            value = min(self.live_ttl, self.TTL_SECONDS.get(domain, self.live_ttl))
+            value = min(self.live_ttl, self.TTL_SECONDS.get(policy_domain, self.live_ttl))
         elif event_status == "final":
             value = self.TTL_SECONDS.get("completed_events", self.maximum_ttl)
         else:
-            value = self.TTL_SECONDS.get(domain, self.default_ttl)
+            value = self.TTL_SECONDS.get(policy_domain, self.default_ttl)
         limits = [value, self.maximum_ttl]
         if provider_maximum is not None:
             limits.append(max(1, provider_maximum))

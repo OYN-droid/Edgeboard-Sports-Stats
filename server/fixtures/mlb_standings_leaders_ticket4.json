@@ -1,0 +1,34 @@
+{
+  "contractVersion": "edgeboard-mlb-standings-leaders-v1",
+  "provider": "edgeboard-mlb-standings-leaders-fixture",
+  "sourceMode": "fixture",
+  "season": 2026,
+  "recordedAt": "2026-08-06T12:00:00Z",
+  "attribution": "Deterministic EdgeBoard contract fixture — not live data",
+  "coverage": {"standings": "representative", "playerSeasonStats": "representative", "teamSeasonStats": "representative"},
+  "standings": [
+    {"teamId":"NYY","teamName":"New York Yankees","league":"AL","division":"East","wins":70,"losses":44,"homeWins":38,"homeLosses":20,"awayWins":32,"awayLosses":24,"runsFor":585,"runsAgainst":471,"streak":"W3","lastTenWins":7,"lastTenLosses":3,"gamesBack":0,"divisionRank":1,"wildCardRank":null,"clinchedDivision":false,"clinchedPlayoff":false},
+    {"teamId":"BOS","teamName":"Boston Red Sox","league":"AL","division":"East","wins":66,"losses":49,"homeWins":35,"homeLosses":23,"awayWins":31,"awayLosses":26,"runsFor":552,"runsAgainst":505,"streak":"L1","lastTenWins":6,"lastTenLosses":4,"gamesBack":4.5,"divisionRank":2,"wildCardRank":1,"clinchedDivision":false,"clinchedPlayoff":false},
+    {"teamId":"CLE","teamName":"Cleveland Guardians","league":"AL","division":"Central","wins":68,"losses":46,"homeWins":37,"homeLosses":21,"awayWins":31,"awayLosses":25,"runsFor":521,"runsAgainst":449,"streak":"W2","lastTenWins":6,"lastTenLosses":4,"gamesBack":0,"divisionRank":1,"wildCardRank":null,"clinchedDivision":false,"clinchedPlayoff":false},
+    {"teamId":"LAD","teamName":"Los Angeles Dodgers","league":"NL","division":"West","wins":72,"losses":43,"homeWins":40,"homeLosses":18,"awayWins":32,"awayLosses":25,"runsFor":612,"runsAgainst":482,"streak":"W1","lastTenWins":8,"lastTenLosses":2,"gamesBack":0,"divisionRank":1,"wildCardRank":null,"clinchedDivision":false,"clinchedPlayoff":false},
+    {"teamId":"SD","teamName":"San Diego Padres","league":"NL","division":"West","wins":67,"losses":48,"homeWins":36,"homeLosses":22,"awayWins":31,"awayLosses":26,"runsFor":548,"runsAgainst":501,"streak":"L2","lastTenWins":5,"lastTenLosses":5,"gamesBack":5,"divisionRank":2,"wildCardRank":1,"clinchedDivision":false,"clinchedPlayoff":false},
+    {"teamId":"ATL","teamName":"Atlanta Braves","league":"NL","division":"East","wins":65,"losses":50,"homeWins":34,"homeLosses":24,"awayWins":31,"awayLosses":26,"runsFor":566,"runsAgainst":522,"streak":"W4","lastTenWins":7,"lastTenLosses":3,"gamesBack":3,"divisionRank":2,"wildCardRank":2,"clinchedDivision":false,"clinchedPlayoff":false}
+  ],
+  "playerSeasonStats": [
+    {"playerId":"mlb-aaron-judge","playerName":"Aaron Judge","teamId":"NYY","games":108,"plateAppearances":472,"atBats":401,"hits":129,"doubles":24,"triples":1,"homeRuns":41,"runs":91,"runsBattedIn":98,"walks":65,"stolenBases":7,"totalBases":278,"battingAverage":0.322,"onBasePercentage":0.413,"sluggingPercentage":0.693,"ops":1.106},
+    {"playerId":"mlb-shohei-ohtani","playerName":"Shohei Ohtani","teamId":"LAD","games":112,"plateAppearances":501,"atBats":445,"hits":139,"doubles":28,"triples":5,"homeRuns":38,"runs":96,"runsBattedIn":86,"walks":51,"stolenBases":31,"totalBases":291,"battingAverage":0.312,"onBasePercentage":0.389,"sluggingPercentage":0.654,"ops":1.043},
+    {"playerId":"mlb-rafael-devers-fixture","playerName":"Rafael Devers","teamId":"BOS","games":109,"plateAppearances":481,"atBats":423,"hits":126,"doubles":31,"triples":2,"homeRuns":27,"runs":76,"runsBattedIn":83,"walks":53,"stolenBases":4,"totalBases":242,"battingAverage":0.298,"onBasePercentage":0.378,"sluggingPercentage":0.572,"ops":0.950},
+    {"playerId":"mlb-mookie-betts","playerName":"Mookie Betts","teamId":"LAD","games":72,"plateAppearances":290,"atBats":254,"hits":80,"doubles":18,"triples":2,"homeRuns":15,"runs":52,"runsBattedIn":44,"walks":32,"stolenBases":9,"totalBases":147,"battingAverage":0.315,"onBasePercentage":0.397,"sluggingPercentage":0.579,"ops":0.976},
+    {"playerId":"mlb-gerrit-cole","playerName":"Gerrit Cole","teamId":"NYY","games":24,"wins":13,"inningsPitchedOuts":438,"pitcherStrikeouts":168,"saves":0,"earnedRunAverage":2.84,"whip":1.06,"walksAllowed":42,"hitsAllowed":113},
+    {"playerId":"mlb-garrett-crochet-fixture","playerName":"Garrett Crochet","teamId":"BOS","games":25,"wins":12,"inningsPitchedOuts":459,"pitcherStrikeouts":181,"saves":0,"earnedRunAverage":2.84,"whip":1.04,"walksAllowed":39,"hitsAllowed":120},
+    {"playerId":"mlb-emmanuel-clase-fixture","playerName":"Emmanuel Clase","teamId":"CLE","games":51,"wins":4,"inningsPitchedOuts":153,"pitcherStrikeouts":58,"saves":34,"earnedRunAverage":1.76,"whip":0.94,"walksAllowed":9,"hitsAllowed":39}
+  ],
+  "teamSeasonStats": [
+    {"teamId":"NYY","games":114,"runs":585,"hits":1031,"homeRuns":172,"runsAllowed":471,"earnedRunAverage":3.78,"whip":1.21},
+    {"teamId":"BOS","games":115,"runs":552,"hits":1008,"homeRuns":145,"runsAllowed":505,"earnedRunAverage":4.02,"whip":1.27},
+    {"teamId":"CLE","games":114,"runs":521,"hits":974,"homeRuns":128,"runsAllowed":449,"earnedRunAverage":3.61,"whip":1.18},
+    {"teamId":"LAD","games":115,"runs":612,"hits":1066,"homeRuns":181,"runsAllowed":482,"earnedRunAverage":3.72,"whip":1.20},
+    {"teamId":"SD","games":115,"runs":548,"hits":1022,"homeRuns":139,"runsAllowed":501,"earnedRunAverage":3.96,"whip":1.25},
+    {"teamId":"ATL","games":115,"runs":566,"hits":1015,"homeRuns":156,"runsAllowed":522,"earnedRunAverage":4.11,"whip":1.29}
+  ]
+}

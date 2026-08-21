@@ -11,7 +11,7 @@ from typing import Any, Iterator
 from .errors import DatabaseError
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 7
 
 
 MIGRATION_1 = """
@@ -252,6 +252,114 @@ CREATE TABLE IF NOT EXISTS edge_trust_history (
 CREATE INDEX IF NOT EXISTS idx_edge_trust_history ON edge_trust_history(league_id, evaluated_at);
 """
 
+MIGRATION_4 = """
+CREATE TABLE IF NOT EXISTS research_data_snapshots (
+  id TEXT PRIMARY KEY, scope TEXT NOT NULL, provider TEXT NOT NULL,
+  contract_version TEXT NOT NULL, fingerprint TEXT NOT NULL,
+  captured_at TEXT NOT NULL, metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_research_snapshot_identity
+  ON research_data_snapshots(scope, provider, contract_version, fingerprint);
+CREATE INDEX IF NOT EXISTS idx_research_snapshot_scope
+  ON research_data_snapshots(scope, captured_at);
+"""
+
+MIGRATION_5 = """
+CREATE TABLE IF NOT EXISTS mlb_domain_certification (
+  domain TEXT PRIMARY KEY, state TEXT NOT NULL, provider TEXT NOT NULL,
+  entitlement TEXT NOT NULL, coverage TEXT NOT NULL, freshness_policy TEXT NOT NULL,
+  fallback TEXT NOT NULL, limitations_json TEXT NOT NULL DEFAULT '[]',
+  validation_status TEXT NOT NULL, edge_trust_status TEXT NOT NULL,
+  certified_at TEXT, certification_version TEXT NOT NULL, reviewer_notes TEXT NOT NULL,
+  criteria_json TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS operational_controls (
+  scope_type TEXT NOT NULL, scope_id TEXT NOT NULL, enabled INTEGER NOT NULL,
+  reason TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL,
+  PRIMARY KEY(scope_type, scope_id)
+);
+"""
+
+MIGRATION_6 = """
+CREATE TABLE IF NOT EXISTS mlb_shadow_windows (
+  id TEXT PRIMARY KEY, provider TEXT NOT NULL, status TEXT NOT NULL,
+  started_at TEXT NOT NULL, ends_at TEXT, stopped_at TEXT, stop_reason TEXT,
+  date_start TEXT, date_end TEXT, event_ids_json TEXT NOT NULL DEFAULT '[]',
+  domains_json TEXT NOT NULL DEFAULT '[]', request_budget INTEGER NOT NULL,
+  domain_budgets_json TEXT NOT NULL DEFAULT '{}', endpoint_budgets_json TEXT NOT NULL DEFAULT '{}',
+  configuration_json TEXT NOT NULL DEFAULT '{}', created_by TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mlb_shadow_windows_status
+  ON mlb_shadow_windows(status, started_at);
+CREATE TABLE IF NOT EXISTS mlb_shadow_requests (
+  id TEXT PRIMARY KEY, window_id TEXT NOT NULL, domain TEXT NOT NULL,
+  endpoint TEXT NOT NULL, event_id TEXT, attempt INTEGER NOT NULL DEFAULT 0,
+  outcome TEXT NOT NULL, error_code TEXT, latency_ms REAL,
+  record_count INTEGER NOT NULL DEFAULT 0, rejected_count INTEGER NOT NULL DEFAULT 0,
+  cache_state TEXT, simulated INTEGER NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL, completed_at TEXT,
+  FOREIGN KEY(window_id) REFERENCES mlb_shadow_windows(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_mlb_shadow_requests_window
+  ON mlb_shadow_requests(window_id, domain, endpoint, started_at);
+CREATE TABLE IF NOT EXISTS mlb_shadow_domain_evidence (
+  window_id TEXT NOT NULL, domain TEXT NOT NULL, provider TEXT NOT NULL,
+  entitlement TEXT NOT NULL, sample_size INTEGER NOT NULL DEFAULT 0,
+  evidence_json TEXT NOT NULL, recommendation TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(window_id, domain),
+  FOREIGN KEY(window_id) REFERENCES mlb_shadow_windows(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS mlb_shadow_reviews (
+  id TEXT PRIMARY KEY, window_id TEXT NOT NULL, domain TEXT NOT NULL,
+  canonical_id TEXT, provider_id TEXT, discrepancy_type TEXT NOT NULL,
+  fixture_value_json TEXT, provider_value_json TEXT,
+  provenance_json TEXT NOT NULL DEFAULT '{}', edge_trust_json TEXT NOT NULL DEFAULT '{}',
+  suggested_reason TEXT NOT NULL, status TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  FOREIGN KEY(window_id) REFERENCES mlb_shadow_windows(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_mlb_shadow_reviews_open
+  ON mlb_shadow_reviews(window_id, status, domain);
+CREATE TABLE IF NOT EXISTS mlb_shadow_mapping_reviews (
+  id TEXT PRIMARY KEY, window_id TEXT NOT NULL, entity_type TEXT NOT NULL,
+  provider_id TEXT NOT NULL, canonical_id TEXT, candidates_json TEXT NOT NULL DEFAULT '[]',
+  resolution_state TEXT NOT NULL, correction_reason TEXT, corrected_by TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+  UNIQUE(window_id, entity_type, provider_id),
+  FOREIGN KEY(window_id) REFERENCES mlb_shadow_windows(id) ON DELETE CASCADE
+);
+"""
+
+MIGRATION_7 = """
+CREATE TABLE IF NOT EXISTS provider_mapping_evidence (
+  provider TEXT NOT NULL, provider_id TEXT NOT NULL, entity_type TEXT NOT NULL,
+  mapping_state TEXT NOT NULL, mapping_method TEXT NOT NULL, confidence REAL NOT NULL DEFAULT 0,
+  evidence_json TEXT NOT NULL DEFAULT '{}', source_version TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, reviewed_at TEXT,
+  reviewed_by TEXT, review_note TEXT, superseded_by_entity_id TEXT,
+  PRIMARY KEY(provider, provider_id)
+);
+CREATE INDEX IF NOT EXISTS idx_provider_mapping_evidence_state
+  ON provider_mapping_evidence(entity_type, mapping_state, last_seen_at);
+CREATE TABLE IF NOT EXISTS provider_mapping_audit (
+  id TEXT PRIMARY KEY, provider TEXT NOT NULL, provider_id TEXT NOT NULL,
+  prior_entity_id TEXT, new_entity_id TEXT, prior_state TEXT, new_state TEXT NOT NULL,
+  action TEXT NOT NULL, reason TEXT NOT NULL, actor TEXT NOT NULL,
+  evidence_json TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_provider_mapping_audit_mapping
+  ON provider_mapping_audit(provider, provider_id, created_at);
+CREATE TABLE IF NOT EXISTS entity_identity_metadata (
+  entity_id TEXT PRIMARY KEY, activity_class TEXT NOT NULL DEFAULT 'unknown',
+  relevance_tier TEXT NOT NULL DEFAULT 'D', public_eligible INTEGER NOT NULL DEFAULT 0,
+  position TEXT, current_team_id TEXT, identity_fingerprint TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}', updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_entity_identity_metadata_tier
+  ON entity_identity_metadata(relevance_tier, activity_class, public_eligible);
+"""
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -300,6 +408,26 @@ class Database:
             connection.execute(
                 "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                 (3, utc_now()),
+            )
+            connection.executescript(MIGRATION_4)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (4, utc_now()),
+            )
+            connection.executescript(MIGRATION_5)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (5, utc_now()),
+            )
+            connection.executescript(MIGRATION_6)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (6, utc_now()),
+            )
+            connection.executescript(MIGRATION_7)
+            connection.execute(
+                "INSERT OR IGNORE INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                (7, utc_now()),
             )
         return self.schema_version()
 

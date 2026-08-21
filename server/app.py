@@ -15,6 +15,18 @@ from .runtime import Runtime, build_runtime
 
 
 ROOT = Path(__file__).resolve().parent.parent
+SPA_ROUTE_ROOTS = frozenset({"about", "history", "markets", "stories"})
+
+
+def is_spa_route(path: str) -> bool:
+    """Return true only for known, extensionless client-side application routes."""
+    parts = [part for part in PurePosixPath(path).parts if part != "/"]
+    return bool(
+        parts
+        and parts[0] in SPA_ROUTE_ROOTS
+        and (parts[0] != "about" or len(parts) == 1)
+        and all(not PurePosixPath(part).suffix for part in parts)
+    )
 
 
 def create_handler(runtime: Runtime):
@@ -41,13 +53,7 @@ def create_handler(runtime: Runtime):
             ):
                 self.send_error(404)
                 return
-            if (
-                decoded_path == "/about"
-                or decoded_path == "/history"
-                or decoded_path.startswith("/history/")
-                or decoded_path == "/markets"
-                or decoded_path.startswith("/markets/")
-            ):
+            if is_spa_route(decoded_path):
                 self.path = "/index.html"
             super().do_GET()
 

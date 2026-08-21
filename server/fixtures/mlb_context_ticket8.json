@@ -1,0 +1,35 @@
+{
+  "contractVersion": "edgeboard-mlb-context-v1",
+  "provider": "edgeboard-mlb-context-fixture",
+  "sourceMode": "fixture",
+  "recordedAt": "2026-08-04T14:00:00Z",
+  "attribution": "Deterministic EdgeBoard MLB context fixture — not live data",
+  "availability": [
+    {"providerRecordId":"availability-judge","playerId":"mlb-aaron-judge","teamId":"NYY","status":"available","reportedReason":"Provider reports available","effectiveAt":"2026-08-04T13:00:00Z","updatedAt":"2026-08-04T13:55:00Z"},
+    {"providerRecordId":"availability-cole","playerId":"mlb-gerrit-cole","teamId":"NYY","status":"probable","reportedReason":"Provider availability designation; no medical inference","effectiveAt":"2026-08-04T12:00:00Z","updatedAt":"2026-08-04T13:54:00Z"}
+  ],
+  "rosters": [
+    {"providerRecordId":"roster-judge","playerId":"mlb-aaron-judge","teamId":"NYY","status":"active","effectiveAt":"2026-03-20T12:00:00Z","updatedAt":"2026-08-04T13:50:00Z"},
+    {"providerRecordId":"roster-cole","playerId":"mlb-gerrit-cole","teamId":"NYY","status":"active","effectiveAt":"2026-03-20T12:00:00Z","updatedAt":"2026-08-04T13:50:00Z"}
+  ],
+  "lineups": [
+    {"providerRecordId":"lineup-nyy-lad-nyy","eventId":"mlb-2026-08-04-nyy-lad-1","teamId":"NYY","state":"confirmed","updatedAt":"2026-08-04T13:52:00Z","entries":[{"playerId":"mlb-aaron-judge","battingOrder":2,"position":"RF"}]}
+  ],
+  "starters": [
+    {"providerRecordId":"starter-nyy-lad-nyy","eventId":"mlb-2026-08-04-nyy-lad-1","teamId":"NYY","playerId":"mlb-gerrit-cole","state":"confirmed","updatedAt":"2026-08-04T13:53:00Z"}
+  ],
+  "weather": [
+    {"providerRecordId":"weather-nyy-lad","eventId":"mlb-2026-08-04-nyy-lad-1","state":"forecast","summary":"Provider forecast: clear conditions; no game impact is inferred.","temperatureF":76,"windMph":6,"precipitationProbability":5,"updatedAt":"2026-08-04T13:45:00Z"},
+    {"providerRecordId":"weather-bos-nyy","eventId":"mlb-2026-08-05-bos-nyy-1","state":"forecast","summary":"Provider forecast includes rain. EdgeBoard does not infer delay probability.","temperatureF":71,"windMph":11,"precipitationProbability":70,"updatedAt":"2026-08-04T13:45:00Z"}
+  ],
+  "transactions": [
+    {"providerRecordId":"transaction-cole","playerId":"mlb-gerrit-cole","teamId":"NYY","type":"activated","description":"Provider-reported activation in the fixture dataset.","occurredAt":"2026-08-01T16:00:00Z","updatedAt":"2026-08-01T16:05:00Z"}
+  ],
+  "contextualEvents": [
+    {"providerRecordId":"context-starter-changed","type":"starter_changed","playerId":"mlb-gerrit-cole","teamId":"NYY","eventId":"mlb-2026-08-04-nyy-lad-1","occurredAt":"2026-08-04T13:40:00Z","summary":"The fixture provider changed the Yankees listed starter to Gerrit Cole; no market effect is inferred.","previousState":{"state":"probable","playerId":"provider-listed-starter-unavailable"},"currentState":{"state":"probable","playerId":"mlb-gerrit-cole"},"affectedReferences":{"playerIds":["mlb-gerrit-cole"],"eventIds":["mlb-2026-08-04-nyy-lad-1"],"marketFamilies":["pitcher_props"]}},
+    {"providerRecordId":"context-lineup-confirmed","type":"lineup_confirmed","playerId":"mlb-aaron-judge","teamId":"NYY","eventId":"mlb-2026-08-04-nyy-lad-1","occurredAt":"2026-08-04T13:52:00Z","summary":"The provider marked the Yankees lineup confirmed; Aaron Judge appears in batting slot 2.","previousState":{"state":"projected"},"currentState":{"state":"confirmed","battingOrder":2},"affectedReferences":{"playerIds":["mlb-aaron-judge"],"eventIds":["mlb-2026-08-04-nyy-lad-1"],"marketFamilies":["batter_props"]}},
+    {"providerRecordId":"context-starter-confirmed","type":"starter_confirmed","playerId":"mlb-gerrit-cole","teamId":"NYY","eventId":"mlb-2026-08-04-nyy-lad-1","occurredAt":"2026-08-04T13:53:00Z","summary":"The provider marked Gerrit Cole as the confirmed Yankees starter.","previousState":{"state":"probable"},"currentState":{"state":"confirmed"},"affectedReferences":{"playerIds":["mlb-gerrit-cole"],"eventIds":["mlb-2026-08-04-nyy-lad-1"],"marketFamilies":["pitcher_props"]}},
+    {"providerRecordId":"context-availability","type":"availability_change","playerId":"mlb-gerrit-cole","teamId":"NYY","eventId":"mlb-2026-08-04-nyy-lad-1","occurredAt":"2026-08-04T13:54:00Z","summary":"The provider reports Gerrit Cole as probable. No diagnosis, severity, or market cause is inferred.","previousState":{"status":"unknown"},"currentState":{"status":"probable"},"affectedReferences":{"playerIds":["mlb-gerrit-cole"],"eventIds":["mlb-2026-08-04-nyy-lad-1"]}},
+    {"providerRecordId":"context-weather","type":"weather_forecast","teamId":"NYY","eventId":"mlb-2026-08-05-bos-nyy-1","occurredAt":"2026-08-04T13:45:00Z","summary":"The provider forecast includes rain; no delay or market effect is inferred.","previousState":null,"currentState":{"summary":"rain in forecast"},"affectedReferences":{"eventIds":["mlb-2026-08-05-bos-nyy-1"]}}
+  ]
+}

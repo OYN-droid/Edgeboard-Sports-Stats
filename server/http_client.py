@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import random
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -11,6 +13,8 @@ from typing import Any
 
 from .errors import (
     ProviderAuthenticationError,
+    ProviderEndpointError,
+    ProviderEntitlementError,
     ProviderRateLimitError,
     ProviderTimeoutError,
     ProviderUnavailableError,
@@ -29,6 +33,7 @@ class JsonHttpClient:
         maximum_response_bytes: int = 5_000_000,
         coordinator: RequestCoordinator | None = None,
         circuit_breaker: CircuitBreaker | None = None,
+        ssl_context: ssl.SSLContext | None = None,
         sleeper=time.sleep,
     ):
         self.timeout_seconds = timeout_seconds
@@ -37,15 +42,19 @@ class JsonHttpClient:
         self.maximum_response_bytes = max(1024, maximum_response_bytes)
         self.coordinator = coordinator or RequestCoordinator()
         self.circuit_breaker = circuit_breaker or CircuitBreaker()
+        self.ssl_context = ssl_context or _verified_ssl_context()
         self.sleeper = sleeper
 
-    def get_json(self, url: str, headers: dict[str, str] | None = None) -> Any:
+    def get_json(
+        self, url: str, headers: dict[str, str] | None = None, *,
+        before_attempt=None, after_attempt=None,
+    ) -> Any:
         if not self.circuit_breaker.allow():
             raise ProviderUnavailableError("Provider circuit is open.")
         try:
             result = self.coordinator.execute(
                 f"GET:{url}",
-                lambda: self._get_json(url, headers),
+                lambda: self._get_json(url, headers, before_attempt=before_attempt, after_attempt=after_attempt),
                 timeout=self.timeout_seconds * (self.max_retries + 1) + 1,
             )
             self.circuit_breaker.success()
@@ -54,26 +63,35 @@ class JsonHttpClient:
             self.circuit_breaker.failure(error)
             raise
 
-    def _get_json(self, url: str, headers: dict[str, str] | None = None) -> Any:
+    def _get_json(self, url: str, headers: dict[str, str] | None = None, *, before_attempt=None, after_attempt=None) -> Any:
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
+            token = before_attempt(attempt) if before_attempt else None
+            attempt_started = time.monotonic()
+            outcome, safe_code = "error", "provider_error"
             try:
                 request = urllib.request.Request(url, headers=headers or {}, method="GET")
-                with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                with urllib.request.urlopen(request, timeout=self.timeout_seconds, context=self.ssl_context) as response:
                     content_length = int(response.headers.get("Content-Length") or 0)
                     if content_length > self.maximum_response_bytes:
                         raise ProviderValidationError("Provider response exceeded the configured size limit.")
                     body = response.read(self.maximum_response_bytes + 1)
                     if len(body) > self.maximum_response_bytes:
                         raise ProviderValidationError("Provider response exceeded the configured size limit.")
-                    return json.loads(body.decode("utf-8"))
+                    decoded = json.loads(body.decode("utf-8"))
+                    outcome, safe_code = "success", ""
+                    return decoded
             except urllib.error.HTTPError as error:
                 try:
                     retry_after = _retry_after(error.headers.get("Retry-After"))
                     if error.code == 429:
                         last_error = ProviderRateLimitError("Provider rate limit reached.", retry_after)
-                    elif error.code in {401, 403}:
+                    elif error.code == 401:
                         raise ProviderAuthenticationError("Provider authentication failed.") from error
+                    elif error.code == 403:
+                        raise ProviderEntitlementError("Provider endpoint access is not enabled for this account.") from error
+                    elif error.code == 404:
+                        raise ProviderEndpointError("Provider endpoint was not found.") from error
                     elif error.code >= 500:
                         last_error = ProviderUnavailableError(f"Provider returned HTTP {error.code}.")
                     else:
@@ -86,6 +104,13 @@ class JsonHttpClient:
                 last_error = ProviderUnavailableError(f"Provider request failed: {error.reason if hasattr(error, 'reason') else error}")
             except (UnicodeDecodeError, json.JSONDecodeError) as error:
                 raise ProviderValidationError("Provider returned malformed JSON.") from error
+            finally:
+                if after_attempt:
+                    after_attempt(
+                        token, attempt, outcome,
+                        getattr(last_error, "code", safe_code) if outcome != "success" else "",
+                        round((time.monotonic() - attempt_started) * 1000, 3),
+                    )
 
             if attempt >= self.max_retries or not getattr(last_error, "retryable", False):
                 break
@@ -109,3 +134,14 @@ def _retry_after(value: str | None) -> float | None:
             return max(0.0, (parsed - datetime.now(timezone.utc)).total_seconds())
         except (TypeError, ValueError):
             return None
+
+
+def _verified_ssl_context() -> ssl.SSLContext:
+    """Use Python's trust store, with the macOS system bundle as a verified fallback."""
+    paths = ssl.get_default_verify_paths()
+    if paths.cafile and os.path.isfile(paths.cafile):
+        return ssl.create_default_context()
+    system_bundle = "/etc/ssl/cert.pem"
+    if os.path.isfile(system_bundle):
+        return ssl.create_default_context(cafile=system_bundle)
+    return ssl.create_default_context()

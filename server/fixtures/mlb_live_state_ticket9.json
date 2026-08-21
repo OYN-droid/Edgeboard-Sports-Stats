@@ -1,0 +1,84 @@
+{
+  "contractVersion": "edgeboard-mlb-live-state-v1",
+  "provider": "edgeboard-mlb-live-state-fixture",
+  "sourceMode": "fixture",
+  "recordedAt": "2026-08-04T14:00:00Z",
+  "attribution": "Deterministic EdgeBoard MLB live-state fixture — not live data",
+  "updates": [
+    {
+      "eventId": "mlb-2026-08-04-nyy-lad-1",
+      "status": "scheduled",
+      "providerStatus": "Scheduled",
+      "providerUpdatedAt": "2026-08-04T13:40:00Z",
+      "fetchedAt": "2026-08-04T13:40:02Z"
+    },
+    {
+      "eventId": "mlb-2026-08-04-nyy-lad-1",
+      "status": "pregame",
+      "providerStatus": "Pregame",
+      "score": { "away": 0, "home": 0 },
+      "providerUpdatedAt": "2026-08-04T13:50:00Z",
+      "fetchedAt": "2026-08-04T13:50:02Z"
+    },
+    {
+      "eventId": "mlb-2026-08-04-nyy-lad-1",
+      "status": "in_progress",
+      "providerStatus": "InProgress",
+      "period": { "inning": 6, "half": "top" },
+      "score": { "away": 4, "home": 3 },
+      "outs": 1,
+      "count": { "balls": 2, "strikes": 1 },
+      "bases": { "first": true, "second": false, "third": true },
+      "currentBatterId": "mlb-aaron-judge",
+      "currentPitcherId": "mlb-gerrit-cole",
+      "inningScores": [
+        { "inning": 1, "away": 1, "home": 0 },
+        { "inning": 2, "away": 0, "home": 2 },
+        { "inning": 3, "away": 2, "home": 0 },
+        { "inning": 4, "away": 0, "home": 1 },
+        { "inning": 5, "away": 1, "home": 0 }
+      ],
+      "inningScoresComplete": false,
+      "providerUpdatedAt": "2026-08-04T13:59:52Z",
+      "fetchedAt": "2026-08-04T14:00:00Z"
+    },
+    {
+      "eventId": "mlb-2026-08-05-bos-nyy-1",
+      "status": "delayed",
+      "providerStatus": "Delayed",
+      "score": { "away": 0, "home": 0 },
+      "providerUpdatedAt": "2026-08-04T13:59:10Z",
+      "fetchedAt": "2026-08-04T14:00:00Z"
+    },
+    {
+      "eventId": "mlb-2026-08-03-bos-nyy-1",
+      "status": "final",
+      "providerStatus": "Final",
+      "period": { "inning": 9, "half": "end" },
+      "score": { "away": 2, "home": 5 },
+      "inningScores": [
+        { "inning": 1, "away": 0, "home": 1 },
+        { "inning": 2, "away": 1, "home": 0 },
+        { "inning": 3, "away": 0, "home": 2 },
+        { "inning": 4, "away": 0, "home": 0 },
+        { "inning": 5, "away": 1, "home": 0 },
+        { "inning": 6, "away": 0, "home": 1 },
+        { "inning": 7, "away": 0, "home": 0 },
+        { "inning": 8, "away": 0, "home": 1 },
+        { "inning": 9, "away": 0, "home": 0 }
+      ],
+      "inningScoresComplete": true,
+      "providerUpdatedAt": "2026-08-04T03:15:00Z",
+      "fetchedAt": "2026-08-04T03:15:03Z"
+    },
+    {
+      "eventId": "mlb-2026-08-08-nyy-lad-1",
+      "status": "suspended",
+      "providerStatus": "Suspended",
+      "period": { "inning": 4, "half": "bottom" },
+      "score": { "away": 1, "home": 1 },
+      "providerUpdatedAt": "2026-08-04T13:57:00Z",
+      "fetchedAt": "2026-08-04T14:00:00Z"
+    }
+  ]
+}

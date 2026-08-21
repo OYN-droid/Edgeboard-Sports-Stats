@@ -7,6 +7,7 @@ import uuid
 
 from .freshness import parse_timestamp
 from .database import Database, utc_now
+from .provider_contracts import ProvenanceEnvelope, provenance_trust_inputs
 
 
 EDGE_TRUST_COMPONENTS = (
@@ -33,7 +34,9 @@ STATE_VALUES = {
     "sample": .62, "pending": .5, "waiting": .5, "live_partial": .5,
     "partial": .48, "delayed": .45, "limited": .42, "cached_stale": .25,
     "stale": .2, "failing": .12, "error": 0.0, "suspended": 0.0,
-    "unavailable": 0.0, "not_started": 0.0,
+    "unavailable": 0.0, "not_started": 0.0, "configured": .35,
+    "contract_unconfirmed": .3, "shadow": .4, "limited_live": .65,
+    "certified_live": 1.0, "degraded": .3, "provider_conflict": .2,
 }
 
 WEIGHTS = {
@@ -54,12 +57,16 @@ def public_component_status(state: str, score: float) -> str:
     labels = {
         "verified": "Verified", "certified": "Verified", "live_verified": "Verified",
         "fresh": "Fresh", "passing": "Verified", "cached_fresh": "Delayed",
-        "conditional": "Conditional", "fixture": "Validated Sample", "sample": "Validated Sample",
+        "conditional": "Conditional", "fixture": "Validated Fixture", "sample": "Sample",
         "pending": "Waiting for Confirmation", "waiting": "Waiting for Confirmation",
         "live_partial": "Partial", "partial": "Partial", "delayed": "Delayed",
         "cached_stale": "Stale", "stale": "Stale", "failing": "Failed Validation",
         "error": "Error", "suspended": "Suspended", "unavailable": "Unavailable",
         "not_started": "Not Evaluated",
+        "configured": "Configured, Not Certified", "contract_unconfirmed": "Contract Unconfirmed",
+        "shadow": "Shadow Validation", "limited_live": "Limited Live",
+        "certified_live": "Certified Live", "degraded": "Degraded",
+        "provider_conflict": "Provider Conflict",
     }
     return labels.get(state, "Verified" if score >= .9 else "Limited" if score >= .4 else "Unavailable")
 
@@ -130,6 +137,21 @@ def evaluate_edge_trust(
     if include_internal:
         result["internal"] = {"components": normalized, "weights": {key: WEIGHTS[key] for key in normalized}}
     return result
+
+
+def trust_from_provenance(provenance: ProvenanceEnvelope, *, include_internal: bool = False) -> dict[str, Any]:
+    """Translate the shared source envelope into existing Edge Trust components."""
+    components = provenance_trust_inputs(provenance)
+    conflicts = ([{"category": "provider_conflict", "sources": [provenance.provider_id]}]
+                 if provenance.provider_agreement_state == "provider_conflict" else [])
+    return evaluate_edge_trust(
+        components,
+        applicable=set(components),
+        conflicts=conflicts,
+        sample=provenance.source_mode in {"sample", "fixture"},
+        last_validation=provenance.validated_at,
+        include_internal=include_internal,
+    )
 
 
 def trust_from_coverage(league: dict[str, Any], *, conflicts: list[dict[str, Any]] | None = None, include_internal: bool = False) -> dict[str, Any]:

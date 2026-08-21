@@ -1,14 +1,17 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
+
+from .redaction import redact_text
 
 
 ERROR_CATEGORIES = {
     "configuration_error", "authentication_error", "authorization_error",
     "validation_error", "provider_error", "provider_rate_limit", "provider_timeout",
     "provider_schema_error", "cache_error", "database_error", "stale_data",
-    "partial_data", "entity_resolution_error", "unsupported_feature", "internal_error",
+    "provider_entitlement_denied", "provider_endpoint_invalid", "partial_data",
+    "entity_resolution_error", "unsupported_feature", "internal_error",
+    "shadow_budget_exhausted",
 }
 
 
@@ -88,6 +91,16 @@ class ProviderAuthenticationError(ProviderError):
     status = 502
 
 
+class ProviderEntitlementError(ProviderError):
+    code = "provider_entitlement_denied"
+    status = 502
+
+
+class ProviderEndpointError(ProviderError):
+    code = "provider_endpoint_invalid"
+    status = 502
+
+
 class ProviderUnavailableError(ProviderError):
     code = "provider_error"
     retryable = True
@@ -95,6 +108,11 @@ class ProviderUnavailableError(ProviderError):
 
 class ProviderValidationError(ProviderError):
     code = "provider_schema_error"
+
+
+class ShadowBudgetExhaustedError(ProviderError):
+    code = "shadow_budget_exhausted"
+    retryable = False
 
 
 class ProviderConfigurationError(ConfigurationError, ProviderError):
@@ -118,16 +136,9 @@ class EntityResolutionError(EdgeBoardError):
     status = 422
 
 
-SECRET_PATTERN = re.compile(
-    r"(?i)(api[_-]?key|authorization|token|secret|password|dsn)(\s*[:=]\s*)([^\s,;]+)"
-)
-BEARER_PATTERN = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
-
-
 def redact(value: object) -> str:
-    text = str(value or "").replace("\r", " ").replace("\n", " ")
-    text = SECRET_PATTERN.sub(r"\1\2[REDACTED]", text)
-    return BEARER_PATTERN.sub("Bearer [REDACTED]", text)[:1000]
+    """Backward-compatible text redaction backed by the centralized utility."""
+    return redact_text(value)
 
 
 @dataclass(frozen=True)

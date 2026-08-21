@@ -9,10 +9,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
-from .errors import redact
-
-
-SENSITIVE_KEYS = {"api_key", "apikey", "authorization", "token", "secret", "password", "notes", "payload"}
+from .redaction import redact_value
 
 
 def request_id(value: str | None = None) -> str:
@@ -23,17 +20,8 @@ def request_id(value: str | None = None) -> str:
 
 
 def sanitize_fields(fields: dict[str, Any]) -> dict[str, Any]:
-    output: dict[str, Any] = {}
-    for key, value in fields.items():
-        if key.lower() in SENSITIVE_KEYS or any(part in key.lower() for part in ("secret", "token", "password", "api_key")):
-            output[key] = "[REDACTED]"
-        elif isinstance(value, str):
-            output[key] = redact(value)
-        elif isinstance(value, (int, float, bool)) or value is None:
-            output[key] = value
-        else:
-            output[key] = str(value)[:500]
-    return output
+    sanitized = redact_value(fields)
+    return sanitized if isinstance(sanitized, dict) else {}
 
 
 class StructuredLogger:

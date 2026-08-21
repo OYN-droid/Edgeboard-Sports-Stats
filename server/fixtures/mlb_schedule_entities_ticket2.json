@@ -1,0 +1,33 @@
+{
+  "contractVersion": "edgeboard-mlb-schedule-entities-v1",
+  "provider": "edgeboard-mlb-contract-fixture",
+  "sourceMode": "fixture",
+  "recordedAt": "2026-08-04T14:00:00Z",
+  "attribution": "Deterministic EdgeBoard contract fixture — not live data",
+  "league": {
+    "providerId": "fixture-mlb",
+    "canonicalId": "mlb",
+    "sportId": "baseball",
+    "name": "Major League Baseball",
+    "abbreviation": "MLB"
+  },
+  "entities": [
+    {"providerId":"fixture-team-nyy","canonicalId":"NYY","type":"team","name":"New York Yankees","aliases":["Yankees","NY Yankees"],"abbreviation":"NYY","active":true},
+    {"providerId":"fixture-team-lad","canonicalId":"LAD","type":"team","name":"Los Angeles Dodgers","aliases":["Dodgers","LA Dodgers"],"abbreviation":"LAD","active":true},
+    {"providerId":"fixture-team-bos","canonicalId":"BOS","type":"team","name":"Boston Red Sox","aliases":["Red Sox","Boston"],"abbreviation":"BOS","active":true},
+    {"providerId":"fixture-venue-yankee","canonicalId":"venue-yankee-stadium","type":"venue","name":"Yankee Stadium","aliases":["Yankee Stadium"],"active":true,"location":"Bronx, New York","timezone":"America/New_York"},
+    {"providerId":"fixture-venue-dodger","canonicalId":"venue-dodger-stadium","type":"venue","name":"Dodger Stadium","aliases":["Dodger Stadium"],"active":true,"location":"Los Angeles, California","timezone":"America/Los_Angeles"},
+    {"providerId":"fixture-player-judge","canonicalId":"mlb-aaron-judge","type":"athlete","name":"Aaron Judge","aliases":["Judge"],"teamCanonicalId":"NYY","position":"Outfielder","active":true},
+    {"providerId":"fixture-player-cole","canonicalId":"mlb-gerrit-cole","type":"athlete","name":"Gerrit Cole","aliases":["Cole"],"teamCanonicalId":"NYY","position":"Pitcher","active":true},
+    {"providerId":"fixture-manager-nyy","canonicalId":"manager-nyy-sample","type":"manager","name":"Yankees Fixture Manager","aliases":["Yankees manager"],"teamCanonicalId":"NYY","active":true}
+  ],
+  "games": [
+    {"providerId":"fixture-game-20260803-nyy-bos","canonicalId":"mlb-2026-08-03-bos-nyy-1","date":"2026-08-03","startTime":"2026-08-03T23:05:00Z","timezone":"America/New_York","status":"completed","awayTeamProviderId":"fixture-team-bos","homeTeamProviderId":"fixture-team-nyy","venueProviderId":"fixture-venue-yankee","doubleheaderGame":1,"providerUpdatedAt":"2026-08-04T03:15:00Z"},
+    {"providerId":"fixture-game-20260804-nyy-lad-1","canonicalId":"mlb-2026-08-04-nyy-lad-1","date":"2026-08-04","startTime":"2026-08-05T02:10:00Z","timezone":"America/Los_Angeles","status":"scheduled","awayTeamProviderId":"fixture-team-nyy","homeTeamProviderId":"fixture-team-lad","venueProviderId":"fixture-venue-dodger","doubleheaderGame":1,"providerUpdatedAt":"2026-08-04T14:00:00Z"},
+    {"providerId":"fixture-game-20260805-nyy-bos-1","canonicalId":"mlb-2026-08-05-bos-nyy-1","date":"2026-08-05","startTime":"2026-08-05T17:05:00Z","timezone":"America/New_York","status":"delayed","statusDetail":"Rain delay","awayTeamProviderId":"fixture-team-bos","homeTeamProviderId":"fixture-team-nyy","venueProviderId":"fixture-venue-yankee","doubleheaderGame":1,"providerUpdatedAt":"2026-08-04T14:00:00Z"},
+    {"providerId":"fixture-game-20260805-nyy-bos-2","canonicalId":"mlb-2026-08-05-bos-nyy-2","date":"2026-08-05","startTime":"2026-08-05T23:05:00Z","timezone":"America/New_York","status":"scheduled","awayTeamProviderId":"fixture-team-bos","homeTeamProviderId":"fixture-team-nyy","venueProviderId":"fixture-venue-yankee","doubleheaderGame":2,"providerUpdatedAt":"2026-08-04T14:00:00Z"},
+    {"providerId":"fixture-game-20260806-lad-nyy","canonicalId":"mlb-2026-08-06-lad-nyy-1","date":"2026-08-06","startTime":"2026-08-06T23:05:00Z","timezone":"America/New_York","status":"postponed","awayTeamProviderId":"fixture-team-lad","homeTeamProviderId":"fixture-team-nyy","venueProviderId":"fixture-venue-yankee","providerUpdatedAt":"2026-08-04T14:00:00Z"},
+    {"providerId":"fixture-game-20260807-lad-nyy","canonicalId":"mlb-2026-08-07-lad-nyy-1","date":"2026-08-07","startTime":"2026-08-07T23:05:00Z","timezone":"America/New_York","status":"cancelled","awayTeamProviderId":"fixture-team-lad","homeTeamProviderId":"fixture-team-nyy","venueProviderId":"fixture-venue-yankee","providerUpdatedAt":"2026-08-04T14:00:00Z"},
+    {"providerId":"fixture-game-20260808-nyy-lad","canonicalId":"mlb-2026-08-08-nyy-lad-1","date":"2026-08-08","startTime":"2026-08-09T01:10:00Z","timezone":"America/Los_Angeles","status":"suspended","awayTeamProviderId":"fixture-team-nyy","homeTeamProviderId":"fixture-team-lad","venueProviderId":"fixture-venue-dodger","providerUpdatedAt":"2026-08-04T14:00:00Z"}
+  ]
+}

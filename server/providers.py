@@ -4,59 +4,23 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
 
 from .config import ProviderConfig
 from .errors import ProviderConfigurationError, ProviderValidationError
 from .http_client import JsonHttpClient
+from .provider_adapter import FixtureAdapterContract, ProviderAdapterBase
+from .provider_contracts import EXTENDED_LEGACY_DOMAIN_METHODS, LEGACY_DOMAIN_METHODS, canonical_domain
+
+DOMAIN_METHODS = LEGACY_DOMAIN_METHODS
+EXTENDED_DOMAIN_METHODS = EXTENDED_LEGACY_DOMAIN_METHODS
 
 
-DOMAIN_METHODS = {
-    "league_availability": "get_league_availability",
-    "schedules": "get_schedules",
-    "live_status": "get_live_status",
-    "odds": "get_odds",
-    "player_props": "get_player_props",
-    "team_statistics": "get_team_statistics",
-    "player_statistics": "get_player_statistics",
-    "injuries": "get_injuries",
-    "lineups": "get_lineups",
-    "weather": "get_weather",
-    "line_movement": "get_line_movement",
-    "combat_cards": "get_combat_cards",
-    "motorsport_sessions": "get_motorsport_sessions",
-}
-
-EXTENDED_DOMAIN_METHODS = {
-    **DOMAIN_METHODS,
-    "sport_catalog": "get_sport_catalog",
-    "league_catalog": "get_league_catalog",
-    "event_details": "get_event_details",
-    "entity_search": "search_entities",
-    "athlete_profiles": "get_athlete_profiles",
-    "teams": "get_teams",
-    "rosters": "get_rosters",
-    "standings": "get_standings",
-    "historical_statistics": "get_historical_statistics",
-    "game_logs": "get_game_logs",
-    "play_by_play": "get_play_by_play",
-    "depth_charts": "get_depth_charts",
-    "futures": "get_futures",
-    "archived_odds": "get_archived_odds",
-    "fighter_statistics": "get_fighter_statistics",
-    "lap_data": "get_lap_data",
-    "telemetry": "get_telemetry",
-    "golf_events": "get_golf_events",
-    "tennis_matches": "get_tennis_matches",
-    "media": "get_media",
-}
-
-
-class MockProvider:
+class MockProvider(FixtureAdapterContract):
     name = "edgeboard-mock"
     mode = "sample"
 
     def __init__(self, now: datetime | None = None):
+        super().__init__()
         self.now = now or datetime.now(timezone.utc)
 
     def _timestamp(self) -> str:
@@ -113,7 +77,11 @@ class MockProvider:
 
     def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
         method_name = EXTENDED_DOMAIN_METHODS.get(domain)
-        return getattr(self, method_name)() if method_name and hasattr(self, method_name) else {"items": []}
+        if method_name and hasattr(self, method_name):
+            return getattr(self, method_name)()
+        if self.supports_domain(domain):
+            return {"items": []}
+        return super().fetch(domain, scope)
 
 
 class OfflineProvider(MockProvider):
@@ -142,6 +110,8 @@ class FixtureProvider(MockProvider):
         self.name = str(self.fixture.get("provider") or "edgeboard-fixture")
 
     def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
+        if domain not in self.fixture and not self.supports_domain(domain):
+            return ProviderAdapterBase.fetch(self, domain, scope)
         payload = self.fixture.get(domain, {"items": []})
         if not scope or not isinstance(payload, dict) or not isinstance(payload.get("items"), list):
             return payload
@@ -161,12 +131,13 @@ class FixtureProvider(MockProvider):
         return super().__getattribute__(name)
 
 
-class TemplateHttpProvider:
+class TemplateHttpProvider(ProviderAdapterBase):
     """Server-only integration template. Subclass or replace its endpoints and adapter for a selected vendor."""
 
     mode = "live"
 
     def __init__(self, config: ProviderConfig, client: JsonHttpClient | None = None):
+        super().__init__()
         if not config.live_configured:
             raise ProviderConfigurationError("Live mode requires a provider base URL and API key.")
         self.name = config.name
@@ -183,13 +154,19 @@ class TemplateHttpProvider:
         )
 
     def _get(self, domain: str) -> Any:
-        endpoint = f"v1/{domain.replace('_', '-')}"
-        return self.client.get_json(urljoin(self.base_url, endpoint), self.headers)
+        # Ticket 1 deliberately has no certified live capability declaration. A future
+        # provider-specific adapter must implement its own endpoint mapping after review.
+        raise ProviderValidationError(
+            f"Provider domain '{canonical_domain(domain) or domain}' has no certified adapter implementation."
+        )
 
     def fetch(self, domain: str, scope: dict[str, Any] | None = None) -> Any:
-        if domain not in EXTENDED_DOMAIN_METHODS:
+        if canonical_domain(domain) is None:
             raise ProviderValidationError(f"Provider domain '{domain}' is unsupported.")
         return self._get(domain)
+
+    def validate_configuration(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        return (), ("Provider contract and capabilities are not certified.",)
 
     def get_league_availability(self) -> Any: return self._get("league_availability")
     def get_schedules(self) -> Any: return self._get("schedules")

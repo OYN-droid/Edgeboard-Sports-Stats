@@ -1,0 +1,40 @@
+{
+  "contractVersion":"edgeboard-mlb-game-markets-v1",
+  "provider":"edgeboard-mlb-game-markets-fixture",
+  "sourceMode":"fixture",
+  "recordedAt":"2026-08-07T15:00:00Z",
+  "attribution":"Deterministic EdgeBoard market fixture — not live sportsbook data",
+  "coverage":{"sportsbooks":"representative","events":"representative","markets":"representative"},
+  "sportsbooks":[
+    {"providerId":"fixture-book-dk","canonicalId":"sportsbook-draftkings","displayName":"DraftKings","shortName":"DK","region":"US","active":true,"reconciliationState":"confirmed"},
+    {"providerId":"fixture-book-fd","canonicalId":"sportsbook-fanduel","displayName":"FanDuel","shortName":"FD","region":"US","active":true,"reconciliationState":"confirmed"},
+    {"providerId":"fixture-book-mgm","canonicalId":"sportsbook-betmgm","displayName":"BetMGM","shortName":"MGM","region":"US","active":true,"reconciliationState":"confirmed"}
+  ],
+  "events":[
+    {"providerEventId":"fixture-game-20260804-nyy-lad-1","canonicalEventId":"mlb-2026-08-04-nyy-lad-1","date":"2026-08-04","startsAt":"2026-08-05T02:10:00Z","awayTeamId":"NYY","homeTeamId":"LAD"},
+    {"providerEventId":"fixture-game-20260805-nyy-bos-2","canonicalEventId":"mlb-2026-08-05-bos-nyy-2","date":"2026-08-05","startsAt":"2026-08-05T23:05:00Z","awayTeamId":"BOS","homeTeamId":"NYY"}
+  ],
+  "prices":[
+    {"providerPriceId":"dk-g1-ml-h","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-draftkings","family":"moneyline","side":"home","americanOdds":-145,"status":"available","updatedAt":"2026-08-07T14:55:00Z","providerOpenedAt":"2026-08-07T12:00:00Z","providerOpeningAmericanOdds":-140},
+    {"providerPriceId":"dk-g1-ml-a","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-draftkings","family":"moneyline","side":"away","americanOdds":125,"status":"available","updatedAt":"2026-08-07T14:55:00Z","providerOpenedAt":"2026-08-07T12:00:00Z","providerOpeningAmericanOdds":120},
+    {"providerPriceId":"fd-g1-ml-h","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-fanduel","family":"moneyline","side":"home","americanOdds":-142,"status":"available","updatedAt":"2026-08-07T14:54:00Z"},
+    {"providerPriceId":"fd-g1-ml-a","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-fanduel","family":"moneyline","side":"away","americanOdds":128,"status":"available","updatedAt":"2026-08-07T14:54:00Z"},
+    {"providerPriceId":"mgm-g1-ml-h","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-betmgm","family":"moneyline","side":"home","americanOdds":-150,"status":"suspended","updatedAt":"2026-08-07T14:52:00Z"},
+    {"providerPriceId":"mgm-g1-ml-a","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-betmgm","family":"moneyline","side":"away","americanOdds":130,"status":"suspended","updatedAt":"2026-08-07T14:52:00Z"},
+
+    {"providerPriceId":"dk-g1-rl-h","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-draftkings","family":"run_line","side":"home","line":-1.5,"americanOdds":145,"status":"available","updatedAt":"2026-08-07T14:55:00Z"},
+    {"providerPriceId":"dk-g1-rl-a","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-draftkings","family":"run_line","side":"away","line":1.5,"americanOdds":-165,"status":"available","updatedAt":"2026-08-07T14:55:00Z"},
+    {"providerPriceId":"fd-g1-rl-h","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-fanduel","family":"run_line","side":"home","line":-1.5,"americanOdds":150,"status":"available","updatedAt":"2026-08-07T14:54:00Z"},
+    {"providerPriceId":"fd-g1-rl-a","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-fanduel","family":"run_line","side":"away","line":1.5,"americanOdds":-170,"status":"available","updatedAt":"2026-08-07T14:54:00Z"},
+
+    {"providerPriceId":"dk-g1-t-o","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-draftkings","family":"total","side":"over","line":8.5,"americanOdds":-105,"status":"available","providerOpenedAt":"2026-08-07T12:00:00Z","providerOpeningLine":8.0,"providerOpeningAmericanOdds":-110,"updatedAt":"2026-08-07T14:55:00Z"},
+    {"providerPriceId":"dk-g1-t-u","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-draftkings","family":"total","side":"under","line":8.5,"americanOdds":-115,"status":"available","updatedAt":"2026-08-07T14:55:00Z"},
+    {"providerPriceId":"fd-g1-t-o","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-fanduel","family":"total","side":"over","line":8.5,"americanOdds":100,"status":"available","updatedAt":"2026-08-07T14:54:00Z"},
+    {"providerPriceId":"fd-g1-t-u","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-fanduel","family":"total","side":"under","line":8.5,"americanOdds":-120,"status":"available","updatedAt":"2026-08-07T14:54:00Z"},
+    {"providerPriceId":"mgm-g1-t-o9","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-betmgm","family":"total","side":"over","line":9.0,"americanOdds":110,"status":"available","isAlternate":true,"updatedAt":"2026-08-07T14:52:00Z"},
+    {"providerPriceId":"mgm-g1-t-u9","eventId":"mlb-2026-08-04-nyy-lad-1","sportsbookId":"sportsbook-betmgm","family":"total","side":"under","line":9.0,"americanOdds":-130,"status":"available","isAlternate":true,"updatedAt":"2026-08-07T14:52:00Z"},
+
+    {"providerPriceId":"dk-g2-ml-h","eventId":"mlb-2026-08-05-bos-nyy-2","sportsbookId":"sportsbook-draftkings","family":"moneyline","side":"home","americanOdds":-120,"status":"available","updatedAt":"2026-08-07T14:55:00Z"},
+    {"providerPriceId":"dk-g2-ml-a","eventId":"mlb-2026-08-05-bos-nyy-2","sportsbookId":"sportsbook-draftkings","family":"moneyline","side":"away","americanOdds":105,"status":"available","updatedAt":"2026-08-07T14:55:00Z"}
+  ]
+}

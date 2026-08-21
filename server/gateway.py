@@ -9,7 +9,7 @@ from .config import ProviderConfig
 from .contracts import validate_normalized_bundle
 from .domain_validation import validate_provider_payload
 from .errors import map_provider_error
-from .freshness import FRESHNESS_RULES_SECONDS, freshness_state
+from .freshness import freshness_state
 from .errors import ProviderConfigurationError
 from .providers import DOMAIN_METHODS, FixtureProvider, MockProvider, OfflineProvider, TemplateHttpProvider
 

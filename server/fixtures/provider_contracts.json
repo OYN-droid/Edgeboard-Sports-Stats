@@ -1,0 +1,23 @@
+{
+  "fixtureId": "edgeboard-provider-contracts-v1",
+  "capabilities": [
+    {"providerId":"edgeboard-fixture","sportId":"basketball","leagueId":"wnba","domain":"schedules","supportState":"fixture_supported","rolloutState":"fixture_only","liveCallPermission":false,"fixtureAvailable":true,"contractConfirmed":false},
+    {"providerId":"unsupported-fixture","sportId":"basketball","leagueId":"wnba","domain":"odds","supportState":"unsupported","rolloutState":"disabled","liveCallPermission":false,"fixtureAvailable":false,"contractConfirmed":false},
+    {"providerId":"poc-fixture","sportId":"baseball","leagueId":"mlb","domain":"schedules","supportState":"configured","rolloutState":"internal_testing","liveCallPermission":false,"fixtureAvailable":true,"contractConfirmed":false},
+    {"providerId":"poc-fixture","sportId":"baseball","leagueId":"mlb","domain":"odds","supportState":"shadow","rolloutState":"shadow","liveCallPermission":true,"fixtureAvailable":true,"contractConfirmed":false},
+    {"providerId":"poc-fixture","sportId":"basketball","leagueId":"wnba","domain":"schedules","supportState":"limited_live","rolloutState":"limited_live","liveCallPermission":true,"fixtureAvailable":true,"contractConfirmed":true},
+    {"providerId":"poc-fixture","sportId":"basketball","leagueId":"wnba","domain":"injuries","supportState":"degraded","rolloutState":"degraded","liveCallPermission":true,"fixtureAvailable":true,"contractConfirmed":true},
+    {"providerId":"poc-fixture","sportId":"mma","leagueId":"ufc","domain":"fight_cards","supportState":"suspended","rolloutState":"suspended","liveCallPermission":true,"fixtureAvailable":true,"contractConfirmed":true}
+  ],
+  "provenance": {
+    "completeFixture": {"providerId":"edgeboard-fixture","sourceMode":"fixture","fetchedAt":"2026-08-04T12:00:00Z","normalizedAt":"2026-08-04T12:00:01Z","validatedAt":"2026-08-04T12:00:02Z","freshnessState":"sample","completenessState":"complete","fallbackUsed":false,"schemaVersion":"1"},
+    "partial": {"providerId":"edgeboard-fixture","sourceMode":"fixture","completenessState":"partial","validationWarnings":["Fixture intentionally omits an optional field."],"fallbackUsed":false,"schemaVersion":"1"},
+    "providerConflict": {"providerId":"poc-fixture","sourceMode":"live","completenessState":"partial","providerAgreementState":"provider_conflict","validationWarnings":["Fixture providers disagree."],"fallbackUsed":false,"schemaVersion":"1"},
+    "staleFallback": {"providerId":"poc-fixture","sourceMode":"cached","freshnessState":"stale","completenessState":"partial","fallbackUsed":true,"fallbackProviderId":"edgeboard-fixture","schemaVersion":"1"}
+  },
+  "secretError": {
+    "message":"authorization=Bearer fixture-secret",
+    "nested":{"api_key":"fixture-key","database_url":"postgresql://user:pass@db.internal/edgeboard"},
+    "requestUrl":"https://fixture.invalid/data?token=fixture-token&league=mlb"
+  }
+}

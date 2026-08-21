@@ -323,7 +323,7 @@ class DatabaseTests(unittest.TestCase):
         self.db.close()
 
     def test_migration_and_health(self):
-        self.assertEqual(self.db.schema_version(), 3)
+        self.assertEqual(self.db.schema_version(), 7)
         self.assertTrue(self.db.health()["connected"])
 
     def test_transaction_failure_rolls_back(self):
@@ -872,12 +872,27 @@ class HttpBoundaryTests(unittest.TestCase):
         self.assertEqual(response.status, 404)
 
     def test_about_route_is_refresh_safe(self):
-        self.connection.request("GET", "/about")
+        self.connection.request("GET", "/about?mode=both&scope=league:wnba")
         response = self.connection.getresponse()
         body = response.read().decode("utf-8")
         self.assertEqual(response.status, 200)
         self.assertIn('<article class="about-view" id="aboutView"', body)
-        self.assertIn('<script type="module" src="app.js"></script>', body)
+        self.assertRegex(body, r'<script type="module" src="app\.js(?:\?v=[a-zA-Z0-9-]+)?"></script>')
+
+    def test_nested_spa_routes_and_missing_static_files_are_distinct(self):
+        for route in ("/history/records", "/markets/screener?scope=system:all"):
+            with self.subTest(route=route):
+                self.connection.request("GET", route)
+                response = self.connection.getresponse()
+                body = response.read().decode("utf-8")
+                self.assertEqual(response.status, 200)
+                self.assertIn("<main>", body)
+        for path in ("/missing.js", "/missing.css", "/assets/missing.png", "/markets/missing.js", "/about/unknown", "/unknown-route"):
+            with self.subTest(path=path):
+                self.connection.request("GET", path)
+                response = self.connection.getresponse()
+                response.read()
+                self.assertEqual(response.status, 404)
 
     def test_production_disallows_framing_and_browser_harnesses(self):
         config = ProviderConfig.from_env({

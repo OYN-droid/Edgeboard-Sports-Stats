@@ -1,7 +1,7 @@
 import { mockProviderPayload } from "../data/mock-provider.js";
 
 const GATEWAY_ENDPOINT = "/api/provider-data";
-const GATEWAY_TIMEOUT_MS = 3000;
+const GATEWAY_TIMEOUT_MS = 10000;
 
 function isProviderPayload(payload) {
   return Boolean(
@@ -9,7 +9,8 @@ function isProviderPayload(payload) {
     && typeof payload === "object"
     && Array.isArray(payload.league_statuses)
     && Array.isArray(payload.events)
-    && Array.isArray(payload.offers),
+    && Array.isArray(payload.offers)
+    && (!Object.hasOwn(payload, "entities") || Array.isArray(payload.entities)),
   );
 }
 

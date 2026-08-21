@@ -2,15 +2,38 @@
 
 EdgeBoard is a multi-sport research interface with normalized sports, event, market, and historical-stat models. It supports Stats, Betting, and Both research modes. The app runs entirely in sample mode by default and does not claim live sportsbook or live statistical data.
 
+Reliable Live Data Ticket 9 adds provider-neutral MLB event progression, scores,
+inning state, participant context, bounded transition history, and controlled
+polling policy. It remains fixture/sample-first and SportsDataIO shadow-only;
+polling is disabled by default. See [the Ticket 9 architecture](docs/reliable-live-ticket-9-mlb-live-state.md).
+
+Reliable Live Data Ticket 10 adds a 41-domain MLB certification matrix,
+explicit owner-controlled promotion and rollback, independent kill switches,
+health-aware failover, and certification-aware public labels. No domain is
+currently promoted beyond fixture support. See [the Ticket 10 certification review](docs/reliable-live-ticket-10-mlb-certification.md).
+
+Ticket 10.1 adds explicitly authorized, bounded MLB Shadow validation windows,
+per-attempt request budgets, measured entitlement and quality evidence, and
+manual discrepancy/mapping review. It does not activate public live data. See
+[the Ticket 10.1 Shadow-window architecture](docs/reliable-live-ticket-10-1-shadow-window.md).
+
+Ticket 10.2 adds durable provider-to-canonical identity mappings, centralized
+MLB aliases, activity/relevance classification, review queues, and tier-specific
+Shadow metrics. Only confirmed or deterministic mappings are consumer-eligible;
+the public source remains the fixture. See [the Ticket 10.2 identity architecture](docs/reliable-live-ticket-10-2-identity-reconciliation.md).
+
 ## Run the application
 
 Complete browser sample dataset:
 
 ```bash
-python3 -m http.server 9001 --bind 127.0.0.1
+python3 -m server.app --port 9010
 ```
 
-Then open `http://127.0.0.1:9001/`.
+Then open `http://127.0.0.1:9010/`. This SPA-aware server is also required for
+browser regression tests that refresh extensionless client routes such as
+`/about`, `/history/records`, and `/markets/screener`. Missing static files still
+return HTTP 404.
 
 Optional provider-gateway scaffold:
 
@@ -18,7 +41,7 @@ Optional provider-gateway scaffold:
 python3 -m server.app --port 9010
 ```
 
-Open `http://127.0.0.1:9010/?provider=gateway` to load the gateway's mock normalized response. Without the query parameter, the browser continues to use the complete local sample dataset.
+Open `http://127.0.0.1:9010/?provider=gateway` to load the gateway's normalized response. Without the query parameter, the browser continues to use the complete local sample dataset. The SportsDataIO Discovery Lab integration is shadow-only: it validates and compares MLB schedules/entities server-side while the gateway continues serving the validated fixture until certification.
 
 Phase 9 production-boundary server:
 
@@ -38,6 +61,8 @@ authenticated, successfully validated provider.
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+The MLB schedule/entity proof-of-concept architecture and rollout constraints are documented in [docs/reliable-live-ticket-2-mlb.md](docs/reliable-live-ticket-2-mlb.md). Ticket 4's fixture-primary standings, team-record, qualification, leaderboard, snapshot, and shadow-validation boundary is documented in [docs/reliable-live-ticket-4-mlb.md](docs/reliable-live-ticket-4-mlb.md). Ticket 5's fixture-primary sportsbook, pregame game-market, best-price, freshness, and odds shadow boundary is documented in [docs/reliable-live-ticket-5-mlb-odds.md](docs/reliable-live-ticket-5-mlb-odds.md). Ticket 6's canonical player-prop/stat mapping, threshold evidence, exact-line price comparison, and shadow-only SportsDataIO boundary is documented in [docs/reliable-live-ticket-6-mlb-player-props.md](docs/reliable-live-ticket-6-mlb-player-props.md). Ticket 8's provider-neutral availability and participant context is documented in [docs/reliable-live-ticket-8-mlb-context.md](docs/reliable-live-ticket-8-mlb-context.md), and Ticket 9's event progression and controlled-polling boundary is documented in [docs/reliable-live-ticket-9-mlb-live-state.md](docs/reliable-live-ticket-9-mlb-live-state.md). None of these paths claims live or certified provider coverage.
 
 The betting browser harness exercises canonical-market parsing, confidence thresholds, the market browser, slip metadata, themes, and a 390px viewport:
 
@@ -142,7 +167,19 @@ Confidence is model-signal strength, not win probability. The filter spans 0–1
 
 The normalized top-navigation selection is the shared scope for active navigation styling, Today’s Markets, and the research-board league context. League, sport, category, Live, Today, All Sports, and More-menu destinations are serialized in the `scope` URL parameter and local storage. `getVisibleMarketSummaries` in `src/services/navigation-service.js` owns scope filtering and aggregate counts so UI components do not maintain separate league lists.
 
-See [Provider integration](docs/provider-integration.md) for contracts, adapters, environment variables, freshness rules, and the live-provider checklist.
+See [Provider integration](docs/provider-integration.md) for contracts, adapters, environment variables, freshness rules, and the live-provider checklist, plus the [provider adapter author guide](docs/provider-adapter-author-guide.md) for the fail-closed Ticket 2 boundary.
+
+See the [Reliable live-data architecture audit](docs/live-data-architecture-audit.md)
+for the current provider boundary, fixture assumptions, normalization gaps, and
+security findings. Its companion documents cover the [domain inventory](docs/live-data-domain-inventory.md),
+[league coverage matrix](docs/live-data-coverage-matrix.md), [provider candidates](docs/live-data-provider-candidates.md),
+[recommended stack](docs/live-data-provider-strategy.md), [rollout plan](docs/live-data-rollout-plan.md),
+[Edge Trust requirements](docs/live-data-edge-trust-requirements.md), [ingestion and storage](docs/live-data-ingestion-storage.md),
+[cost controls](docs/live-data-cost-rate-limits.md), [backend security](docs/live-data-backend-security.md),
+[ticket backlog](docs/live-data-ticket-backlog.md), [environment inventory](docs/live-data-environment.md),
+and [unresolved owner decisions](docs/live-data-unresolved-decisions.md). The
+SportsDataIO MLB proof of concept is opt-in and shadow-only; it does not change
+the fixture-primary public rollout or certify any live domain.
 
 See [Statistical research architecture](docs/statistical-research.md) for the historical provider contract, canonical stat flow, mode behavior, and persistence rules.
 
@@ -247,3 +284,7 @@ windowed rendering, cancellation, comparisons, Workspace presets, Edge
 Intelligence context, safety language, and provider-coverage limitations.
 
 See [Edge Markets Parlay Builder](docs/parlay-builder.md) for the deterministic constraint, correlation, refinement, Workspace, and evidence architecture.
+
+See [Reliable Live Data Ticket 7](docs/reliable-live-ticket-7-market-movement.md) for normalized market history, retention controls, verified-cause rules, and the bounded shadow-capture workflow.
+
+See [Reliable Live Data Ticket 9](docs/reliable-live-ticket-9-mlb-live-state.md) for the provider-neutral MLB live-state contract, deterministic versions, transition and correction audit, event-aware polling policy, shadow validation, and strict no-background-loop boundary.

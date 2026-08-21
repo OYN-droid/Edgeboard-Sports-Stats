@@ -7,6 +7,7 @@ from typing import Any
 
 from .database import Database, utc_now
 from .errors import ValidationError
+from .provider_contracts import ROLLOUT_DOMAIN_COMPATIBILITY
 
 
 ROLLOUT_STATES = (
@@ -16,10 +17,7 @@ ROLLOUT_STATES = (
 CERTIFICATION_STATUSES = ("not_started", "failing", "conditional", "passing", "certified", "suspended")
 CERTIFICATION_CATEGORIES = ("identity", "schedule", "statistics", "markets", "freshness", "ui", "reliability")
 SOURCE_MODES = ("live_verified", "live_partial", "cached_fresh", "cached_stale", "fixture", "sample", "unavailable")
-DOMAINS = (
-    "entities", "schedules", "live_status", "historical_stats", "standings", "injuries",
-    "lineups", "markets", "props", "line_movement", "spatial_data", "media",
-)
+DOMAINS = tuple(ROLLOUT_DOMAIN_COMPATIBILITY)
 
 SAFE_TRANSITIONS = {
     "disabled": {"fixture_only"},
@@ -117,7 +115,8 @@ class RolloutService:
                 "lastUpdatedAt": row["last_updated_at"],
                 "provider": row["provider"] or "Not configured",
                 "limitations": json.loads(row["limitations_json"]),
-                **({"evidence": json.loads(row["evidence_json"]), "configuredSourceMode": configured_mode} if not public else {}),
+                **({"canonicalDomain": ROLLOUT_DOMAIN_COMPATIBILITY[row["domain"]],
+                    "evidence": json.loads(row["evidence_json"]), "configuredSourceMode": configured_mode} if not public else {}),
             })
         coverage = []
         for row in rollouts:

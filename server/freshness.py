@@ -2,25 +2,26 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from .provider_contracts import canonical_domain
+
 
 FRESHNESS_RULES_SECONDS = {
-    "league_availability": 300,
+    "availability": 300,
     "schedules": 300,
-    "live_status": 10,
-    "pregame_odds": 60,
+    "event_status": 10,
+    "odds": 60,
     "live_odds": 8,
     "player_props": 60,
-    "team_statistics": 3600,
-    "player_statistics": 3600,
+    "historical_statistics": 3600,
     "injuries": 300,
-    "lineups": 90,
+    "projected_lineups": 90,
+    "confirmed_lineups": 30,
     "weather": 600,
     "line_movement": 30,
-    "combat_cards": 300,
-    "motorsport_sessions": 120,
+    "fight_cards": 300,
+    "race_sessions": 120,
     "completed_events": 86400,
     "standings": 600,
-    "historical_stats": 86400,
     "play_by_play": 5,
     "telemetry": 3,
 }
@@ -49,7 +50,7 @@ def freshness_state(domain: str, updated_at: object, now: datetime | None = None
         return "unavailable"
     current = now or datetime.now(timezone.utc)
     age = max(0.0, (current - timestamp).total_seconds())
-    limit = FRESHNESS_RULES_SECONDS.get(domain, 300)
+    limit = FRESHNESS_RULES_SECONDS.get(canonical_domain(domain) or domain, 300)
     if age <= limit:
         return "fresh"
     if age <= limit * 3:
@@ -75,7 +76,7 @@ def freshness_metadata(
     fetched = parse_timestamp(fetched_at) or current
     provider_time = parse_timestamp(provider_updated_at) or fetched
     normalized = parse_timestamp(normalized_at) or current
-    limit = FRESHNESS_RULES_SECONDS.get(domain, 300)
+    limit = FRESHNESS_RULES_SECONDS.get(canonical_domain(domain) or domain, 300)
     state = freshness_state(domain, provider_time.isoformat(), current, sample=sample)
     return {
         "source": source,
