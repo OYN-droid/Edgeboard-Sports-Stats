@@ -2,11 +2,13 @@
 
 EdgeBoard is a portfolio-scale sports research application that turns normalized sample data into athlete profiles, statistical comparisons, market research, historical exploration, visual analytics, and saved research workflows. It demonstrates product thinking, frontend architecture, deterministic analysis, backend boundaries, accessibility, and verification—not sample fixtures presented as live sports data.
 
-[Repository](https://github.com/OYN-droid/Edgeboard-Sports-Stats) · [API contract](docs/openapi.json) · [Architecture notes](docs/getting-started.md) · [Illustration system](docs/illustration-system.md)
+[Live Demo](https://edgeboard-sports-stats.onrender.com/) · [Repository](https://github.com/OYN-droid/Edgeboard-Sports-Stats) · [API contract](docs/openapi.json) · [Architecture notes](docs/getting-started.md) · [Illustration system](docs/illustration-system.md)
 
 ## Demo
 
-The launch candidate is deploy-ready through [`render.yaml`](render.yaml), but no public production URL is claimed in this repository yet. Run the complete credential-free demo locally:
+Open the verified public portfolio deployment: [Live Demo](https://edgeboard-sports-stats.onrender.com/).
+
+To run the complete credential-free demo locally:
 
 ```bash
 git clone https://github.com/OYN-droid/Edgeboard-Sports-Stats.git
@@ -153,7 +155,6 @@ Optional environment settings are documented in [`.env.example`](.env.example). 
 - Fixture coverage is intentionally representative rather than exhaustive across every league, season, market, and historical record.
 - Workspace data is local to the browser. There are no accounts, cloud synchronization, push alerts, or multi-user collaboration.
 - Illustrations are selective and use explicit fallbacks outside the active exact-portrait set.
-- No public deployment URL is recorded yet; deployment is a separate launch phase.
 - No open-source license is currently declared. Repository visibility does not grant reuse rights by default.
 
 ## Further reading
