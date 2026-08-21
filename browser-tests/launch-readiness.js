@@ -8,7 +8,9 @@ const check = (condition, label) => {
   if (!condition) failures.push(label);
 };
 
-await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+if (frame.contentWindow.location.href === "about:blank" || frame.contentDocument?.readyState !== "complete") {
+  await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+}
 await wait(1400);
 const view = frame.contentWindow;
 const app = frame.contentDocument;
@@ -57,8 +59,8 @@ app.querySelector('[data-theme-option="dark"]')?.click();
 check(app.body.dataset.theme === "dark", "16 dark theme remains functional");
 check(app.querySelector("#betSlip h2")?.textContent === "Research Slip" && app.querySelector("#openWorkspace")?.textContent.includes("Workspace"), "17 primary terminology is consistent");
 const resources = view.performance.getEntriesByType("resource");
-const appScript = resources.find((entry) => entry.name.endsWith("/app.js"));
-const stylesheet = resources.find((entry) => entry.name.endsWith("/styles.css"));
+const appScript = resources.find((entry) => new URL(entry.name).pathname.endsWith("/app.js"));
+const stylesheet = resources.find((entry) => new URL(entry.name).pathname.endsWith("/styles.css"));
 check((appScript?.decodedBodySize || 0) < 800000, `18 application entry remains below 800 KB (${Math.round((appScript?.decodedBodySize || 0) / 1024)} KB)`);
 check((stylesheet?.decodedBodySize || 0) < 250000, `19 shared stylesheet remains below 250 KB (${Math.round((stylesheet?.decodedBodySize || 0) / 1024)} KB)`);
 check(window.testErrors.length === 0, `20 no browser errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);

@@ -7,11 +7,22 @@ const check = (condition, label) => {
   checks.push(label);
   if (!condition) failures.push(label);
 };
+const waitFor = async (predicate, timeout = 5000) => {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await wait(40);
+  }
+  return false;
+};
 
-await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
-await wait(1400);
+if (frame.contentWindow.location.href === "about:blank" || frame.contentDocument?.readyState !== "complete") {
+  await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+}
+await waitFor(() => frame.contentDocument?.querySelectorAll("#todayPulseGrid [data-home-card]").length >= 4);
 const view = frame.contentWindow;
 const app = frame.contentDocument;
+await waitFor(() => app.querySelector(".primary-button"));
 const rootStyle = view.getComputedStyle(app.documentElement);
 
 for (const token of ["--surface-card", "--text-primary", "--border-subtle", "--pink", "--space-4", "--radius-lg", "--shadow-sm"]) {
@@ -19,8 +30,30 @@ for (const token of ["--surface-card", "--text-primary", "--border-subtle", "--p
 }
 
 const demo = app.querySelector("#dataStatus");
-check(demo?.textContent.includes("Sample data") && demo?.textContent.includes("Deterministic demo"), "sample mode is presented as an intentional deterministic demo");
+check(demo?.textContent.includes("Portfolio demo") && demo?.textContent.includes("Validated sample data"), "sample mode is presented as an intentional validated portfolio demo");
 check(demo?.getAttribute("aria-description")?.includes("No live feeds"), "demo disclosure is available to assistive technology");
+
+const launchCards = [...app.querySelectorAll("#todayPulseGrid [data-home-card]")];
+const launchSports = new Set(launchCards.map((card) => card.dataset.sportId));
+const launchHero = launchCards[0];
+const launchHeroImage = launchHero?.querySelector("img");
+if (launchHeroImage) launchHeroImage.loading = "eager";
+launchHeroImage?.scrollIntoView({ block: "center" });
+if (launchHeroImage && (!launchHeroImage.complete || !launchHeroImage.naturalWidth)) {
+  await Promise.race([
+    launchHeroImage.decode().catch(() => undefined),
+    wait(3000),
+  ]);
+}
+view.scrollTo(0, 0);
+check(app.querySelector("#todayPulse")?.dataset.scope === "system:all" && launchSports.size >= 4, "fresh Home defaults to a deterministic multi-sport story mix");
+check(app.querySelector("#todayPulseTitle")?.textContent === "Stories behind the numbers" && app.querySelector("#todayPulseSummary")?.textContent.includes("Evidence-backed sports intelligence"), "first view states the product value in plain language");
+check(launchHero?.dataset.homeCard === "story-fixture-ended-streak" && launchHero?.dataset.leagueId === "mlb", "canonical recruiter story leads the launch presentation");
+check(launchHero?.querySelector("[data-illustration-level]")?.dataset.illustrationLevel === "exact" && launchHero?.querySelector("[data-illustration-registry-id]")?.dataset.illustrationRegistryId === "art-mlb-aaron-judge-portrait", "hero portrait resolves through the centralized exact-art registry");
+check(launchHeroImage?.complete && launchHeroImage?.naturalWidth > 0, "hero artwork is present and decoded");
+check(launchHero?.querySelector("[data-view-story]") && launchHero?.querySelector("[data-open-athlete='mlb-aaron-judge']") && launchHero?.querySelector("[data-research-story]") && launchHero?.querySelector("[data-home-action='comparison']"), "hero exposes story, profile, structured research, and comparison paths");
+check(!app.querySelector("#researchIntentNav")?.textContent.includes("AI Research") && app.querySelector("#researchIntentNav")?.textContent.includes("Edge Research"), "research navigation describes deterministic Edge Research without a generative AI claim");
+check(app.querySelector("#researchIntentNav")?.textContent.includes("Parlay Research") && app.querySelector("#researchIntentNav")?.textContent.includes("Value Research"), "market navigation is framed as research rather than advice");
 
 const primary = app.querySelector(".primary-button");
 const secondary = app.querySelector(".text-button");
@@ -57,8 +90,10 @@ check(app.body.dataset.theme === "light", "light theme remains available");
 app.querySelector('[data-theme-option="dark"]')?.click();
 check(app.body.dataset.theme === "dark" && view.getComputedStyle(app.body).backgroundColor !== lightSurface, "dark theme remains visually distinct");
 
-primary?.focus();
-check(app.activeElement === primary && view.getComputedStyle(primary).outlineStyle !== "none", "keyboard focus remains visible on the primary action");
+const launchPrimary = launchHero?.querySelector("[data-view-story]");
+launchPrimary?.focus({ focusVisible: true });
+const visibleFocusRule = [...app.styleSheets].some((sheet) => [...sheet.cssRules].some((rule) => rule.selectorText?.includes("button:focus-visible") && rule.style.outline));
+check(launchPrimary instanceof view.HTMLButtonElement && launchPrimary.tabIndex === 0 && visibleFocusRule, "primary story action is keyboard-focusable and retains the visible focus contract");
 check(app.querySelectorAll("button:not([type])").length === 0, "all static markup buttons retain explicit semantics");
 check(window.testErrors.length === 0, `no browser errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
 

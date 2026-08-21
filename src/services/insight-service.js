@@ -85,8 +85,8 @@ function marketView(market, selection, entityId) {
     settlementScope: market.settlementScope,
     available: market.available && selection.available && !selection.stale && market.status === "open",
     stale: selection.stale,
-    label: "Related current market",
-    warning: "Historical context is separate from projection, edge, confidence, and sportsbook odds. A streak does not prove a bet will win.",
+    label: "Related market analysis",
+    warning: "Historical context is separate from fixture projections, sample prices, and model signals. A streak does not prove a bet will win.",
   });
 }
 

@@ -192,6 +192,7 @@ export function createHomeDiscoveryModel({
   preferences = {},
   researchMode = "stats",
   currentDate = new Date(),
+  canonicalStoryId = "",
 } = {}) {
   if (!sportsRepository || !statsRepository || !insightService) {
     throw new TypeError("Home discovery requires sports, statistics, and insight repositories.");
@@ -241,6 +242,7 @@ export function createHomeDiscoveryModel({
     mode: researchMode,
     now: currentDate,
     visibleLeagues,
+    canonicalStoryId,
   }).map((story) => Object.freeze({
     id: story.id,
     kind: "story",
@@ -338,7 +340,9 @@ export function createHomeDiscoveryModel({
     generatedAt: statsRepository.updatedAt || null,
     sample: true,
     sections: Object.freeze([
-      section("stories", "Today’s Stories", `Validated stories for ${contextLabel}.`, stories, liveOnly
+      section("stories", canonicalStoryId ? "Stories behind the numbers" : "Today’s Stories", canonicalStoryId
+        ? "Evidence-backed sports intelligence across leagues, with direct paths into profiles, comparisons, and structured research."
+        : `Validated stories for ${contextLabel}.`, stories, liveOnly
         ? "No normalized event currently has live status in this scope."
         : todayOnly ? "No validated story or scheduled event is available for today in this scope."
           : "No fresh deterministic story is available for this scope."),

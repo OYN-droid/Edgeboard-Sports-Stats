@@ -480,7 +480,7 @@ function storyActions(candidate, mode) {
   actions.push(Object.freeze({ type: "save-story", label: "Save story", storyId: candidate.id }));
   if (entity) actions.push(Object.freeze({ type: "follow-entity", label: "Follow entity", entityId: entity.id }));
   actions.push(Object.freeze({ type: "share-story", label: "Share", storyId: candidate.id }));
-  if (mode !== "stats" && candidate.bettingContext) actions.push(Object.freeze({ type: "market", kind: "market", label: "Current market", query: `Show verified current markets related to ${entity?.name || candidate.leagueId}` }));
+  if (mode !== "stats" && candidate.bettingContext) actions.push(Object.freeze({ type: "market", kind: "market", label: candidate.sample ? "Sample market analysis" : "Current market", query: `Show ${candidate.sample ? "sample" : "verified current"} markets related to ${entity?.name || candidate.leagueId}` }));
   return freezeList(actions);
 }
 
@@ -641,8 +641,16 @@ export class DeterministicStoryEngine {
     const eligible = this.getStoriesForScope(scope, { ...options, forHomepage: true });
     const selected = [];
     const sportCounts = new Map();
+    const canonical = options.canonicalStoryId
+      ? eligible.find((candidate) => candidate.id === options.canonicalStoryId)
+      : null;
+    if (canonical) {
+      selected.push(canonical);
+      sportCounts.set(canonical.sportId, 1);
+    }
     for (const candidate of eligible) {
       if (selected.length >= limit) break;
+      if (selected.includes(candidate)) continue;
       const count = sportCounts.get(candidate.sportId) || 0;
       if (scope.sportIds?.length !== 1 && scope.leagueIds?.length !== 1 && count >= 2 && eligible.some((item) => !selected.includes(item) && (sportCounts.get(item.sportId) || 0) === 0)) continue;
       selected.push(candidate);

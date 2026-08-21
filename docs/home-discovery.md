@@ -9,7 +9,7 @@ workspace.
 
 The home route now presents these sections in order:
 
-1. Today’s Stories
+1. Stories behind the numbers (the all-sports portfolio launch view; scoped views retain Today’s Stories)
 2. Trending Research
 3. Did You Know?
 4. On This Day
@@ -20,7 +20,7 @@ The home route now presents these sections in order:
 9. Today’s Markets
 10. Edge Intelligence
 
-Today’s Stories is the only primary `h1` hero on the home route. The existing
+Stories behind the numbers is the only primary `h1` hero on the fresh all-sports home route. The existing
 research form is retained intact in the Edge Intelligence section below market
 discovery.
 
@@ -43,7 +43,7 @@ Intelligence queries.
 
 ## Deterministic section rules
 
-- **Today’s Stories** prioritizes validated scoped insights, then normalized
+- **Stories behind the numbers / Today’s Stories** prioritizes validated scoped insights, then normalized
   current-day events. Live scope uses live events only.
 - **Trending Research** means deterministic priority from validation, relevance,
   sample quality, and existing insight scoring. It is not public popularity or

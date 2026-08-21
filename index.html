@@ -7,7 +7,7 @@
     <title>EdgeBoard Sports Stats</title>
     <meta name="description" content="Discover sports statistics, stories, history, visual analytics, and market research with transparent supporting evidence." />
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="styles.css?v=illustration-system-20260808-1" />
+    <link rel="stylesheet" href="styles.css?v=portfolio-narrative-20260821-2" />
   </head>
   <body>
     <div class="app-shell">
@@ -18,9 +18,9 @@
           <span class="sample-badge" id="modeBadge">Sample</span>
         </a>
         <nav class="sport-tabs" id="sportTabs" aria-label="Sports"></nav>
-        <button class="data-status sample" id="dataStatus" type="button" aria-haspopup="dialog" aria-controls="dataStatusDialog" aria-description="Deterministic portfolio demonstration data. No live feeds are enabled." title="Portfolio demo: deterministic sample data, not a live feed">
+        <button class="data-status sample" id="dataStatus" type="button" aria-haspopup="dialog" aria-controls="dataStatusDialog" aria-description="Portfolio demo with validated sample data. No live feeds are enabled." title="Portfolio demo: validated sample data, not a live feed">
           <span class="data-status-dot" aria-hidden="true"></span>
-          <span><strong>Sample data</strong><small>Deterministic demo</small></span>
+          <span><strong>Portfolio demo</strong><small>Validated sample data</small></span>
         </button>
         <button class="workspace-entry" id="openWorkspace" type="button" aria-label="Open local Workspace">
           Workspace <span id="workspaceSavedCount" aria-label="0 saved items">0</span>
@@ -47,13 +47,13 @@
 
       <nav class="research-intent-nav" id="researchIntentNav" aria-label="Research by intent">
         <button class="active" type="button" data-intent="markets" aria-pressed="true">Markets</button>
-        <button type="button" data-intent="live" aria-pressed="false">Live</button>
+        <button type="button" data-intent="live" aria-pressed="false">Event Status</button>
         <button type="button" data-intent="player-props" aria-pressed="false">Player Props</button>
         <button type="button" data-intent="game-props" aria-pressed="false">Game Props</button>
-        <button type="button" data-intent="sgp" aria-pressed="false">SGP Builder</button>
-        <button type="button" data-intent="value" aria-pressed="false">Value Bets</button>
-        <button type="button" data-intent="movement" aria-pressed="false">Line Movement</button>
-        <button type="button" data-intent="ai-research" aria-pressed="false">AI Research</button>
+        <button type="button" data-intent="sgp" aria-pressed="false">Parlay Research</button>
+        <button type="button" data-intent="value" aria-pressed="false">Value Research</button>
+        <button type="button" data-intent="movement" aria-pressed="false">Market Movement</button>
+        <button type="button" data-intent="ai-research" aria-pressed="false">Edge Research</button>
         <button type="button" data-intent="trending" aria-pressed="false">Trending</button>
       </nav>
 
@@ -192,7 +192,7 @@
 
         <section class="today-pulse discovery-story-hero" id="todayPulse" aria-labelledby="todayPulseTitle">
           <div class="today-board-heading">
-            <div><p class="eyebrow">Deterministic sports discovery</p><h1 id="todayPulseTitle">Today’s Stories</h1><p id="todayPulseSummary">Validated stories and current event context for the selected scope.</p></div>
+            <div><p class="eyebrow">Evidence-backed sports intelligence</p><h1 id="todayPulseTitle">Stories behind the numbers</h1><p id="todayPulseSummary">Explore evidence-backed stories, athlete research, comparisons, and market context across sports.</p></div>
             <span class="sample-badge">Sample data</span>
           </div>
           <div class="today-pulse-grid" id="todayPulseGrid" aria-live="polite"></div>
@@ -457,7 +457,7 @@
             <section class="analyst-workflow" id="analystWorkflow" aria-labelledby="analystWorkflowTitle" aria-live="polite" hidden>
               <div class="analyst-workflow-header">
                 <div>
-                  <p class="eyebrow">Structured AI research</p>
+                  <p class="eyebrow">Structured research</p>
                   <h3 id="analystWorkflowTitle">Analyst workflow</h3>
                 </div>
                 <span class="workflow-status" id="analystWorkflowStatus">Ready</span>
@@ -626,6 +626,6 @@
       </div>
     </dialog>
 
-    <script type="module" src="app.js?v=illustration-system-20260808-1"></script>
+    <script type="module" src="app.js?v=portfolio-narrative-20260821-2"></script>
   </body>
 </html>

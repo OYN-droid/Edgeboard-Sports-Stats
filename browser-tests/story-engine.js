@@ -90,6 +90,9 @@ check(deduped[0].supportingEvidence.some((item) => item.id === "merged-evidence"
 check(deduplicateStories([valid, { ...valid, id: "different-stat", statIds: ["different-stat"] }]).length === 2, "27 same entity with a distinct stat remains distinct");
 check(engine.getFeaturedStories({}, { mode: "stats", now: fixedNow, visibleLeagues: allLeagues }).slice(0, 4).map((item) => item.sportId).length > 0, "28 homepage selection returns scored stories");
 check(new Set(engine.getFeaturedStories({}, { mode: "stats", now: fixedNow, visibleLeagues: allLeagues }).map((item) => item.sportId)).size > 1, "29 All Sports feature selection is diverse");
+const recruiterStories = engine.getFeaturedStories({}, { mode: "stats", now: fixedNow, visibleLeagues: allLeagues, canonicalStoryId: "story-fixture-ended-streak" });
+check(recruiterStories[0]?.id === "story-fixture-ended-streak" && recruiterStories[0]?.primaryEntity?.id === "mlb-aaron-judge", "29a explicit portfolio seed leads with the supported Aaron Judge story");
+check(recruiterStories[0]?.media?.illustration?.fallbackLevel === "exact" && new Set(recruiterStories.map((item) => item.sportId)).size > 1, "29b portfolio seed preserves exact artwork and multi-sport diversity");
 
 // Deterministic phrasing.
 const streak = all.find((item) => item.storyType === "active_streak" && item.claimData.streakLength > 1);

@@ -28,7 +28,7 @@ import {
 } from "./src/services/research-mode-service.js";
 import { createAthleteProfileRepository } from "./src/services/athlete-profile-service.js";
 import { createAthleteMediaViewModel } from "./src/services/athlete-media-service.js";
-import { createInsightService } from "./src/services/insight-service.js";
+import { createInsightService } from "./src/services/insight-service.js?v=portfolio-narrative-20260821-2";
 import { createResearchPlan } from "./src/services/research-planner-service.js";
 import { buildResearchAnswer } from "./src/services/research-answer-service.js";
 import { createEntityRegistry, mergeProviderEntities } from "./src/services/entity-registry-service.js";
@@ -61,8 +61,8 @@ import {
   edgeLabToCsv,
   edgeLabToMarkdown,
 } from "./src/services/edge-lab-service.js";
-import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js";
-import { createStoryEngine } from "./src/services/story-engine.js";
+import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js?v=portfolio-narrative-20260821-2";
+import { createStoryEngine } from "./src/services/story-engine.js?v=portfolio-narrative-20260821-2";
 import { createDiscoveryService } from "./src/services/discovery-service.js";
 import { createKnowledgeGraphService } from "./src/services/knowledge-graph-service.js";
 import { classifyMarketExplainerQuery, createMarketResearchService } from "./src/services/market-research-service.js";
@@ -217,7 +217,8 @@ function loadNavigationSelection() {
   } catch {
     savedSelection = null;
   }
-  return normalizeNavigationSelection(urlSelection || savedSelection, navigationModel.allLeagues, defaultLeague?.leagueId);
+  const launchSelection = { type: "system", id: "all", label: "All Sports" };
+  return normalizeNavigationSelection(urlSelection || savedSelection || launchSelection, navigationModel.allLeagues, defaultLeague?.leagueId);
 }
 
 function loadResearchState() {
@@ -604,6 +605,7 @@ const elements = {
   insightDiscoverySummary: document.querySelector("#insightDiscoverySummary"),
   insightDiscoveryGrid: document.querySelector("#insightDiscoveryGrid"),
   todayPulse: document.querySelector("#todayPulse"),
+  todayPulseTitle: document.querySelector("#todayPulseTitle"),
   todayPulseSummary: document.querySelector("#todayPulseSummary"),
   todayPulseGrid: document.querySelector("#todayPulseGrid"),
   homeDiscoverySections: document.querySelector("#homeDiscoverySections"),
@@ -1691,7 +1693,7 @@ function renderDataStatus() {
       : metadata.stale ? "stale"
         : metadata.state;
   const labels = {
-    sample: "Sample data",
+    sample: "Portfolio demo",
     fresh: "Fresh",
     delayed: "Delayed",
     stale: "Stale",
@@ -1705,7 +1707,7 @@ function renderDataStatus() {
   elements.dataStatus.className = `data-status ${escapeHtml(state)}`;
   elements.dataStatus.innerHTML = `
     <span class="data-status-dot" aria-hidden="true"></span>
-    <span><strong>${escapeHtml(labels[state] || state)}</strong><small>${metadata.sample ? "Deterministic demo" : escapeHtml(metadata.provider)} · ${escapeHtml(updated)}</small></span>
+    <span><strong>${escapeHtml(labels[state] || state)}</strong><small>${metadata.sample ? "Validated sample data" : escapeHtml(metadata.provider)} · ${escapeHtml(updated)}</small></span>
   `;
   elements.dataStatus.title = `${metadata.sources.length} source domain${metadata.sources.length === 1 ? "" : "s"} · ${metadata.errors.length} provider error${metadata.errors.length === 1 ? "" : "s"}${metadata.sample ? " · no live provider configured" : ""}`;
   const sourceRows = metadata.sources.length
@@ -2087,7 +2089,7 @@ function renderInsightCard(insight, { feature = false, context = "discovery" } =
       </div>
       ${insight.rarity?.comparisonPoolSize ? `<p class="insight-rarity">${escapeHtml(insight.rarity.label)} · ${insight.rarity.qualifyingEntityCount} of ${insight.rarity.comparisonPoolSize} qualified entities</p>` : ""}
       <div class="market-research-quality" title="Research Quality evaluates source evidence, not projection or probability."><span>Research Quality</span><strong>${escapeHtml(trust.researchQuality.label)} · ${trust.researchQuality.score}%</strong></div>
-      ${insight.bettingContext ? `<aside class="related-insight-market"><strong>Related current market</strong><span>${escapeHtml(insight.bettingContext.line)} · ${formatOdds(insight.bettingContext.odds)} · ${escapeHtml(insight.bettingContext.sportsbook)}</span><small>Historical context remains separate from projection and model confidence.</small></aside>` : ""}
+      ${insight.bettingContext ? `<aside class="related-insight-market"><strong>Related sample market</strong><span>${escapeHtml(insight.bettingContext.line)} · ${formatOdds(insight.bettingContext.odds)} · ${escapeHtml(insight.bettingContext.sportsbook)}</span><small>Fixture market context remains separate from projection and model confidence.</small></aside>` : ""}
       <div class="insight-card-footer">
         <span>${escapeHtml(insight.source.attribution || insight.source.provider)} · ${formatDateTime(insight.freshness.lastUpdated)}</span>
         <div>
@@ -2604,7 +2606,7 @@ function renderMarketDetail(model) {
   const rowValue = (row) => row?.stats?.[performance.statId] ?? row?.[performance.statId] ?? "—";
   const currentPick = getPickBySelectionId(sportsRepository, model.leagueId, model.selectionId);
   return `<article class="market-research-detail">
-    <header class="market-detail-hero"><div><div class="home-card-kickers"><span>${escapeHtml(model.leagueName)}</span><span>${escapeHtml(model.status)}</span>${model.source.sample ? '<span class="sample-badge">Sample data</span>' : ""}</div><h2>${escapeHtml(model.participantName)} · ${escapeHtml(model.marketName)}</h2><p>${escapeHtml(model.period)} · ${escapeHtml(model.settlementScope)}${model.event?.startsAt ? ` · ${formatDateTime(model.event.startsAt)}` : " · Event time unavailable"}</p></div><div class="market-current-price"><span>Current provider offer</span><strong>${escapeHtml(model.currentLine)} · ${formatOdds(model.currentOdds)}</strong><small>${escapeHtml(model.sportsbook)} · updated ${formatDateTime(model.lastUpdatedAt)}</small></div></header>
+    <header class="market-detail-hero"><div><div class="home-card-kickers"><span>${escapeHtml(model.leagueName)}</span><span>${escapeHtml(model.status)}</span>${model.source.sample ? '<span class="sample-badge">Fixture demo</span>' : ""}</div><h2>${escapeHtml(model.participantName)} · ${escapeHtml(model.marketName)}</h2><p>${escapeHtml(model.period)} · ${escapeHtml(model.settlementScope)}${model.event?.startsAt ? ` · ${formatDateTime(model.event.startsAt)}` : " · Event time unavailable"}</p></div><div class="market-current-price"><span>${model.source.sample ? "Fixture market snapshot" : "Current provider offer"}</span><strong>${escapeHtml(model.currentLine)} · ${formatOdds(model.currentOdds)}</strong><small>${escapeHtml(model.sportsbook)} · ${model.source.sample ? "sample updated" : "updated"} ${formatDateTime(model.lastUpdatedAt)}</small></div></header>
     ${model.stale ? '<div class="data-warning" role="status"><strong>Stale market</strong><p>This offer may no longer match the provider. Research remains visible with a warning; add-to-slip is disabled.</p></div>' : ""}
     ${renderMarketExplainerPanel(model)}
     ${renderResearchImpact(model)}
@@ -2661,7 +2663,7 @@ async function renderMarketResearch({ focus = false } = {}) {
       state.parlayBuilderResult = result;
       if (!state.parlayVersions.some((item) => item.id === result.id)) state.parlayVersions = [...state.parlayVersions, result].slice(-8);
       elements.marketResearchTitle.textContent = "Parlay Builder";
-      elements.marketResearchSummary.textContent = "Build smarter parlays with Edge Intelligence and Edge Trust.";
+      elements.marketResearchSummary.textContent = "Evaluate fixture market combinations with Edge Intelligence and Edge Trust—not betting advice.";
       elements.marketResearchContent.innerHTML = renderParlayBuilder(result);
     } else if (route.type === "screener") {
       state.marketResearchModel = null;
@@ -2964,6 +2966,7 @@ function replaceHomeDiscoveryContent(container, content) {
 
 function renderHomeDiscovery() {
   const summary = getSelectionSummary(state.navigationSelection);
+  const portfolioLaunch = summary.selection.type === "system" && summary.selection.id === "all";
   const model = createHomeDiscoveryModel({
     selection: summary,
     visibleLeagues: summary.visibleLeagues,
@@ -2977,11 +2980,13 @@ function renderHomeDiscovery() {
     preferences: discoveryScopeAndOptions().options.preferences,
     researchMode: state.researchMode,
     currentDate: new Date(),
+    canonicalStoryId: portfolioLaunch ? "story-fixture-ended-streak" : "",
   });
   const sections = new Map(model.sections.map((item) => [item.id, item]));
   const stories = sections.get("stories");
   const trending = sections.get("trending");
   elements.todayPulse.dataset.scope = serializeNavigationSelection(summary.selection);
+  elements.todayPulseTitle.textContent = stories.title;
   elements.todayPulseSummary.textContent = `${stories.description} ${model.disclaimer}`;
   const storiesContent = stories.cards.length
     ? stories.cards.map((card, index) => renderHomeDiscoveryCard(card, { feature: index === 0 })).join("")
