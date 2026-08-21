@@ -263,7 +263,7 @@ class ProviderConfig:
             market_movement_line_threshold=max(0.0, _float(env, "MARKET_MOVEMENT_LINE_THRESHOLD", 0.5)),
             market_movement_implied_probability_threshold=max(0.0, _float(env, "MARKET_MOVEMENT_IMPLIED_PROBABILITY_THRESHOLD", 0.02)),
             host=env.get("EDGEBOARD_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1",
-            port=max(1, _int(env, "EDGEBOARD_SERVER_PORT", 9010)),
+            port=max(1, _int(env, "PORT", _int(env, "EDGEBOARD_SERVER_PORT", 9010))),
             flags=flags,
             terms=terms,
         )

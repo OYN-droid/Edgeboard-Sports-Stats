@@ -81,6 +81,12 @@ class MutableClock:
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_platform_port_precedes_local_server_port(self):
+        platform = ProviderConfig.from_env({"PORT": "10000", "EDGEBOARD_SERVER_PORT": "9010"})
+        local = ProviderConfig.from_env({"EDGEBOARD_SERVER_PORT": "9010"})
+        self.assertEqual(platform.port, 10000)
+        self.assertEqual(local.port, 9010)
+
     def test_sample_environment_is_valid_without_credentials(self):
         config = ProviderConfig.from_env({"APP_ENV": "test", "DATA_MODE": "sample", "SAMPLE_MODE": "true"})
         errors, warnings = config.validate()

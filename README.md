@@ -56,6 +56,43 @@ The default remains a clearly attributed recorded fixture. Useful endpoints are
 `/api/provider-data`. No live-data claim is active without a configured,
 authenticated, successfully validated provider.
 
+## Portfolio deployment
+
+The canonical deployment path is the single Python web service declared in
+[`render.yaml`](render.yaml). EdgeBoard has no third-party production Python
+dependencies; the build command compiles the server and scripts, and the start
+command serves the frontend, static assets, and relative `/api/*` routes from
+the same origin:
+
+```bash
+python3 -m server.app --host 0.0.0.0 --port "$PORT"
+```
+
+For a local production-mode smoke test with no provider credentials:
+
+```bash
+export EDGEBOARD_ENV=production
+export EDGEBOARD_DATA_MODE=sample
+export SAMPLE_MODE=true
+export SAMPLE_MODE_ENABLED=true
+export APP_BASE_URL=http://127.0.0.1:10000
+export ALLOWED_ORIGINS=http://127.0.0.1:10000
+export PORT=10000
+python3 -m server.app --host 0.0.0.0 --port "$PORT"
+```
+
+Set `APP_BASE_URL` and `ALLOWED_ORIGINS` to the final HTTPS deployment origin;
+the Render Blueprint prompts for both instead of hard-coding a future URL.
+Render supplies `PORT`. Explicit `--port` wins, followed by `PORT`,
+`EDGEBOARD_SERVER_PORT`, and the local `9010` default. Readiness is checked at
+`/api/status/ready` and does not require a live provider.
+
+The Blueprint fixes all public league rollouts to `fixture_only` and disables
+live data, live odds, provider POC access, server alerts, cloud workspace sync,
+and AI explanations. SportsDataIO and other provider credentials are optional
+and must not be configured for the portfolio fixture deployment. The public UI
+and API continue to label the resulting data as sample/fixture content.
+
 ## Tests
 
 ```bash

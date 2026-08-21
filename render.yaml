@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: edgeboard-sports-stats
+    runtime: python
+    plan: free
+    buildCommand: python3 -m compileall -q server scripts
+    startCommand: python3 -m server.app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/status/ready
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: EDGEBOARD_ENV
+        value: production
+      - key: EDGEBOARD_DATA_MODE
+        value: sample
+      - key: SAMPLE_MODE
+        value: "true"
+      - key: SAMPLE_MODE_ENABLED
+        value: "true"
+      - key: LIVE_DATA_ENABLED
+        value: "false"
+      - key: LIVE_ODDS_ENABLED
+        value: "false"
+      - key: SPORTS_PROVIDER_POC_ENABLED
+        value: "false"
+      - key: HISTORICAL_STATS_ENABLED
+        value: "false"
+      - key: INJURIES_ENABLED
+        value: "false"
+      - key: LINEUPS_ENABLED
+        value: "false"
+      - key: CLOUD_WORKSPACE_SYNC_ENABLED
+        value: "false"
+      - key: SERVER_ALERTS_ENABLED
+        value: "false"
+      - key: AI_EXPLANATIONS_ENABLED
+        value: "false"
+      - key: VISUAL_TELEMETRY_ENABLED
+        value: "false"
+      - key: MLB_ROLLOUT_STATE
+        value: fixture_only
+      - key: WNBA_ROLLOUT_STATE
+        value: fixture_only
+      - key: UFC_ROLLOUT_STATE
+        value: fixture_only
+      - key: MLS_ROLLOUT_STATE
+        value: fixture_only
+      - key: DATABASE_URL
+        value: "sqlite:///:memory:"
+      - key: APP_BASE_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
