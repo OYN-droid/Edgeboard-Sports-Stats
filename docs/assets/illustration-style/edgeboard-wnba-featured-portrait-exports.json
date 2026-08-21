@@ -9,6 +9,7 @@
   "productionStatus": "approved",
   "reviewStatus": "approved",
   "humanVisualApproval": "approved",
+  "externalSourceArchiveStatus": "not_distributed_with_repository",
   "sourcePreservation": "Original supplied files remain unchanged at their recorded source paths.",
   "exportMethod": "scripts/export_proof_portrait.swift proportional contain-fit on a transparent 640x800 RGBA canvas",
   "reviewMetadata": {

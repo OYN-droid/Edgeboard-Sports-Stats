@@ -42,6 +42,7 @@ def digest(path: Path) -> str:
 
 def main() -> int:
     errors: list[str] = []
+    unavailable_sources: list[str] = []
     provenance = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
     records = provenance.get("exports", [])
     registry = extract_json(REGISTRY_PATH, "/* registry-json-start */", "/* registry-json-end */")
@@ -62,6 +63,8 @@ def main() -> int:
         errors.append("Boxing approval or technical result counts are invalid")
     if "decoded-pixel scan" not in provenance.get("sourceAlphaAuditMethod", ""):
         errors.append("Boxing provenance does not record the pixel-level source alpha audit")
+    if provenance.get("externalSourceArchiveStatus") != "not_distributed_with_repository":
+        errors.append("Boxing provenance must identify external source archives as not distributed with the repository")
     rejected_teofimo = next((record for record in provenance.get("rejectedSources", [])
                              if record.get("canonicalEntityId") == "boxing-teofimo-lopez"), None)
     if (not rejected_teofimo
@@ -86,10 +89,13 @@ def main() -> int:
         canonical_pattern = rf'athlete\("{re.escape(entity_id)}",\s*"{re.escape(display_name)}",\s*"boxing",\s*"boxing".*?weightClass:\s*"{re.escape(division)}"'
         if not re.search(canonical_pattern, canonical_text):
             errors.append(f"{entity_id}: canonical boxer identity or division is missing")
-        if not source.is_file() or digest(source) != source_sha or record.get("sourceSha256") != source_sha:
-            errors.append(f"{entity_id}: authoritative source is missing or its SHA-256 changed")
-        elif source.stat().st_size != record.get("sourceSizeBytes"):
-            errors.append(f"{entity_id}: authoritative source size changed")
+        if (not source.name or record.get("sourceSha256") != source_sha
+                or not isinstance(record.get("sourceSizeBytes"), int) or record.get("sourceSizeBytes", 0) <= 0):
+            errors.append(f"{entity_id}: recorded external source provenance is incomplete")
+        if not source.is_file():
+            unavailable_sources.append(entity_id)
+        elif digest(source) != source_sha or source.stat().st_size != record.get("sourceSizeBytes"):
+            errors.append(f"{entity_id}: available authoritative source size or SHA-256 changed")
         if not record.get("sourcePhysicalAlpha") or not record.get("sourceMeaningfulTransparency"):
             errors.append(f"{entity_id}: source alpha audit metadata is incomplete")
 
@@ -142,12 +148,14 @@ def main() -> int:
     print(f"Boxing featured exact portraits: {len(active_boxing)} active")
     print("Needs revision: 0 · prior Teofimo Lopez rejection retained as superseded provenance")
     print("Coverage: featured_partial · not complete boxing coverage")
+    if unavailable_sources:
+        print(f"External source recheck skipped: {len(unavailable_sources)}/13 archives are not distributed with the repository; recorded provenance retained")
     print("Validation:")
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("PASS · sources, alpha, isolation state, deterministic exports, hashes, approvals, canonical identities, centralized registry, and fallbacks are valid")
+    print("PASS · portable production integrity, recorded sources, alpha audits, deterministic exports, hashes, approvals, canonical identities, registry, and fallbacks are valid")
     return 0
 
 

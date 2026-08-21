@@ -5,6 +5,7 @@
   "productionStatus": "approved",
   "reviewStatus": "approved",
   "humanVisualApproval": "approved",
+  "externalSourceArchiveStatus": "not_distributed_with_repository",
   "styleVersion": "edgeboard-illustration-v1",
   "portraitMode": "standard",
   "variant": "portrait",

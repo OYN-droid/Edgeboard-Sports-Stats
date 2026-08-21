@@ -25,6 +25,15 @@ jobs:
         run: python -m compileall -q server scripts tests
       - name: Validate configuration
         run: python -m server.app --check-config
+      - name: Validate production sample configuration
+        env:
+          EDGEBOARD_ENV: production
+          EDGEBOARD_DATA_MODE: sample
+          SAMPLE_MODE: "true"
+          SAMPLE_MODE_ENABLED: "true"
+          APP_BASE_URL: https://edgeboard.example
+          ALLOWED_ORIGINS: https://edgeboard.example
+        run: python -m server.app --check-config
       - name: Run migrations
         run: python scripts/migrate.py
       - name: Unit and integration tests
@@ -38,6 +47,35 @@ jobs:
           ! git grep -nE '(sk-[A-Za-z0-9]{16,}|Bearer [A-Za-z0-9._~-]{16,})' -- ':!*.md'
       - name: Check diff hygiene
         run: git diff --check
+
+  portable-illustrations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate style proof, production assets, provenance, and coverage
+        run: python scripts/validate_portable_illustrations.py
+
+  browser-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_ENV: test
+      DATA_MODE: sample
+      SAMPLE_MODE: "true"
+      SAMPLE_MODE_ENABLED: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Confirm runner Chrome
+        run: google-chrome --version
+      - name: Run all 25 browser suites
+        run: python scripts/run_browser_regression.py
 
   rollout-matrix:
     runs-on: ubuntu-latest

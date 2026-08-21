@@ -9,6 +9,7 @@
   "humanVisualApproval": "approved",
   "productionStatus": "approved",
   "reviewStatus": "approved",
+  "externalSourceArchiveStatus": "not_distributed_with_repository",
   "activeCount": 13,
   "needsRevisionCount": 0,
   "exportContract": { "width": 640, "height": 800, "mode": "RGBA", "bitDepth": 8, "interlaced": false, "meaningfulTransparency": true },

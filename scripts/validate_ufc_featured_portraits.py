@@ -60,11 +60,14 @@ def validate_batch(provenance: dict, expected: dict, disclosure_counts: tuple[st
         errors.append("UFC featured style version or portrait mode is invalid")
     if any(value != "approved" for value in provenance.get("reviewMetadata", {}).values()):
         errors.append("UFC human-review metadata is incomplete")
+    if provenance.get("externalSourceArchiveStatus") != "not_distributed_with_repository":
+        errors.append("UFC provenance must identify external source archives as not distributed with the repository")
     return exports
 
 
 def main() -> int:
     errors: list[str] = []
+    unavailable_sources: list[str] = []
     batch_1 = json.loads(BATCH_1_PATH.read_text(encoding="utf-8"))
     batch_2 = json.loads(BATCH_2_PATH.read_text(encoding="utf-8"))
     exports_1 = validate_batch(batch_1, EXPECTED_BATCH_1, ("six active", "four modeled divisions"), errors)
@@ -105,8 +108,14 @@ def main() -> int:
         if not re.search(canonical_pattern, canonical_text):
             errors.append(f"{entity_id}: canonical fighter identity or weight class is missing")
 
+        if (not source.name or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sourceSha256", "")))
+                or record.get("sourceSha256") != source_sha
+                or not isinstance(record.get("sourceSizeBytes"), int)
+                or record.get("sourceSizeBytes", 0) <= 0
+                or not record.get("sourceMeaningfulTransparency")):
+            errors.append(f"{entity_id}: recorded external source provenance is incomplete")
         if not source.is_file():
-            errors.append(f"{entity_id}: preserved source is missing")
+            unavailable_sources.append(entity_id)
         else:
             source_errors, source_metadata = parse_png(source)
             errors.extend(f"{entity_id} source: {error}" for error in source_errors if error != "PNG dimensions must be 640x800")
@@ -193,12 +202,14 @@ def main() -> int:
     print(f"Featured registry active: {len(expected_active & active_ufc)}/10")
     print("Division coverage: Flyweight, Featherweight, Lightweight, Welterweight, Middleweight, Heavyweight, Women's Flyweight")
     print("Coverage: featured partial · 10 fighters · not complete UFC roster coverage")
+    if unavailable_sources:
+        print(f"External source recheck skipped: {len(unavailable_sources)}/{len(exports)} archives are not distributed with the repository; recorded provenance retained")
     print("Validation:")
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("PASS · both batches, deterministic PNG exports, alpha, hashes, provenance, canonical mappings, approvals, registry entries, belt metadata, and fallbacks are valid")
+    print("PASS · both batches, portable production integrity, recorded source provenance, deterministic PNG exports, approvals, registry entries, belt metadata, and fallbacks are valid")
     return 0
 
 

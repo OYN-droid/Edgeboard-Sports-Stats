@@ -27,6 +27,7 @@ def digest(path: Path) -> str:
 
 def main() -> int:
     errors: list[str] = []
+    unavailable_sources: list[str] = []
     provenance = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
     exports = provenance.get("exports", [])
     slots = extract_json(MANIFEST_PATH, "/* basketball-showcase-json-start */", "/* basketball-showcase-json-end */")
@@ -47,6 +48,8 @@ def main() -> int:
         errors.append("NBA Batch 5 style version or portrait mode is invalid")
     if any(value != "approved" for value in provenance.get("reviewMetadata", {}).values()):
         errors.append("NBA Batch 5 human-review metadata is incomplete")
+    if provenance.get("externalSourceArchiveStatus") != "not_distributed_with_repository":
+        errors.append("NBA Batch 5 provenance must identify external source archives as not distributed with the repository")
 
     for record in exports:
         entity_id = record.get("canonicalEntityId")
@@ -59,8 +62,13 @@ def main() -> int:
         expected_path = f"assets/illustrations/nba/edgeboard--{entity_id}--portrait--v01.png"
         if asset_path != expected_path:
             errors.append(f"{entity_id}: production target path is not canonical")
+        if (not source.name or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sourceSha256", "")))
+                or not isinstance(record.get("sourceSizeBytes"), int) or record.get("sourceSizeBytes", 0) <= 0
+                or record.get("sourceDimensions") != {"width": 1122, "height": 1402}
+                or not record.get("sourceHasAlpha") or not record.get("sourceMeaningfulTransparency")):
+            errors.append(f"{entity_id}: recorded external source provenance is incomplete")
         if not source.is_file():
-            errors.append(f"{entity_id}: preserved source is missing")
+            unavailable_sources.append(entity_id)
         elif (source.stat().st_size != record.get("sourceSizeBytes") or digest(source) != record.get("sourceSha256")
               or record.get("sourceDimensions") != {"width": 1122, "height": 1402}
               or not record.get("sourceHasAlpha") or not record.get("sourceMeaningfulTransparency")):
@@ -102,12 +110,14 @@ def main() -> int:
     print(f"Physical: {sum((ROOT / item['assetPath']).is_file() for item in exports)}/5")
     print(f"Human approved: {len(exports) if provenance.get('humanVisualApproval') == 'approved' else 0}/5")
     print(f"Registry active: {len(active_nba)}/30 · pending: {30 - len(active_nba)}/30")
+    if unavailable_sources:
+        print(f"External source recheck skipped: {len(unavailable_sources)}/5 archives are not distributed with the repository; recorded provenance retained")
     print("Validation:")
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("PASS · source preservation, PNG integrity, alpha, deterministic export, provenance, canonical mappings, and activation are valid")
+    print("PASS · portable production integrity, recorded source provenance, PNG alpha, deterministic exports, canonical mappings, and activation are valid")
     return 0
 
 

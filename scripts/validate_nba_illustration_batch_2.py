@@ -30,6 +30,7 @@ def digest(path: Path) -> str:
 
 def main() -> int:
     errors: list[str] = []
+    unavailable_sources: list[str] = []
     provenance = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
     exports = provenance.get("exports", [])
     registry = extract_json(REGISTRY_PATH, "/* registry-json-start */", "/* registry-json-end */")
@@ -52,6 +53,8 @@ def main() -> int:
         errors.append("NBA Batch 2 provenance does not record the approved Style v1 state")
     if not provenance.get("reviewMetadata") or any(value != "approved" for value in provenance["reviewMetadata"].values()):
         errors.append("NBA Batch 2 human-review metadata is incomplete")
+    if provenance.get("externalSourceArchiveStatus") != "not_distributed_with_repository":
+        errors.append("NBA Batch 2 provenance must identify external source archives as not distributed with the repository")
 
     registry_by_entity: dict[str, list[dict]] = {}
     for entry in registry:
@@ -69,13 +72,16 @@ def main() -> int:
         if asset_path != expected_path or asset_path in seen_paths:
             errors.append(f"{entity_id}: wrong or duplicate canonical production path")
         seen_paths.add(asset_path)
-        if source.is_file() and (source.stat().st_size != record.get("sourceSizeBytes")
-              or digest(source) != record.get("sourceSha256")
-              or record.get("sourceDimensions") != {"width": 1122, "height": 1402}
-              or record.get("sourceColorMode") != "8-bit RGBA"
-              or not record.get("sourceHasAlpha")
-              or not record.get("sourceMeaningfulTransparency")):
-            errors.append(f"{entity_id}: preserved source metadata, size, or SHA-256 changed")
+        if (not source.name or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sourceSha256", "")))
+                or not isinstance(record.get("sourceSizeBytes"), int) or record.get("sourceSizeBytes", 0) <= 0
+                or record.get("sourceDimensions") != {"width": 1122, "height": 1402}
+                or record.get("sourceColorMode") != "8-bit RGBA"
+                or not record.get("sourceHasAlpha") or not record.get("sourceMeaningfulTransparency")):
+            errors.append(f"{entity_id}: recorded external source provenance is incomplete")
+        if not source.is_file():
+            unavailable_sources.append(entity_id)
+        elif source.stat().st_size != record.get("sourceSizeBytes") or digest(source) != record.get("sourceSha256"):
+            errors.append(f"{entity_id}: available external source size or SHA-256 changed")
 
         if not asset.is_file():
             errors.append(f"{entity_id}: production export is missing")
@@ -124,12 +130,14 @@ def main() -> int:
     print(f"Physical: {sum((ROOT / item['assetPath']).is_file() for item in exports)}/6")
     print(f"Human approved: {len(exports) if provenance.get('humanVisualApproval') == 'approved' else 0}/6")
     print(f"Registry active: {len(active_nba)}/30 · pending: {len(pending_ids)}/30")
+    if unavailable_sources:
+        print(f"External source recheck skipped: {len(unavailable_sources)}/6 archives are not distributed with the repository; recorded provenance retained")
     print("Validation:")
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("PASS · source preservation, PNG integrity, alpha, deterministic export, provenance, canonical mappings, and activation are valid")
+    print("PASS · portable production integrity, recorded source provenance, PNG alpha, deterministic exports, canonical mappings, and activation are valid")
     return 0
 
 

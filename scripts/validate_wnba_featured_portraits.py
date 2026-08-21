@@ -38,6 +38,7 @@ def digest(path: Path) -> str:
 
 def main() -> int:
     errors: list[str] = []
+    unavailable_sources: list[str] = []
     provenance = json.loads(PROVENANCE_PATH.read_text(encoding="utf-8"))
     exports = provenance.get("exports", [])
     slots = extract_json(MANIFEST_PATH, "/* basketball-showcase-json-start */", "/* basketball-showcase-json-end */")
@@ -60,6 +61,8 @@ def main() -> int:
         errors.append("WNBA featured style version or portrait mode is invalid")
     if any(value != "approved" for value in provenance.get("reviewMetadata", {}).values()):
         errors.append("WNBA featured human-review metadata is incomplete")
+    if provenance.get("externalSourceArchiveStatus") != "not_distributed_with_repository":
+        errors.append("WNBA provenance must identify external source archives as not distributed with the repository")
     if not REFERENCE_PATH.is_file() or digest(REFERENCE_PATH) != REFERENCE_SHA256:
         errors.append("Style v1 reference PNG is missing or changed")
 
@@ -77,8 +80,13 @@ def main() -> int:
         expected_path = f"assets/illustrations/athletes/edgeboard--{entity_id}--portrait--v01.png"
         if asset_path != expected_path:
             errors.append(f"{entity_id}: production target path is not canonical")
+        if (not source.name or not re.fullmatch(r"[0-9a-f]{64}", str(record.get("sourceSha256", "")))
+                or not isinstance(record.get("sourceSizeBytes"), int)
+                or record.get("sourceSizeBytes", 0) <= 0
+                or not record.get("sourceHasAlpha") or not record.get("sourceMeaningfulTransparency")):
+            errors.append(f"{entity_id}: recorded external source provenance is incomplete")
         if not source.is_file():
-            errors.append(f"{entity_id}: preserved source is missing")
+            unavailable_sources.append(entity_id)
         else:
             source_errors, source_metadata = parse_png(source)
             # Supplied sources may be larger than the canonical export canvas;
@@ -125,12 +133,14 @@ def main() -> int:
     print(f"Human approved: {len(exports) if provenance.get('humanVisualApproval') == 'approved' else 0}/8")
     print(f"Featured registry active: {len(set(EXPECTED) & active_wnba)}/8")
     print("Coverage: featured partial · not complete league coverage")
+    if unavailable_sources:
+        print(f"External source recheck skipped: {len(unavailable_sources)}/8 archives are not distributed with the repository; recorded provenance retained")
     print("Validation:")
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("PASS · source preservation, PNG integrity, alpha, deterministic export, provenance, canonical mappings, and activation are valid")
+    print("PASS · portable production integrity, recorded source provenance, PNG alpha, deterministic exports, canonical mappings, and activation are valid")
     return 0
 
 
