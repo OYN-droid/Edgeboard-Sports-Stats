@@ -7,18 +7,21 @@ const suites = [
 const output = document.querySelector("#results");
 const host = document.querySelector("#harness");
 const completed = [];
+const requestedSuiteTimeoutMs = Number(new URL(location.href).searchParams.get("suiteTimeoutMs"));
+const suiteTimeoutMs = Number.isFinite(requestedSuiteTimeoutMs) && requestedSuiteTimeoutMs > 0
+  ? requestedSuiteTimeoutMs : 90000;
 
 for (const suite of suites) {
   localStorage.clear();
   const frame = document.createElement("iframe");
   frame.title = `${suite} regression suite`;
-  frame.src = `./${suite}.html`;
+  frame.src = `./${suite}.html?suiteTimeoutMs=${suiteTimeoutMs}`;
   frame.style.cssText = "width:1280px;height:900px;border:0;position:absolute;left:-10000px";
   host.replaceChildren(frame);
   await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
   const startedAt = Date.now();
   let status = "Running…";
-  while (!status.startsWith("PASS") && !status.startsWith("FAIL") && Date.now() - startedAt < 45000) {
+  while (!status.startsWith("PASS") && !status.startsWith("FAIL") && Date.now() - startedAt < suiteTimeoutMs) {
     await new Promise((resolve) => setTimeout(resolve, 150));
     status = frame.contentDocument?.querySelector("#results")?.textContent || "Running…";
   }

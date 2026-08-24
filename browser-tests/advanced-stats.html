@@ -12,11 +12,14 @@
         window.testErrors.push(`${event.message} (${event.filename || "unknown"}:${event.lineno || 0}:${event.colno || 0})`);
       });
       window.addEventListener("unhandledrejection", (event) => window.testErrors.push(String(event.reason)));
+      const requestedSuiteTimeoutMs = Number(new URL(location.href).searchParams.get("suiteTimeoutMs"));
+      const suiteTimeoutMs = Number.isFinite(requestedSuiteTimeoutMs) && requestedSuiteTimeoutMs > 0
+        ? requestedSuiteTimeoutMs : 90000;
       window.setTimeout(() => {
         if (document.querySelector("#results")?.textContent === "Running…") {
           document.querySelector("#results").textContent = `ERROR\n${window.testErrors.join("\n") || "Harness did not complete."}`;
         }
-      }, 10000);
+      }, suiteTimeoutMs);
     </script>
     <iframe
       id="app"

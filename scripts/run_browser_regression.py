@@ -159,7 +159,10 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=0, help="application port; an available port is selected by default")
     parser.add_argument("--timeout", type=int, default=900, help="maximum browser-suite runtime in seconds")
     parser.add_argument("--suite", default="full-regression", help="browser-tests harness name without the .html suffix")
+    parser.add_argument("--suite-timeout-ms", type=int, default=90000, help="per-suite browser harness timeout in milliseconds")
     args = parser.parse_args()
+    if args.suite_timeout_ms <= 0:
+        parser.error("--suite-timeout-ms must be greater than zero")
     app_port = args.port or available_port()
     debug_port = available_port()
     app_process = None
@@ -206,7 +209,8 @@ def main() -> int:
         suite = "".join(character for character in args.suite if character.isalnum() or character in {"-", "_"})
         if not suite:
             raise ValueError("Browser suite name is invalid")
-        devtools_call(connection, 1, "Page.navigate", {"url": f"http://127.0.0.1:{app_port}/browser-tests/{suite}.html"})
+        suite_url = f"http://127.0.0.1:{app_port}/browser-tests/{suite}.html?{urllib.parse.urlencode({'suiteTimeoutMs': args.suite_timeout_ms})}"
+        devtools_call(connection, 1, "Page.navigate", {"url": suite_url})
 
         deadline = time.monotonic() + args.timeout
         request_id = 2

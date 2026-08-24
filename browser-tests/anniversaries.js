@@ -10,6 +10,7 @@ import { createStatsRepository } from "../src/services/stats-provider.js";
 const checks=[];const failures=[];const check=(condition,label)=>{checks.push(label);if(!condition)failures.push(label);};
 const wait=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms));
 const appFrame=document.querySelector("#app");
+const appFrameReady=appFrame.contentWindow.location.href!=="about:blank"&&appFrame.contentDocument?.readyState==="complete"?Promise.resolve():new Promise((resolve)=>appFrame.addEventListener("load",resolve,{once:true}));
 appFrame.contentWindow.addEventListener("error",(event)=>window.testErrors.push(`app: ${event.message}`));
 appFrame.contentWindow.addEventListener("unhandledrejection",(event)=>window.testErrors.push(`app: ${String(event.reason)}`));
 const sportsRepository=createSportsRepository(mockProviderPayload);
@@ -70,7 +71,7 @@ service.invalidateHistoricalItem(first.historicalItemId);
 check(service.getAnniversaries({date:"2026-08-03",limit:50}).total===10,"40 targeted invalidation safely rebuilds the date");
 
 const frame=appFrame;
-await new Promise((resolve)=>frame.addEventListener("load",resolve,{once:true}));await wait(500);
+await appFrameReady;await wait(500);
 const doc=frame.contentDocument;const win=frame.contentWindow;
 check(doc.body.classList.contains("history-active"),"41 anniversary route restores after refresh");
 check(doc.querySelector("#historicalExplorerTitle")?.textContent==="On This Day","42 explorer heading identifies On This Day");

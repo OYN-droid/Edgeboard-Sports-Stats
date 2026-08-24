@@ -22,6 +22,8 @@ import { buildStatsResult } from "../src/services/stats-results-service.js";
 
 const results = document.querySelector("#results");
 const frame = document.querySelector("#app");
+const frameReady = frame.contentWindow.location.href !== "about:blank" && frame.contentDocument?.readyState === "complete"
+  ? Promise.resolve() : new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
 frame.contentWindow.addEventListener("error", (event) => window.testErrors.push(`app: ${event.message}`));
 frame.contentWindow.addEventListener("unhandledrejection", (event) => window.testErrors.push(`app: ${String(event.reason)}`));
 const failures = [];
@@ -466,7 +468,7 @@ const bothRank = buildLeaderboardViewModel(provider, parsed(createStatisticalQue
 check(statsRank.join(",") === bothRank.join(","), "betting confidence never changes observed leaderboard rank");
 
 // Live application: responsive rendering, controls, URL restoration, history, copy feedback, and regressions.
-await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
+await frameReady;
 await wait(650);
 let app = frame.contentDocument;
 let view = frame.contentWindow;
