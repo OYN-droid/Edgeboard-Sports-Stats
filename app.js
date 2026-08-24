@@ -62,7 +62,7 @@ import {
   edgeLabToMarkdown,
 } from "./src/services/edge-lab-service.js";
 import { createHomeDiscoveryModel } from "./src/services/home-discovery-service.js?v=portfolio-narrative-20260821-2";
-import { createHomeCommandCenterModel } from "./src/services/home-command-center-service.js?v=home-command-center-20260821";
+import { createHomeCommandCenterModel } from "./src/services/home-command-center-service.js?v=home-command-center-20260824-synthetic-eligibility";
 import { createStoryEngine } from "./src/services/story-engine.js?v=portfolio-narrative-20260821-2";
 import { createDiscoveryService } from "./src/services/discovery-service.js";
 import { createKnowledgeGraphService } from "./src/services/knowledge-graph-service.js";

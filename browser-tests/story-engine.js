@@ -133,6 +133,9 @@ check(all.some((item) => item.leagueId === "f1" && item.statIds.includes("motors
 check(Boolean(byFixture("story-fixture-golf-course")), "59 golf course-history fixture is represented");
 check(Boolean(byFixture("story-fixture-tennis-upset")), "60 tennis upset fixture is represented");
 check(Boolean(byFixture("story-fixture-corrected")) && Boolean(byFixture("story-fixture-expired")), "61 corrected and expired fixture stories are retained for audit");
+const syntheticBoxingFixture = byFixture("story-fixture-boxing-knockout-milestone");
+check(syntheticBoxingFixture?.primaryEntity?.id === "boxing-sample-boxer-a" && syntheticBoxingFixture?.claimData?.entityName === "Sample Boxer A", "61.a synthetic boxing fixture remains available with its original canonical identity");
+check(!syntheticBoxingFixture?.entityIds?.includes("boxing-canelo-alvarez"), "61.b synthetic fixture evidence is never remapped to a real athlete");
 
 // Edge Trust, view models, actions, and betting separation.
 const view = buildStoryViewModel(valid, { presentation: "hero", mode: "stats" });
