@@ -84,6 +84,26 @@ class PartialProvider(MockProvider):
         raise ProviderUnavailableError("Injury feed unavailable.")
 
 
+class PassthroughProvider(MockProvider):
+    name = "passthrough-provider"
+
+    def get_team_statistics(self):
+        return {"items": [{"id": "TEAM-STAT-1", "nested": {"value": 1}}]}
+
+
+class RawMutationProbeAdapter(CompositeProviderAdapter):
+    def __init__(self):
+        super().__init__()
+        self.seen_values: list[int] = []
+
+    def adapt(self, raw, provider_name, generated_at=None):
+        item = raw["team_statistics"]["items"][0]
+        self.seen_values.append(item["nested"]["value"])
+        if len(self.seen_values) == 1:
+            item["nested"]["value"] = 999
+        return super().adapt(raw, provider_name, generated_at)
+
+
 class MutableClock:
     def __init__(self):
         self.value = 0.0
@@ -200,6 +220,24 @@ class ProviderArchitectureTests(unittest.TestCase):
         self.assertTrue(fallback["provider_status"]["offline_fallback"])
         self.assertGreater(len(fallback["events"]), 0)
         self.assertIsNotNone(fallback["provider_status"]["last_successful_update_at"])
+
+    def test_passthrough_bundle_mutation_does_not_corrupt_cached_payload(self):
+        gateway = ProviderGateway(PassthroughProvider(), cache=MemoryCache())
+        first = gateway.get_bundle()
+        first["team_statistics"][0]["nested"]["value"] = 999
+
+        second = gateway.get_bundle()
+
+        self.assertEqual(second["team_statistics"][0]["nested"]["value"], 1)
+
+    def test_gateway_detaches_cached_passthrough_payload_before_adapter(self):
+        adapter = RawMutationProbeAdapter()
+        gateway = ProviderGateway(PassthroughProvider(), cache=MemoryCache(), adapter=adapter)
+
+        gateway.get_bundle()
+        gateway.get_bundle()
+
+        self.assertEqual(adapter.seen_values, [1, 1])
 
     def test_partial_provider_response(self):
         gateway = ProviderGateway(PartialProvider(), cache=MemoryCache(), adapter=CompositeProviderAdapter())

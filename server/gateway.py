@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 from typing import Any
 
@@ -166,7 +167,9 @@ class ProviderGateway:
                         "cache": cache_state,
                     })
 
-        bundle = self.adapter.adapt(raw, self.provider.name, now_text)
+        # Raw domain values may be shared with MemoryCache. Detach the complete
+        # provider snapshot before adapters can pass through or enrich its items.
+        bundle = self.adapter.adapt(copy.deepcopy(raw), self.provider.name, now_text)
         partial = bool(errors)
         source_states = {source["state"] for source in sources}
         healthy_state = (
