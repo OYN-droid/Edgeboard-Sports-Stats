@@ -1,4 +1,5 @@
 import { getStatDefinition } from "../config/stat-registry.js";
+import { isHomeStoryEligible } from "./home-command-center-service.js";
 
 export const HOME_DISCOVERY_SCHEMA_VERSION = 1;
 
@@ -238,12 +239,12 @@ export function createHomeDiscoveryModel({
     liveOnly,
     todayOnly,
   }, {
-    limit: 6,
+    limit: 30,
     mode: researchMode,
     now: currentDate,
     visibleLeagues,
     canonicalStoryId,
-  }).map((story) => Object.freeze({
+  }).filter(isHomeStoryEligible).slice(0, 6).map((story) => Object.freeze({
     id: story.id,
     kind: "story",
     title: story.headline,

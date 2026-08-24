@@ -195,7 +195,7 @@ check(profileImage?.getAttribute("alt")?.includes("Caitlin Clark"), "profile ill
 check(profileImage?.getAttribute("loading") === "lazy" && profileImage?.getAttribute("decoding") === "async", "profile illustration uses lazy loading and async decoding");
 
 const homeFrame = document.createElement("iframe");
-homeFrame.src = "/?mode=stats&scope=league%3Aufc&testFixtureTimestamp=2026-07-30T12%3A30%3A00.000Z";
+homeFrame.src = "/?mode=stats&scope=system%3Afor-you&testFixtureTimestamp=2026-07-30T12%3A30%3A00.000Z";
 homeFrame.style.cssText = "width:390px;height:900px;border:0";
 document.body.append(homeFrame);
 homeFrame.contentWindow.addEventListener("error", (event) => window.testErrors.push(`home: ${event.message}`));
@@ -206,9 +206,8 @@ check(Boolean(storyArt), "prominent deterministic discovery story can render con
 check(storyArt?.getAttribute("alt") === "" && storyArt?.getAttribute("aria-hidden") === "true", "story illustration is decorative when adjacent claim text identifies the entity");
 const featureCard = homeFrame.contentDocument.querySelector("#todayPulseGrid .home-discovery-card.feature");
 const featureArt = featureCard?.querySelector(".home-card-illustration");
-check(["weight_class", "generic_sport"].includes(featureArt?.dataset.illustrationLevel)
-  && /(?:mma|combat)/i.test(featureArt?.dataset.illustrationRegistryId || "")
-  && featureArt?.dataset.illustrationRegistryId !== "art-ufc-sample-fighter-profile", "UFC sample hero deliberately exposes its non-person combat fallback resolution");
+check(featureArt?.dataset.illustrationLevel === "exact"
+  && !featureCard?.textContent.includes("Sample Boxer A"), "For You hero resolves exact artwork for a non-synthetic entity");
 check(Boolean(homeFrame.contentDocument.querySelector("#insightDiscoveryGrid .home-discovery-card:first-child .home-card-illustration img")), "first Trending Research card uses the centralized illustration renderer");
 for (const [width, label, minimumArtWidth] of [[390, "mobile", 180], [768, "tablet", 190], [1280, "desktop", 230]]) {
   homeFrame.style.width = `${width}px`;

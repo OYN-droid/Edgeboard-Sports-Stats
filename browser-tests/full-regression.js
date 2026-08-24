@@ -1,6 +1,6 @@
 const suites = [
   "about", "advanced-stats", "anniversaries", "athlete-profiles", "discovery-engine", "entities",
-  "historical-explorer", "illustrations", "illustration-proof-gallery", "insights", "knowledge-graph", "launch-readiness", "market-depth",
+  "historical-explorer", "home-command-center", "illustrations", "illustration-proof-gallery", "insights", "knowledge-graph", "launch-readiness", "market-depth",
   "live-state", "mlb-certification", "market-explanations", "market-research", "market-screener", "parlay-builder", "portfolio-polish", "research-analyst",
   "stats-research", "story-engine", "visualizations", "workspace",
 ];

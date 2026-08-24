@@ -110,6 +110,13 @@ const featureImage = feature?.querySelector("img");
 if (featureImage && (!featureImage.complete || !featureImage.naturalWidth)) await Promise.race([featureImage.decode().catch(() => undefined), wait(3000)]);
 check(featureImage?.complete && featureImage?.naturalWidth > 0, "featured artwork loads without a broken image");
 check(app.querySelectorAll(".home-command-center button:not([type])").length === 0, "command-center buttons retain explicit semantics");
+
+app.querySelector('#sportTabs [data-nav-view="for-you"]').click();
+await waitFor(() => app.querySelector("#todayPulse")?.dataset.scope === "system:for-you");
+const forYouStories = [...app.querySelectorAll("#todayPulseGrid .home-discovery-card")];
+check(forYouStories.length > 1, `For You renders multiple real-entity stories (found ${forYouStories.length})`);
+check(forYouStories.every((card) => !card.textContent.includes("Sample Boxer A")), "For You excludes synthetic fixture-person stories");
+check(forYouStories.filter((card) => card.querySelector("[data-open-athlete], [data-open-entity]")).length > 1, "For You includes multiple stories linked to canonical real-entity profiles");
 check(window.testErrors.length === 0, `no application console errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
 
 output.dataset.status = failures.length ? "failed" : "passed";
