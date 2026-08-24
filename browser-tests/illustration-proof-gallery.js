@@ -1,12 +1,12 @@
 import { ILLUSTRATION_REGISTRY } from "../src/config/illustration-registry.js";
-import { ILLUSTRATION_PROOF_QA_FIELDS, ILLUSTRATION_STYLE_PROOF_BATCH } from "../src/config/illustration-style-proof-batch.js";
+import { ILLUSTRATION_PROOF_QA_FIELDS, ILLUSTRATION_STYLE_PROOF_BATCH } from "../tools/illustration-qa/illustration-style-proof-batch.js";
 import { EDGEBOARD_ILLUSTRATION_STYLE_V1, EDGEBOARD_ILLUSTRATION_STYLE_VERSION } from "../src/config/illustration-style-v1.js";
 import { CANONICAL_ENTITIES } from "../src/data/canonical-entities.js";
-import { approvedProofRegistryEntry, evaluateIllustrationProofActivation, prepareProofAssetSubmission, validateIllustrationProofBatch, validateProofAssetInspection } from "../src/services/illustration-proof-service.js";
+import { approvedProofRegistryEntry, evaluateIllustrationProofActivation, prepareProofAssetSubmission, validateIllustrationProofBatch, validateProofAssetInspection } from "../tools/illustration-qa/illustration-proof-service.js";
 import { createIllustrationResolver, getIllustration } from "../src/services/illustration-service.js";
-import { MLB_SHOWCASE_BATCH_1 } from "../src/config/mlb-illustration-showcase-batch-1.js";
-import { NBA_SHOWCASE_BATCH_2, WNBA_SHOWCASE_BATCH_2 } from "../src/config/basketball-illustration-showcase-batch-2.js";
-import { NFL_SHOWCASE_BATCH_4 } from "../src/config/football-hockey-illustration-showcase-batch-4.js";
+import { MLB_SHOWCASE_BATCH_1 } from "../tools/illustration-qa/mlb-illustration-showcase-batch-1.js";
+import { NBA_SHOWCASE_BATCH_2, WNBA_SHOWCASE_BATCH_2 } from "../tools/illustration-qa/basketball-illustration-showcase-batch-2.js";
+import { NFL_SHOWCASE_BATCH_4 } from "../tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js";
 import { FEATURED_PORTRAIT_SELECTIONS } from "../src/config/featured-portrait-coverage.js";
 
 const output = document.querySelector("#results");
@@ -336,11 +336,12 @@ check(ILLUSTRATION_STYLE_PROOF_BATCH.every((slot) => slot.expectedFileType === "
 
 for (const slot of ILLUSTRATION_STYLE_PROOF_BATCH) {
   const exactEntry = ILLUSTRATION_REGISTRY.find((entry) => entry.id === slot.registryDraft.id);
-  check(exactEntry?.status === "active" && exactEntry.assetPath === slot.assetPath && exactEntry.styleVersion === EDGEBOARD_ILLUSTRATION_STYLE_VERSION && exactEntry.styleRole === "production_proof_exemplar", `${slot.displayName} has one active Style v1 exemplar registry entry`);
+  const deliveryPath = slot.assetPath.replace(/\.png$/i, ".webp");
+  check(exactEntry?.status === "active" && exactEntry.assetPath === deliveryPath && exactEntry.styleVersion === EDGEBOARD_ILLUSTRATION_STYLE_VERSION && exactEntry.styleRole === "production_proof_exemplar", `${slot.displayName} has one active Style v1 exemplar registry entry`);
   check(ILLUSTRATION_REGISTRY.some((entry) => entry.id === slot.fallbackRegistryId && entry.status === "active"), `${slot.displayName} fallback remains active`);
   for (const context of contexts) {
     const resolved = getIllustration(entities.get(slot.canonicalEntityId), { ...contextFor(slot), context });
-    check(resolved.fallbackLevel === "exact" && resolved.registryId === slot.registryDraft.id && resolved.assetPath === slot.assetPath, `${slot.displayName} resolves exact artwork in ${context} context`);
+    check(resolved.fallbackLevel === "exact" && resolved.registryId === slot.registryDraft.id && resolved.assetPath === deliveryPath, `${slot.displayName} resolves exact artwork in ${context} context`);
   }
 }
 

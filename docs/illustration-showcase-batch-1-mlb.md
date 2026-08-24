@@ -49,7 +49,7 @@ No provider ID is an asset key. Bare abbreviations collide across EdgeBoard spor
 
 ## Production manifest
 
-The machine-readable source is `src/config/mlb-illustration-showcase-batch-1.js`. Every exported slot contains:
+The machine-readable source is `tools/illustration-qa/mlb-illustration-showcase-batch-1.js`. Every exported slot contains:
 
 - canonical athlete and team IDs
 - display names and position

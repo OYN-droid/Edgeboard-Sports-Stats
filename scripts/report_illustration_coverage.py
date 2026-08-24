@@ -11,8 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "src/config/illustration-registry.js"
-SHOWCASE_PATH = ROOT / "src/config/showcase-illustration-registry.js"
-PROOF_PATH = ROOT / "src/config/illustration-style-proof-batch.js"
+SHOWCASE_PATH = ROOT / "tools/illustration-qa/showcase-illustration-registry.js"
+PROOF_PATH = ROOT / "tools/illustration-qa/illustration-style-proof-batch.js"
 BOXING_FEATURED_PROVENANCE_PATH = ROOT / "docs/assets/illustration-style/edgeboard-boxing-featured-portrait-exports.json"
 ASSET_ROOT = ROOT / "assets/illustrations"
 
@@ -71,7 +71,12 @@ def main() -> int:
 
     asset_files = {str(path.relative_to(ROOT)) for path in ASSET_ROOT.rglob("*") if path.is_file()}
     proof_paths = {item["assetPath"] for item in proof_slots}
-    orphans = sorted(asset_files - registered_paths - archived_paths - proof_paths)
+    source_paths = {
+        Path(path).with_suffix(".png").as_posix()
+        for path in registered_paths
+        if Path(path).suffix == ".webp" and (ROOT / Path(path).with_suffix(".png")).is_file()
+    }
+    orphans = sorted(asset_files - registered_paths - source_paths - archived_paths - proof_paths)
     if orphans:
         errors.extend(f"orphaned asset: {path}" for path in orphans)
 

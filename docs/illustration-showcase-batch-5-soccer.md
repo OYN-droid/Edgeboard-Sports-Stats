@@ -7,9 +7,9 @@ The role `team_representative` is a replaceable editorial assignment. It is not 
 ## Architecture
 
 - `src/config/sports-registry.js` remains the authority for supported competition IDs and priority tiers.
-- `src/config/soccer-illustration-showcase-batch-5.js` owns the 40-slot production manifest, portrait prompts, deferred action prompts, planned asset paths, and validation.
+- `tools/illustration-qa/soccer-illustration-showcase-batch-5.js` owns the 40-slot production manifest, portrait prompts, deferred action prompts, planned asset paths, and validation.
 - `src/data/canonical-entities.js` owns canonical athlete and club identity. Effective-dated showcase selection stays separate.
-- `src/config/showcase-illustration-registry.js` records the replaceable assignments.
+- `tools/illustration-qa/showcase-illustration-registry.js` records the replaceable assignments.
 - `src/config/illustration-registry.js` activates only existing club, competition, sport, and neutral fallback assets. Planned portraits remain inactive until reviewed files exist.
 - `scripts/report_soccer_showcase_batch_5.py` provides the focused coverage and missing-asset report.
 

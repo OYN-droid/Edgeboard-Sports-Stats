@@ -1917,7 +1917,7 @@ function persistResearchState({ updateUrl = true, historyMode = "replace" } = {}
   }
 }
 
-function renderAthleteMedia(media, { large = false } = {}) {
+function renderAthleteMedia(media, { large = false, loading = "lazy" } = {}) {
   if (!media) return "";
   const candidates = media.candidates || (media.imageUrl ? [{ type: media.imageType, url: media.imageUrl }] : []);
   const encodedCandidates = encodeURIComponent(JSON.stringify(candidates));
@@ -1925,7 +1925,7 @@ function renderAthleteMedia(media, { large = false } = {}) {
   const fallback = `<span class="athlete-media-fallback" aria-label="${escapeHtml(media.altText)}" ${decorative ? 'aria-hidden="true"' : 'role="img"'} ${candidates.length ? "hidden" : ""}>${escapeHtml(media.fallbackInitials)}</span>`;
   return `
     <div class="athlete-media${large ? " profile-media" : ""}" data-media-type="${escapeHtml(media.imageType)}">
-      ${candidates.length ? `<img src="${escapeHtml(candidates[0].url)}" alt="${decorative ? "" : escapeHtml(media.altText)}" ${decorative ? 'aria-hidden="true"' : ""} loading="lazy" decoding="async" data-athlete-image data-media-index="0" data-media-candidates="${escapeHtml(encodedCandidates)}" />` : ""}
+      ${candidates.length ? `<img src="${escapeHtml(candidates[0].url)}" alt="${decorative ? "" : escapeHtml(media.altText)}" ${decorative ? 'aria-hidden="true"' : ""} loading="${loading === "eager" ? "eager" : "lazy"}" decoding="async" data-athlete-image data-media-index="0" data-media-candidates="${escapeHtml(encodedCandidates)}" />` : ""}
       ${fallback}
     </div>
   `;
@@ -2169,7 +2169,7 @@ function renderHomeDiscoveryCard(card, { feature = false } = {}) {
     context: "story", desiredVariant: feature ? "story" : "compact", decorative: true,
     fallbackPolicy: "featured_story",
   });
-  const illustration = illustrationMedia?.candidates?.length ? `<div class="home-card-illustration" aria-hidden="true" data-illustration-level="${escapeHtml(illustrationMedia.illustration?.fallbackLevel || "none")}" data-illustration-registry-id="${escapeHtml(illustrationMedia.illustration?.registryId || "")}">${renderAthleteMedia(illustrationMedia)}</div>` : "";
+  const illustration = illustrationMedia?.candidates?.length ? `<div class="home-card-illustration" aria-hidden="true" data-illustration-level="${escapeHtml(illustrationMedia.illustration?.fallbackLevel || "none")}" data-illustration-registry-id="${escapeHtml(illustrationMedia.illustration?.registryId || "")}">${renderAthleteMedia(illustrationMedia, { loading: feature ? "eager" : "lazy" })}</div>` : "";
   return `<article class="home-discovery-card${feature ? " feature" : ""}${card.insightId ? " insight-card" : ""}${illustration ? " has-illustration" : ""}" data-home-card="${escapeHtml(card.id)}" data-card-kind="${escapeHtml(card.kind)}" data-classification="${escapeHtml(card.classification)}" data-league-id="${escapeHtml(card.leagueId || "")}" data-sport-id="${escapeHtml(card.sportId || "")}"${card.insightId ? ` data-insight-card="${escapeHtml(card.insightId)}"` : ""}>
     <div class="home-card-kickers"><span>${escapeHtml(card.eyebrow)}</span><span class="validation-label">${escapeHtml((card.validationStatus || "validation unavailable").replaceAll("_", " "))}</span><span class="sample-badge">${sourceLabel}</span></div>
     ${illustration}
@@ -2967,9 +2967,9 @@ function replaceHomeDiscoveryContent(container, content) {
   return true;
 }
 
-function commandCenterStoryMedia(story, className = "") {
+function commandCenterStoryMedia(story, className = "", { loading = "lazy" } = {}) {
   const illustration = story.media?.illustration;
-  return `<div class="command-story-media ${escapeHtml(className)}" aria-hidden="true" data-illustration-level="${escapeHtml(illustration?.fallbackLevel || "none")}" data-illustration-registry-id="${escapeHtml(illustration?.registryId || "")}">${renderAthleteMedia(story.media)}</div>`;
+  return `<div class="command-story-media ${escapeHtml(className)}" aria-hidden="true" data-illustration-level="${escapeHtml(illustration?.fallbackLevel || "none")}" data-illustration-registry-id="${escapeHtml(illustration?.registryId || "")}">${renderAthleteMedia(story.media, { loading })}</div>`;
 }
 
 function commandCenterEventTitle(event) {
@@ -3005,7 +3005,7 @@ function renderCommandFeaturedStory(story) {
         ${researchAction ? renderHomeDiscoveryAction(researchAction) : ""}
       </div>
     </div>
-    ${commandCenterStoryMedia(story, "command-feature-art")}
+    ${commandCenterStoryMedia(story, "command-feature-art", { loading: "eager" })}
   </article>`;
 }
 

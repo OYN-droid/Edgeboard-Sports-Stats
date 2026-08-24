@@ -9,12 +9,12 @@ EdgeBoard illustrations are a presentation layer over canonical sports entities.
 ## Architecture
 
 - `src/config/illustration-registry.js` is the canonical asset manifest. Every entry identifies a canonical entity or fallback group and records type, variant, path, provenance, priority, status, and accessible alternative text.
-- `src/config/showcase-illustration-registry.js` keeps editorial assignments and league coverage targets separate from roster identity. Assignments are effective-dated, so trades, team changes, promotion changes, or weight-class changes do not silently change old editorial decisions.
+- `tools/illustration-qa/showcase-illustration-registry.js` keeps editorial assignments and league coverage targets separate from roster identity. Assignments are effective-dated, so trades, team changes, promotion changes, or weight-class changes do not silently change old editorial decisions.
 - `src/services/illustration-service.js` exposes `getIllustration(entity, context)` and the injectable `IllustrationResolver`. It validates registry data and returns one normalized presentation result.
 - `src/services/athlete-media-service.js` makes the registry the first approved media candidate while retaining the existing licensed-media and initials fallback chain.
 - `scripts/report_illustration_coverage.py` validates paths, IDs, provenance, variants, duplicate canonical variants, orphan files, target coverage, and the next production queue.
-- `src/config/combat-illustration-showcase-batch-3.js` prepares canonical UFC/MMA and boxing portrait and stance-action production without activating unreviewed art. `scripts/report_combat_showcase_batch_3.py` validates its 19 weight classes, 38 fighter assignments, and complete fallback chains.
-- `src/config/football-hockey-illustration-showcase-batch-4.js` prepares 32 NFL and 32 NHL team representatives with portrait-first production, league-appropriate deferred actions, simplified uniforms, and safe team-level fallbacks. `scripts/report_football_hockey_showcase_batch_4.py` validates all 64 mappings.
+- `tools/illustration-qa/combat-illustration-showcase-batch-3.js` prepares canonical UFC/MMA and boxing portrait and stance-action production without activating unreviewed art. `scripts/report_combat_showcase_batch_3.py` validates its 19 weight classes, 38 fighter assignments, and complete fallback chains.
+- `tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js` prepares 32 NFL and 32 NHL team representatives with portrait-first production, league-appropriate deferred actions, simplified uniforms, and safe team-level fallbacks. `scripts/report_football_hockey_showcase_batch_4.py` validates all 64 mappings.
 
 The resolver uses one deterministic order:
 

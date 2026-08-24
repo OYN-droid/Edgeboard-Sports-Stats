@@ -15,6 +15,7 @@ from .cache import CachePolicy, MemoryCache
 from .edge_trust import evaluate_edge_trust
 from .errors import ProviderError, ProviderValidationError, ValidationError
 from .mlb_game_markets import MlbGameMarketAdapter, american_to_decimal, decimal_to_american, odds_freshness
+from .mlb_domain_service import MlbDomainService
 
 
 MLB_PROP_CONTRACT_VERSION = "edgeboard-mlb-player-props-v1"
@@ -219,10 +220,11 @@ class MlbPlayerPropAdapter:
         return {"contractVersion":MLB_PROP_CONTRACT_VERSION,"provider":payload["provider"],"sourceMode":source_mode or payload.get("sourceMode") or "fixture","recordedAt":context["recordedAt"],"attribution":payload.get("attribution"),"coverage":copy.deepcopy(payload.get("coverage") or {}),"events":list(events.values()),"sportsbooks":list(books.values()),"players":list(players.values()),"props":props,"historicalGameLogs":logs,"rejected":[*context["rejected"],*rejected],"diagnostics":{"providerPlayerMappings":provider_players}}
 
 
-class MlbPlayerPropService:
+class MlbPlayerPropService(MlbDomainService):
+    provider_status_fields = ("mlb_player_prop_source", "mlb_player_prop_edge_trust")
+
     def __init__(self, cache: MemoryCache, rollout: Any, shadow: Any, schedule_service: Any, *, payload_loader: Callable[[], dict[str, Any]] | None = None, shadow_validator: Callable[..., tuple[dict[str, Any] | None, list[dict[str, Any]], ProviderError | None]] | None = None):
-        self.cache, self.rollout, self.shadow, self.schedule_service = cache, rollout, shadow, schedule_service
-        self.payload_loader, self.shadow_validator = payload_loader or self._fixture, shadow_validator
+        super().__init__(cache, rollout, shadow, schedule_service, payload_loader=payload_loader, shadow_validator=shadow_validator)
         self.adapter, self._lock, self._shadow_lock = MlbPlayerPropAdapter(), threading.Lock(), threading.Lock()
         self.provider_requests, self._last_shadow_report, self._research_cache = 0, None, {}
         self.context_service = None
@@ -310,8 +312,8 @@ class MlbPlayerPropService:
             offers.append({"offer_id":_identity(*key),"league_key":"mlb","event_id":key[0],"market_type":"player_prop","canonical_market_id":definition["marketId"],"provider_market_id":_identity("provider",*key),"market_name":definition["label"],"ui_group":"player_props","period":key[5],"settlement_scope":key[6],"is_live":False,"is_alternate":key[7],"sgp_eligible":False,"source":data["provider"],"source_name":books[key[1]]["displayName"],"sportsbook_id":key[1],"source_mode":"sample","last_updated_at":max(p["updatedAt"] for p in rows),"status":status,"selections":selections})
         return offers
 
-    def provider_bundle(self, base: dict[str, Any]) -> dict[str, Any]:
-        bundle,data=copy.deepcopy(base),self.read(); bundle["offers"]=[*bundle.get("offers",[]),*self.offers()]; bundle["provider_status"]={**bundle.get("provider_status",{}),"mlb_player_prop_source":data["source"],"mlb_player_prop_edge_trust":data["edgeTrust"]}; return bundle
+    def _extend_provider_bundle(self, bundle: dict[str, Any], data: dict[str, Any]) -> None:
+        bundle["offers"] = [*bundle.get("offers", []), *self.offers()]
 
     def run_shadow_validation(self, *, selected_date: str, refresh: bool = False) -> dict[str, Any]:
         if self.rollout.get("mlb")["rolloutState"]!="shadow": raise ValidationError("MLB prop validation requires shadow rollout state.")

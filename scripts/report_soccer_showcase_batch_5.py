@@ -22,9 +22,9 @@ def extract_json(path: Path, start: str, end: str):
 
 
 def main() -> int:
-    manifest = extract_json(ROOT / "src/config/soccer-illustration-showcase-batch-5.js", "/* soccer-showcase-json-start */", "/* soccer-showcase-json-end */")
+    manifest = extract_json(ROOT / "tools/illustration-qa/soccer-illustration-showcase-batch-5.js", "/* soccer-showcase-json-start */", "/* soccer-showcase-json-end */")
     registry = extract_json(ROOT / "src/config/illustration-registry.js", "/* registry-json-start */", "/* registry-json-end */")
-    assignments = extract_json(ROOT / "src/config/showcase-illustration-registry.js", "/* assignments-json-start */", "/* assignments-json-end */")
+    assignments = extract_json(ROOT / "tools/illustration-qa/showcase-illustration-registry.js", "/* assignments-json-start */", "/* assignments-json-end */")
     canonical = (ROOT / "src/data/canonical-entities.js").read_text(encoding="utf-8")
     registry_ids = {item["id"] for item in registry}
     athlete_ids = set(re.findall(r'athlete\("([^"]+)",\s*"[^"]+",\s*"soccer",', canonical))

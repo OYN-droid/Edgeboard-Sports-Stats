@@ -4,9 +4,9 @@ Batch 4 is a production plan for one replaceable `team_representative` per curre
 
 ## Architecture
 
-- `src/config/football-hockey-illustration-showcase-batch-4.js` owns the production manifest, asset-path drafts, portrait prompts, deferred action prompts, and validation.
+- `tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js` owns the production manifest, asset-path drafts, portrait prompts, deferred action prompts, and validation.
 - `src/data/canonical-entities.js` remains the identity source for every athlete and team. Team membership is contextual and separate from the stable athlete ID.
-- `src/config/showcase-illustration-registry.js` records the 64 effective-dated editorial assignments.
+- `tools/illustration-qa/showcase-illustration-registry.js` records the 64 effective-dated editorial assignments.
 - `src/config/illustration-registry.js` activates only existing team, sport, and neutral fallbacks. Planned athlete art never enters the active registry before a reviewed file exists.
 - `scripts/report_football_hockey_showcase_batch_4.py` validates counts, unique canonical mappings, assignment parity, prompt completeness, and fallback readiness.
 

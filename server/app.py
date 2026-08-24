@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
+import os
 import signal
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +18,8 @@ from .runtime import Runtime, build_runtime
 
 ROOT = Path(__file__).resolve().parent.parent
 SPA_ROUTE_ROOTS = frozenset({"about", "history", "markets", "stories"})
+GZIP_MINIMUM_BYTES = 1024
+GZIP_SUFFIXES = frozenset({".html", ".js", ".css", ".json", ".svg"})
 
 
 def is_spa_route(path: str) -> bool:
@@ -55,7 +59,98 @@ def create_handler(runtime: Runtime):
                 return
             if is_spa_route(decoded_path):
                 self.path = "/index.html"
-            super().do_GET()
+            if not self._serve_static_get():
+                super().do_GET()
+
+        def _serve_static_get(self) -> bool:
+            """Serve regular files with representation-aware caching and gzip."""
+            request_path = urlparse(self.path).path
+            file_path = Path(self.translate_path(self.path))
+            if file_path.is_dir():
+                if not request_path.endswith("/"):
+                    return False
+                file_path = next(
+                    (file_path / name for name in ("index.html", "index.htm") if (file_path / name).is_file()),
+                    file_path,
+                )
+                if file_path.is_dir():
+                    return False
+            if not file_path.is_file():
+                self.send_error(404)
+                return True
+            try:
+                source = file_path.open("rb")
+            except OSError:
+                self.send_error(404)
+                return True
+            try:
+                metadata = os.fstat(source.fileno())
+                relative = file_path.relative_to(ROOT)
+                content_type = self.guess_type(str(file_path))
+                use_gzip = (
+                    metadata.st_size >= GZIP_MINIMUM_BYTES
+                    and file_path.suffix.casefold() in GZIP_SUFFIXES
+                    and self._accepts_gzip()
+                )
+                etag_suffix = "-gzip" if use_gzip else ""
+                etag = f'"{metadata.st_mtime_ns:x}-{metadata.st_size:x}{etag_suffix}"'
+                cache_control = self._static_cache_control(relative)
+                if self.headers.get("If-None-Match") in {etag, "*"}:
+                    self.send_response(304)
+                    self.send_header("ETag", etag)
+                    if cache_control:
+                        self.send_header("Cache-Control", cache_control)
+                    if file_path.suffix.casefold() in GZIP_SUFFIXES:
+                        self.send_header("Vary", "Accept-Encoding")
+                    self.end_headers()
+                    return True
+                body = gzip.compress(source.read(), compresslevel=6, mtime=0) if use_gzip else None
+                self.send_response(200)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(body) if body is not None else metadata.st_size))
+                self.send_header("Last-Modified", self.date_time_string(metadata.st_mtime))
+                self.send_header("ETag", etag)
+                if cache_control:
+                    self.send_header("Cache-Control", cache_control)
+                if file_path.suffix.casefold() in GZIP_SUFFIXES:
+                    self.send_header("Vary", "Accept-Encoding")
+                if use_gzip:
+                    self.send_header("Content-Encoding", "gzip")
+                self.end_headers()
+                if body is not None:
+                    self.wfile.write(body)
+                else:
+                    self.copyfile(source, self.wfile)
+                return True
+            finally:
+                source.close()
+
+        def _accepts_gzip(self) -> bool:
+            accepted: dict[str, float] = {}
+            for item in self.headers.get("Accept-Encoding", "").split(","):
+                parts = [part.strip() for part in item.split(";")]
+                if not parts or not parts[0]:
+                    continue
+                quality = 1.0
+                for parameter in parts[1:]:
+                    if parameter.startswith("q="):
+                        try:
+                            quality = float(parameter[2:])
+                        except ValueError:
+                            quality = 0.0
+                accepted[parts[0].casefold()] = quality
+            return accepted.get("gzip", accepted.get("*", 0.0)) > 0
+
+        @staticmethod
+        def _static_cache_control(relative: Path) -> str:
+            parts = relative.parts
+            if parts in {("index.html",), ("index.htm",)}:
+                return "no-cache"
+            if parts in {("app.js",), ("styles.css",)}:
+                return "public, max-age=31536000, immutable"
+            if len(parts) >= 2 and parts[:2] == ("assets", "illustrations"):
+                return "public, max-age=31536000, immutable"
+            return ""
 
         def do_POST(self):
             parsed = urlparse(self.path)

@@ -15,7 +15,7 @@ from validate_illustration_style_proof import STYLE_VERSION, extract_json, parse
 ROOT = Path(__file__).resolve().parents[1]
 PROVENANCE_PATH = ROOT / "docs/assets/illustration-style/edgeboard-nba-illustration-batch-3-exports.json"
 REGISTRY_PATH = ROOT / "src/config/illustration-registry.js"
-MANIFEST_PATH = ROOT / "src/config/basketball-illustration-showcase-batch-2.js"
+MANIFEST_PATH = ROOT / "tools/illustration-qa/basketball-illustration-showcase-batch-2.js"
 CANONICAL_PATH = ROOT / "src/data/canonical-entities.js"
 EXPECTED_IDS = {
     "nba-josh-giddey", "nba-cade-cunningham", "nba-kevin-durant",
@@ -105,7 +105,7 @@ def main() -> int:
         if len(exact) != 1:
             errors.append(f"{entity_id}: expected exactly one canonical portrait registry entry")
         elif (exact[0].get("id") != f"art-{entity_id}-portrait"
-              or exact[0].get("assetPath") != asset_path
+              or exact[0].get("assetPath") != Path(asset_path).with_suffix(".webp").as_posix()
               or exact[0].get("status") != "active"
               or exact[0].get("styleVersion") != STYLE_VERSION
               or exact[0].get("styleRole") != "showcase_production_portrait"

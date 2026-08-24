@@ -117,7 +117,7 @@ def main() -> int:
         entry = registry_by_entity.get(entity_id)
         if not entry or (entry.get("id") != f"art-{entity_id}-portrait" or entry.get("entityType") != "fighter"
                 or entry.get("sport") != "boxing" or entry.get("league") != "boxing" or entry.get("weightClass") != division
-                or entry.get("assetPath") != expected_asset_path or entry.get("assetType") != "original_generated"
+                or entry.get("assetPath") != Path(expected_asset_path).with_suffix(".webp").as_posix() or entry.get("assetType") != "original_generated"
                 or entry.get("portraitMode") != "standard" or entry.get("status") != "active"
                 or entry.get("productionStatus") != "approved" or entry.get("reviewStatus") != "approved"
                 or not entry.get("registryEligible") or entry.get("styleVersion") != STYLE_VERSION

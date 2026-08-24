@@ -14,6 +14,7 @@ from .cache import CachePolicy, MemoryCache
 from .database import Database, utc_now
 from .edge_trust import evaluate_edge_trust
 from .errors import ProviderError, ProviderValidationError, ValidationError
+from .mlb_domain_service import MlbDomainService
 
 
 MLB_RESEARCH_CONTRACT_VERSION = "edgeboard-mlb-standings-leaders-v1"
@@ -254,17 +255,18 @@ def compare_mlb_research_shadow(fixture: dict[str, Any], candidate: dict[str, An
     return discrepancies
 
 
-class MlbStandingsLeadersService:
+class MlbStandingsLeadersService(MlbDomainService):
     """Fixture-primary MLB standings/leaderboards with an optional server-only shadow validator."""
+
+    provider_status_fields = ("mlb_research_source", "mlb_research_edge_trust")
 
     def __init__(
         self, cache: MemoryCache, database: Database, rollout: Any, shadow: Any, *,
         payload_loader: Callable[[], dict[str, Any]] | None = None,
         shadow_validator: Callable[..., tuple[dict[str, Any] | None, list[dict[str, Any]], ProviderError | None]] | None = None,
     ):
-        self.cache, self.database, self.rollout, self.shadow = cache, database, rollout, shadow
-        self.payload_loader = payload_loader or self._fixture
-        self.shadow_validator = shadow_validator
+        super().__init__(cache, rollout, shadow, payload_loader=payload_loader, shadow_validator=shadow_validator)
+        self.database = database
         self.adapter = MlbStandingsLeadersAdapter()
         self._lock = threading.Lock()
         self._shadow_lock = threading.Lock()
@@ -327,7 +329,9 @@ class MlbStandingsLeadersService:
     def provider_bundle(self, base: dict[str, Any], season: int | None = None) -> dict[str, Any]:
         """Attach provider-neutral context for existing profile/story/visual consumers."""
         data = self.read(season)
-        bundle = copy.deepcopy(base)
+        return self._build_provider_bundle(base, data)
+
+    def _extend_provider_bundle(self, bundle: dict[str, Any], data: dict[str, Any]) -> None:
         bundle["standings"] = copy.deepcopy(data["standings"])
         bundle["leaderboards"] = {
             stat_id: self.leaderboard(stat_id, data["season"])
@@ -340,12 +344,6 @@ class MlbStandingsLeadersService:
             row["teamId"]: self.team_record(row["teamId"], data["season"])
             for row in data["standings"]
         }
-        bundle["provider_status"] = {
-            **bundle.get("provider_status", {}),
-            "mlb_research_source": data["source"],
-            "mlb_research_edge_trust": data["edgeTrust"],
-        }
-        return bundle
 
     def leaderboard(
         self, stat_id: str, season: int | None = None, *, entity_type: str = "player",

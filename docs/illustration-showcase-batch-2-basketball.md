@@ -15,7 +15,7 @@ The NBA manifest and all five production batches use `edgeboard-illustration-v1`
 - Mode/variant: `standard` / `portrait`
 - Production format: 640 × 800, 8-bit RGBA, non-interlaced PNG with meaningful alpha transparency
 
-The machine-readable authority is [basketball-illustration-showcase-batch-2.js](../src/config/basketball-illustration-showcase-batch-2.js). Every pending row includes its complete one-at-a-time production prompt, controlled pose variation, batch/order, canonical mapping, unique target, and fallback metadata.
+The machine-readable authority is [basketball-illustration-showcase-batch-2.js](../tools/illustration-qa/basketball-illustration-showcase-batch-2.js). Every pending row includes its complete one-at-a-time production prompt, controlled pose variation, batch/order, canonical mapping, unique target, and fallback metadata.
 
 ## Representative audit
 

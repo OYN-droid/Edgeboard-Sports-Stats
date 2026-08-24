@@ -21,10 +21,10 @@ def extract_json(path: Path, start: str, end: str):
 
 
 def main() -> int:
-    manifest_path = ROOT / "src/config/football-hockey-illustration-showcase-batch-4.js"
+    manifest_path = ROOT / "tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js"
     canonical_path = ROOT / "src/data/canonical-entities.js"
     registry_path = ROOT / "src/config/illustration-registry.js"
-    showcase_path = ROOT / "src/config/showcase-illustration-registry.js"
+    showcase_path = ROOT / "tools/illustration-qa/showcase-illustration-registry.js"
     slots = extract_json(manifest_path, "/* football-hockey-showcase-json-start */", "/* football-hockey-showcase-json-end */")
     registry = extract_json(registry_path, "/* registry-json-start */", "/* registry-json-end */")
     assignments = extract_json(showcase_path, "/* assignments-json-start */", "/* assignments-json-end */")

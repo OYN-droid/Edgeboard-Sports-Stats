@@ -522,11 +522,12 @@ class Database:
         return cursor.rowcount == 1
 
     def execute(self, sql: str, parameters: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
-        try:
-            cursor = self.connection.execute(sql, parameters)
-            return [dict(row) for row in cursor.fetchall()]
-        except sqlite3.Error as error:
-            raise DatabaseError("Database query failed.") from error
+        with self._lock:
+            try:
+                cursor = self.connection.execute(sql, parameters)
+                return [dict(row) for row in cursor.fetchall()]
+            except sqlite3.Error as error:
+                raise DatabaseError("Database query failed.") from error
 
     def close(self) -> None:
         self.connection.close()

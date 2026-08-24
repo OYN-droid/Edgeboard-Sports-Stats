@@ -14,7 +14,7 @@ from validate_illustration_style_proof import STYLE_VERSION, extract_json, parse
 ROOT = Path(__file__).resolve().parents[1]
 PROVENANCE_PATH = ROOT / "docs/assets/illustration-style/edgeboard-mlb-illustration-batch-5-exports.json"
 REGISTRY_PATH = ROOT / "src/config/illustration-registry.js"
-MANIFEST_PATH = ROOT / "src/config/mlb-illustration-showcase-batch-1.js"
+MANIFEST_PATH = ROOT / "tools/illustration-qa/mlb-illustration-showcase-batch-1.js"
 EXPECTED_IDS = {"mlb-masyn-winn", "mlb-ezequiel-tovar", "mlb-riley-greene", "mlb-james-wood", "mlb-juan-soto"}
 VALID_IDS = EXPECTED_IDS
 REMEDIATION_SOURCE_IDS = {"mlb-ezequiel-tovar", "mlb-riley-greene", "mlb-juan-soto"}
@@ -87,7 +87,7 @@ def main() -> int:
                 errors.append(f"{entity_id}: export does not satisfy transparent 640x800 RGBA contract")
             if asset.stat().st_size > MAX_BYTES or asset.stat().st_size != record.get("exportSizeBytes") or digest(asset) != record.get("exportSha256"):
                 errors.append(f"{entity_id}: production size or SHA-256 does not match provenance")
-            if len(exact) != 1 or exact[0].get("id") != f"art-{entity_id}-portrait" or exact[0].get("assetPath") != asset_path or exact[0].get("status") != "active" or exact[0].get("styleVersion") != STYLE_VERSION or exact[0].get("styleRole") != "showcase_production_portrait":
+            if len(exact) != 1 or exact[0].get("id") != f"art-{entity_id}-portrait" or exact[0].get("assetPath") != Path(asset_path).with_suffix(".webp").as_posix() or exact[0].get("status") != "active" or exact[0].get("styleVersion") != STYLE_VERSION or exact[0].get("styleRole") != "showcase_production_portrait":
                 errors.append(f"{entity_id}: active registry metadata does not match the approved export")
         else:  # Retained for strict partial-failure safety if a future record is blocked.
             if source_metadata.get("rgba") or source_metadata.get("meaningfulTransparency"):

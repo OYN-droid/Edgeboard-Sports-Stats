@@ -106,6 +106,8 @@ The browser command starts an isolated sample-mode server and headless Chrome se
 
 Individual browser harnesses remain inspectable at `/browser-tests/<suite>.html`, including `full-regression.html`, `athlete-profiles.html`, `market-screener.html`, `research-analyst.html`, `visualizations.html`, and `launch-readiness.html`.
 
+Portrait delivery assets can be regenerated with `python3 scripts/optimize_portraits.py` after installing Pillow. This is an optional development-time optimization tool; Pillow is not imported by the application server and is not required for the standard-library-only sample experience.
+
 ## Production configuration and deployment
 
 Validate configuration and simulate the production boundary locally:

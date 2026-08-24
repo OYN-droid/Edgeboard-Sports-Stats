@@ -14,6 +14,7 @@ from typing import Any, Callable
 from .cache import CachePolicy, MemoryCache
 from .edge_trust import evaluate_edge_trust
 from .errors import ProviderError, ProviderValidationError, ValidationError
+from .mlb_domain_service import MlbDomainService
 
 
 MLB_MARKET_CONTRACT_VERSION = "edgeboard-mlb-game-markets-v1"
@@ -325,10 +326,11 @@ def compare_mlb_market_shadow(fixture: dict[str, Any], candidate: dict[str, Any]
     return discrepancies
 
 
-class MlbGameMarketService:
+class MlbGameMarketService(MlbDomainService):
+    provider_status_fields = ("mlb_market_source", "mlb_market_edge_trust")
+
     def __init__(self, cache: MemoryCache, rollout: Any, shadow: Any, schedule_service: Any, *, payload_loader: Callable[[], dict[str, Any]] | None = None, shadow_validator: Callable[..., tuple[dict[str, Any] | None, list[dict[str, Any]], ProviderError | None]] | None = None):
-        self.cache, self.rollout, self.shadow, self.schedule_service = cache, rollout, shadow, schedule_service
-        self.payload_loader, self.shadow_validator = payload_loader or self._fixture, shadow_validator
+        super().__init__(cache, rollout, shadow, schedule_service, payload_loader=payload_loader, shadow_validator=shadow_validator)
         self.adapter, self._lock, self._shadow_lock = MlbGameMarketAdapter(), threading.Lock(), threading.Lock()
         self.provider_requests = 0
         self._last_shadow_report: dict[str, Any] | None = None
@@ -418,13 +420,10 @@ class MlbGameMarketService:
             })
         return offers
 
-    def provider_bundle(self, base: dict[str, Any]) -> dict[str, Any]:
-        bundle, data = copy.deepcopy(base), self.read()
+    def _extend_provider_bundle(self, bundle: dict[str, Any], data: dict[str, Any]) -> None:
         bundle["offers"] = [item for item in bundle.get("offers", []) if item.get("league_key") != "mlb"] + self.offers()
         bundle["sportsbooks"] = copy.deepcopy(data["sportsbooks"])
         bundle["best_prices"] = self.best_prices()["items"]
-        bundle["provider_status"] = {**bundle.get("provider_status", {}), "mlb_market_source": data["source"], "mlb_market_edge_trust": data["edgeTrust"]}
-        return bundle
 
     def run_shadow_validation(self, *, selected_date: str, refresh: bool = False) -> dict[str, Any]:
         if self.rollout.get("mlb")["rolloutState"] != "shadow": raise ValidationError("MLB odds validation requires shadow rollout state.")

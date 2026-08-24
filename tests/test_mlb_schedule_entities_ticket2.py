@@ -127,6 +127,12 @@ class ServiceTests(unittest.TestCase):
         self.service.refresh()
         self.assertEqual(self.service.provider_requests, 2)
 
+    def test_cached_read_isolated_from_caller_mutation(self):
+        first = self.service.read()
+        original_name = first["entities"][0]["name"]
+        first["entities"][0]["name"] = "Caller mutation"
+        self.assertEqual(self.service.read()["entities"][0]["name"], original_name)
+
     def test_provider_correction_preserves_canonical_game_identity(self):
         payload = fixture()
         service = MlbScheduleEntityService(MemoryCache(), self.rollout, self.shadow, payload_loader=lambda: payload)

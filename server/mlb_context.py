@@ -13,6 +13,7 @@ from typing import Any, Callable
 from .cache import CachePolicy, MemoryCache
 from .edge_trust import evaluate_edge_trust
 from .errors import ProviderError, ProviderValidationError, ValidationError
+from .mlb_domain_service import MlbDomainService
 from .provider_contracts import CapabilityDeclaration
 
 
@@ -295,12 +296,13 @@ class MlbContextAdapter:
                 "weather": weather, "transactions": transactions}.items()}}
 
 
-class MlbContextService:
+class MlbContextService(MlbDomainService):
+    provider_status_fields = ("mlb_context_source", "mlb_context_edge_trust")
+
     def __init__(self, cache: MemoryCache, rollout: Any, shadow: Any, schedule_service: Any, *,
                  payload_loader: Callable[[], dict[str, Any]] | None = None,
                  shadow_validator: Callable[..., tuple[dict[str, Any] | None, list[dict[str, Any]], ProviderError | None]] | None = None):
-        self.cache, self.rollout, self.shadow, self.schedule_service = cache, rollout, shadow, schedule_service
-        self.payload_loader, self.shadow_validator = payload_loader or self._fixture, shadow_validator
+        super().__init__(cache, rollout, shadow, schedule_service, payload_loader=payload_loader, shadow_validator=shadow_validator)
         self.adapter, self._lock, self._shadow_lock = MlbContextAdapter(), threading.Lock(), threading.Lock()
         self.provider_requests, self.shadow_provider_requests, self._last_shadow_report = 0, 0, None
         self.invalidation_callbacks: list[Callable[[], None]] = []
@@ -406,14 +408,11 @@ class MlbContextService:
             "provider": item["source"], "verification": "verified", "causal_relationship": "related_event",
             "summary": item["summary"], "entity_id": item.get("playerId") or item.get("teamId") or ""}
 
-    def provider_bundle(self, base: dict[str, Any]) -> dict[str, Any]:
-        bundle, data = copy.deepcopy(base), self.read()
+    def _extend_provider_bundle(self, bundle: dict[str, Any], data: dict[str, Any]) -> None:
         bundle["injuries"] = copy.deepcopy(data["availability"])
         bundle["lineups"] = copy.deepcopy(data["lineups"])
         bundle["weather"] = copy.deepcopy(data["weather"])
         bundle["offers"] = self.enrich_offers(bundle.get("offers", []))
-        bundle["provider_status"] = {**bundle.get("provider_status", {}), "mlb_context_source": data["source"], "mlb_context_edge_trust": data["edgeTrust"]}
-        return bundle
 
     def run_shadow_validation(self, *, selected_date: str, refresh: bool = False) -> dict[str, Any]:
         if self.rollout.get("mlb")["rolloutState"] != "shadow": raise ValidationError("MLB context validation requires shadow rollout state.")

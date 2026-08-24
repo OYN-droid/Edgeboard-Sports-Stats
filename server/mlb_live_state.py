@@ -17,6 +17,7 @@ from .errors import (
     ProviderAuthenticationError, ProviderEntitlementError, ProviderError,
     ProviderRateLimitError, ProviderValidationError, ValidationError,
 )
+from .mlb_domain_service import MlbDomainService
 from .provider_contracts import CapabilityDeclaration
 
 
@@ -331,15 +332,16 @@ class LivePollingPolicy:
             state.get("status", "unknown"), final_age_seconds=state.get("freshness", {}).get("ageSeconds", 0)) > 0)
 
 
-class MlbLiveStateService:
+class MlbLiveStateService(MlbDomainService):
     """Bounded live-state history, explicit polling, shadow validation, and read models."""
+
+    provider_status_fields = ("mlb_live_state_source", "mlb_live_state_edge_trust")
 
     def __init__(self, cache: MemoryCache, rollout: Any, shadow: Any, schedule_service: Any,
                  *, payload_loader: Callable[[], dict[str, Any]] | None = None,
                  shadow_validator: Callable[..., tuple[dict[str, Any] | None, list[dict[str, Any]], ProviderError | None]] | None = None,
                  polling_policy: LivePollingPolicy | None = None, history_limit: int = 50):
-        self.cache, self.rollout, self.shadow, self.schedule_service = cache, rollout, shadow, schedule_service
-        self.payload_loader, self.shadow_validator = payload_loader or self._fixture, shadow_validator
+        super().__init__(cache, rollout, shadow, schedule_service, payload_loader=payload_loader, shadow_validator=shadow_validator)
         self.adapter = MlbLiveStateAdapter()
         self.polling_policy = polling_policy or LivePollingPolicy()
         self.history_limit = max(2, history_limit)
@@ -512,8 +514,7 @@ class MlbLiveStateService:
         return {**copy.deepcopy(entity), "liveContext": {"states": copy.deepcopy(states),
             "source": data["source"], "edgeTrust": data["edgeTrust"]}}
 
-    def provider_bundle(self, base: dict[str, Any]) -> dict[str, Any]:
-        bundle, data = copy.deepcopy(base), self.read()
+    def _extend_provider_bundle(self, bundle: dict[str, Any], data: dict[str, Any]) -> None:
         by_event = {item["eventId"]: item for item in data["states"]}
         enriched_events = []
         for event in bundle.get("events", []):
@@ -545,10 +546,7 @@ class MlbLiveStateService:
                     f"Game status is {state['status'].replace('_', ' ')}; the saved pregame price is retained only as a research snapshot."]))
         bundle["live_event_states"] = data["states"]
         bundle["live_state_events"] = self._meaningful_events(data)
-        bundle["provider_status"] = {**bundle.get("provider_status", {}),
-            "mlb_live_state_source": data["source"], "mlb_live_state_edge_trust": data["edgeTrust"],
-            "mlb_live_polling": self.diagnostics()}
-        return bundle
+        bundle.setdefault("provider_status", {})["mlb_live_polling"] = self.diagnostics()
 
     @staticmethod
     def _meaningful_events(data: dict[str, Any]) -> list[dict[str, Any]]:

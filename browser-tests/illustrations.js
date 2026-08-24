@@ -1,14 +1,14 @@
 import { ILLUSTRATION_ASSET_TYPES, ILLUSTRATION_DIMENSIONS, ILLUSTRATION_REGISTRY, ILLUSTRATION_VARIANTS } from "../src/config/illustration-registry.js";
-import { getIllustrationPriorityQueue, getShowcaseAssignments, SHOWCASE_COVERAGE_TARGETS } from "../src/config/showcase-illustration-registry.js";
-import { MLB_SHOWCASE_BATCH_1, MLB_SHOWCASE_BATCH_1_METADATA, MLB_SHOWCASE_PRODUCTION_BATCHES, validateMlbShowcaseBatch } from "../src/config/mlb-illustration-showcase-batch-1.js";
-import { BASKETBALL_SHOWCASE_BATCH_2, BASKETBALL_SHOWCASE_BATCH_2_METADATA, validateBasketballShowcaseBatch } from "../src/config/basketball-illustration-showcase-batch-2.js";
-import { COMBAT_SHOWCASE_BATCH_3, COMBAT_SHOWCASE_BATCH_3_METADATA, validateCombatShowcaseBatch } from "../src/config/combat-illustration-showcase-batch-3.js";
-import { FOOTBALL_HOCKEY_SHOWCASE_BATCH_4, FOOTBALL_HOCKEY_SHOWCASE_BATCH_4_METADATA, validateFootballHockeyShowcaseBatch } from "../src/config/football-hockey-illustration-showcase-batch-4.js";
-import { SOCCER_SHOWCASE_BATCH_5, SOCCER_SHOWCASE_BATCH_5_METADATA, validateSoccerShowcaseBatch } from "../src/config/soccer-illustration-showcase-batch-5.js";
-import { MOTORSPORTS_SHOWCASE_BATCH_6, MOTORSPORTS_SHOWCASE_BATCH_6_METADATA, validateMotorsportsShowcaseBatch } from "../src/config/motorsports-illustration-showcase-batch-6.js";
-import { TENNIS_GOLF_SHOWCASE_BATCH_7, TENNIS_GOLF_SHOWCASE_BATCH_7_METADATA, validateTennisGolfShowcaseBatch } from "../src/config/tennis-golf-illustration-showcase-batch-7.js";
+import { getIllustrationPriorityQueue, getShowcaseAssignments, SHOWCASE_COVERAGE_TARGETS } from "../tools/illustration-qa/showcase-illustration-registry.js";
+import { MLB_SHOWCASE_BATCH_1, MLB_SHOWCASE_BATCH_1_METADATA, MLB_SHOWCASE_PRODUCTION_BATCHES, validateMlbShowcaseBatch } from "../tools/illustration-qa/mlb-illustration-showcase-batch-1.js";
+import { BASKETBALL_SHOWCASE_BATCH_2, BASKETBALL_SHOWCASE_BATCH_2_METADATA, validateBasketballShowcaseBatch } from "../tools/illustration-qa/basketball-illustration-showcase-batch-2.js";
+import { COMBAT_SHOWCASE_BATCH_3, COMBAT_SHOWCASE_BATCH_3_METADATA, validateCombatShowcaseBatch } from "../tools/illustration-qa/combat-illustration-showcase-batch-3.js";
+import { FOOTBALL_HOCKEY_SHOWCASE_BATCH_4, FOOTBALL_HOCKEY_SHOWCASE_BATCH_4_METADATA, validateFootballHockeyShowcaseBatch } from "../tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js";
+import { SOCCER_SHOWCASE_BATCH_5, SOCCER_SHOWCASE_BATCH_5_METADATA, validateSoccerShowcaseBatch } from "../tools/illustration-qa/soccer-illustration-showcase-batch-5.js";
+import { MOTORSPORTS_SHOWCASE_BATCH_6, MOTORSPORTS_SHOWCASE_BATCH_6_METADATA, validateMotorsportsShowcaseBatch } from "../tools/illustration-qa/motorsports-illustration-showcase-batch-6.js";
+import { TENNIS_GOLF_SHOWCASE_BATCH_7, TENNIS_GOLF_SHOWCASE_BATCH_7_METADATA, validateTennisGolfShowcaseBatch } from "../tools/illustration-qa/tennis-golf-illustration-showcase-batch-7.js";
 import { EDGEBOARD_ILLUSTRATION_STYLE_V1, EDGEBOARD_ILLUSTRATION_STYLE_VERSION } from "../src/config/illustration-style-v1.js";
-import { ILLUSTRATION_STYLE_PROOF_BATCH } from "../src/config/illustration-style-proof-batch.js";
+import { ILLUSTRATION_STYLE_PROOF_BATCH } from "../tools/illustration-qa/illustration-style-proof-batch.js";
 import { FEATURED_PORTRAIT_COVERAGE_METADATA, FEATURED_PORTRAIT_SELECTIONS, validateFeaturedPortraitCoverage } from "../src/config/featured-portrait-coverage.js";
 import { CANONICAL_ENTITIES } from "../src/data/canonical-entities.js";
 import { UNIFIED_CANONICAL_ENTITIES } from "../src/data/canonical-sports-entities.js";
@@ -106,7 +106,7 @@ check(MLB_SHOWCASE_BATCH_1.every((item) => item.portraitMode === "standard" && i
 check(MLB_SHOWCASE_BATCH_1.every((item) => item.showcaseRole === "team_representative" && ["awaiting_asset", "needs_revision", "approved_existing"].includes(item.generationStatus) && ["awaiting_asset", "needs_revision", "approved"].includes(item.reviewStatus)), "MLB selections remain replaceable editorial assignments with explicit production states");
 check(MLB_SHOWCASE_BATCH_1.every((item) => item.registryDraft.status === "active_existing_reference"), "all 30 technically valid MLB portrait rows are active");
 check(MLB_SHOWCASE_BATCH_1.find((item) => item.canonicalAthleteId === "mlb-aaron-judge")?.registryDraft.id === "art-mlb-aaron-judge-portrait", "Aaron Judge reuses the approved Yankees registry entry without duplication");
-check(new Set(MLB_SHOWCASE_BATCH_1.map((item) => item.productionTargetPath)).size === 30 && MLB_SHOWCASE_BATCH_1.every((item) => item.productionTargetPath.endsWith(".png")), "all 30 MLB portraits have unique canonical PNG targets");
+check(new Set(MLB_SHOWCASE_BATCH_1.map((item) => item.productionTargetPath)).size === 30 && MLB_SHOWCASE_BATCH_1.every((item) => item.productionTargetPath.endsWith(".webp")), "all 30 MLB portraits have unique optimized WebP delivery targets");
 check(MLB_SHOWCASE_PRODUCTION_BATCHES.length === 5 && MLB_SHOWCASE_PRODUCTION_BATCHES.flatMap((batch) => batch.canonicalAthleteIds).length === 29 && new Set(MLB_SHOWCASE_PRODUCTION_BATCHES.flatMap((batch) => batch.canonicalAthleteIds)).size === 29, "MLB production order groups all 29 remaining athletes once across five drift-control batches");
 check(Object.values(mlbBatch.batch1).every((count) => count === 6), "MLB production Batch 1 reports 6/6 physical, technical, human-approved, and registry-active portraits");
 check(Object.values(mlbBatch.batch2).every((count) => count === 6), "MLB production Batch 2 reports 6/6 physical, technical, human-approved, and registry-active portraits");
@@ -222,7 +222,7 @@ for (const [width, label, minimumArtWidth] of [[390, "mobile", 180], [768, "tabl
 homeFrame.contentDocument.querySelector('[data-theme-option="light"]')?.click();
 check(homeFrame.contentDocument.body.dataset.theme === "light" && Boolean(featureArt?.querySelector("img")), "featured illustration remains available in light mode");
 homeFrame.contentDocument.querySelector('[data-theme-option="dark"]')?.click();
-check(homeFrame.contentDocument.body.dataset.theme === "dark" && storyArt?.getAttribute("loading") === "lazy", "featured illustration remains lazy-loaded in dark mode");
+check(homeFrame.contentDocument.body.dataset.theme === "dark" && storyArt?.getAttribute("loading") === "eager", "above-the-fold featured illustration remains eagerly loaded in dark mode");
 check(!homeFrame.contentDocument.querySelector(".today-market-card .home-card-illustration"), "dense market cards preserve restrained data-first presentation");
 homeFrame.remove();
 

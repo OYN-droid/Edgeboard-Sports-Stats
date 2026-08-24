@@ -14,7 +14,7 @@ from validate_illustration_style_proof import STYLE_VERSION, extract_json, parse
 
 ROOT = Path(__file__).resolve().parents[1]
 PROVENANCE_PATH = ROOT / "docs/assets/illustration-style/edgeboard-nfl-featured-portrait-exports.json"
-MANIFEST_PATH = ROOT / "src/config/football-hockey-illustration-showcase-batch-4.js"
+MANIFEST_PATH = ROOT / "tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js"
 REGISTRY_PATH = ROOT / "src/config/illustration-registry.js"
 CANONICAL_PATH = ROOT / "src/data/canonical-entities.js"
 REFERENCE_PATH = ROOT / "docs/assets/illustration-style/edgeboard-illustration-style-v1-reference.png"
@@ -112,7 +112,7 @@ def main() -> int:
         exact = [entry for entry in registry_by_entity.get(entity_id, []) if entry.get("variant") == "portrait"]
         if len(exact) != 1:
             errors.append(f"{entity_id}: expected exactly one canonical portrait registry entry")
-        elif (exact[0].get("id") != f"art-{entity_id}-portrait" or exact[0].get("assetPath") != asset_path
+        elif (exact[0].get("id") != f"art-{entity_id}-portrait" or exact[0].get("assetPath") != Path(asset_path).with_suffix(".webp").as_posix()
               or exact[0].get("status") != "active" or exact[0].get("styleVersion") != STYLE_VERSION
               or exact[0].get("styleRole") != "showcase_production_portrait"
               or exact[0].get("assetType") != "original_generated"):

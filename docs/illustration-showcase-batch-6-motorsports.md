@@ -24,7 +24,7 @@ The canonical competitor ID owns the eventual artwork. Series and constructor/te
 
 Hunter Lawrence demonstrates the intended cross-series behavior: one canonical competitor ID appears in two distinct `(series, team)` slots. Validation requires uniqueness within a series, not global uniqueness across the manifest.
 
-The manifest lives in `src/config/motorsports-illustration-showcase-batch-6.js`. Canonical competitors and teams live in `src/data/canonical-entities.js`. Replaceable showcase assignments and coverage targets live in `src/config/showcase-illustration-registry.js`.
+The manifest lives in `tools/illustration-qa/motorsports-illustration-showcase-batch-6.js`. Canonical competitors and teams live in `src/data/canonical-entities.js`. Replaceable showcase assignments and coverage targets live in `tools/illustration-qa/showcase-illustration-registry.js`.
 
 ## Production and registry state
 

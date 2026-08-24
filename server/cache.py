@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import threading
 import time
 from dataclasses import dataclass
@@ -42,7 +41,7 @@ class MemoryCache:
     ) -> None:
         with self._lock:
             self._entries[key] = CacheEntry(
-                copy.deepcopy(value), self._clock(), max(0, ttl_seconds),
+                value, self._clock(), max(0, ttl_seconds),
                 max(ttl_seconds, stale_seconds), private, tuple(dict.fromkeys(tags)),
             )
 
@@ -55,11 +54,13 @@ class MemoryCache:
             age = self._clock() - entry.stored_at
             if age <= entry.ttl_seconds:
                 self._hits += 1
-                return copy.deepcopy(entry.value), "fresh"
+                # Cached values are returned by reference for performance and
+                # must be treated as read-only; mutation-owning callers copy.
+                return entry.value, "fresh"
             if age <= entry.stale_seconds:
                 if allow_stale:
                     self._stale_hits += 1
-                    return copy.deepcopy(entry.value), "stale"
+                    return entry.value, "stale"
                 self._misses += 1
                 return None, "stale"
             self._entries.pop(key, None)

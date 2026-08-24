@@ -31,11 +31,11 @@ def canonical_fighters() -> dict[str, tuple[str, str, str]]:
 
 def main() -> int:
     manifest = extract_json(
-        ROOT / "src/config/combat-illustration-showcase-batch-3.js",
+        ROOT / "tools/illustration-qa/combat-illustration-showcase-batch-3.js",
         "/* combat-showcase-json-start */", "/* combat-showcase-json-end */",
     )
     assignments = extract_json(
-        ROOT / "src/config/showcase-illustration-registry.js",
+        ROOT / "tools/illustration-qa/showcase-illustration-registry.js",
         "/* assignments-json-start */", "/* assignments-json-end */",
     )
     registry = extract_json(

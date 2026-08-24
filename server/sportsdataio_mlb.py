@@ -1118,11 +1118,13 @@ class SportsDataIoMlbTrialProvider(ProviderAdapterBase):
             # evidence-backed manager policy exists.
             managers = [] if self.identity_service else self._managers(results["teams"], teams)
             if self.cache:
-                self.cache.set(entity_cache_key, {
+                # Schedule normalization continues appending to diagnostics below,
+                # so store an explicit entity snapshot rather than a live alias.
+                self.cache.set(entity_cache_key, copy.deepcopy({
                     "teams": teams, "venues": venues, "players": players, "managers": managers,
                     "diagnostics": diagnostics,
                     "endpointCounts": {domain: len(results.get(domain, [])) for domain in ("teams", "venues", "players")},
-                }, 3600, 3600, private=True, tags=("provider:sportsdataio", "league:mlb", "domain:entities"))
+                }), 3600, 3600, private=True, tags=("provider:sportsdataio", "league:mlb", "domain:entities"))
         games = self._games(
             [item for group in game_sets for item in group], teams, venues, diagnostics,
             allow_provider_derived_ids=self.identity_service is None,

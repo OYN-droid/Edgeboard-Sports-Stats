@@ -18,7 +18,7 @@ Selection context was checked on 2026-08-09 against official [ATP singles rankin
 
 ## Manifest and prompts
 
-`src/config/tennis-golf-illustration-showcase-batch-7.js` stores each canonical athlete ID, tour assignment, likeness notes, restrained outfit context, portrait path, optional-action placeholder, generation and review state, fallback IDs, prompt, and planned registry row.
+`tools/illustration-qa/tennis-golf-illustration-showcase-batch-7.js` stores each canonical athlete ID, tour assignment, likeness notes, restrained outfit context, portrait path, optional-action placeholder, generation and review state, fallback IDs, prompt, and planned registry row.
 
 Tennis action descriptions cover serve, forehand, backhand, and return stance. Golf descriptions cover address, backswing, impact, and follow-through. All action variants remain deferred until all 24 portraits are approved.
 

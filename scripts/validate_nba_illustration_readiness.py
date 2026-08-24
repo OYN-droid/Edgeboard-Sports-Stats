@@ -11,10 +11,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "src/config/basketball-illustration-showcase-batch-2.js"
+MANIFEST = ROOT / "tools/illustration-qa/basketball-illustration-showcase-batch-2.js"
 CANONICAL = ROOT / "src/data/canonical-entities.js"
 REGISTRY = ROOT / "src/config/illustration-registry.js"
-SHOWCASE = ROOT / "src/config/showcase-illustration-registry.js"
+SHOWCASE = ROOT / "tools/illustration-qa/showcase-illustration-registry.js"
 CURRY_ID = "nba-stephen-curry"
 CURRY_PATH = "assets/illustrations/proof/edgeboard--nba-stephen-curry--portrait--v01.png"
 STYLE_VERSION = "edgeboard-illustration-v1"
@@ -107,7 +107,7 @@ def main() -> int:
         errors.append("batch membership does not match the pending NBA roster")
     if set(active_nba) != EXPECTED_ACTIVE_IDS:
         errors.append(f"NBA exact portraits must be Curry plus all twenty-nine approved production-batch athletes; found {sorted(active_nba)}")
-    elif active_nba[CURRY_ID].get("assetPath") != CURRY_PATH or active_nba[CURRY_ID].get("styleVersion") != STYLE_VERSION:
+    elif active_nba[CURRY_ID].get("assetPath") != Path(CURRY_PATH).with_suffix(".webp").as_posix() or active_nba[CURRY_ID].get("styleVersion") != STYLE_VERSION:
         errors.append("Stephen Curry registry path or style version changed")
 
     for slot in slots:

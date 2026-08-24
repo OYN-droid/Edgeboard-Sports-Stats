@@ -16,6 +16,7 @@ EXPECTED_COUNT = 6
 EXPECTED_WIDTH = 640
 EXPECTED_HEIGHT = 800
 MAX_BYTES = 5_000_000
+MAX_DELIVERY_BYTES = 180_000
 STYLE_VERSION = "edgeboard-illustration-v1"
 SHOWCASE_FILES = (
     "mlb-illustration-showcase-batch-1.js", "basketball-illustration-showcase-batch-2.js",
@@ -153,7 +154,7 @@ def parse_png(path: Path) -> tuple[list[str], dict[str, object]]:
 
 
 def main() -> int:
-    manifest_path = ROOT / "src/config/illustration-style-proof-batch.js"
+    manifest_path = ROOT / "tools/illustration-qa/illustration-style-proof-batch.js"
     registry_path = ROOT / "src/config/illustration-registry.js"
     canonical_path = ROOT / "src/data/canonical-entities.js"
     manifest = extract_json(manifest_path, "/* illustration-proof-json-start */", "/* illustration-proof-json-end */")
@@ -172,6 +173,7 @@ def main() -> int:
     warnings: list[str] = []
     entity_ids: set[str] = set()
     asset_paths: set[str] = set()
+    allowed_asset_paths: set[str] = set()
     inspected = 0
 
     for required_brief_token in (
@@ -255,7 +257,7 @@ def main() -> int:
     if STYLE_VERSION not in style_config_text or "human_approved" not in style_config_text:
         errors.append("Style v1 identifier or human approval is missing")
     for filename in SHOWCASE_FILES:
-        showcase_text = (ROOT / "src/config" / filename).read_text(encoding="utf-8")
+        showcase_text = (ROOT / "tools/illustration-qa" / filename).read_text(encoding="utf-8")
         if "EDGEBOARD_ILLUSTRATION_STYLE_VERSION" not in showcase_text or "EDGEBOARD_ILLUSTRATION_V1_PROMPT" not in showcase_text:
             errors.append(f"showcase manifest does not inherit Style v1: {filename}")
 
@@ -272,6 +274,7 @@ def main() -> int:
     for slot in manifest:
         entity_id = slot.get("canonicalEntityId", "")
         asset_path = slot.get("assetPath", "")
+        delivery_path = str(Path(asset_path).with_suffix(".webp"))
         if entity_id in entity_ids:
             errors.append(f"duplicate canonical identity: {entity_id}")
         entity_ids.add(entity_id)
@@ -280,6 +283,7 @@ def main() -> int:
         if asset_path in asset_paths:
             errors.append(f"duplicate asset path: {asset_path}")
         asset_paths.add(asset_path)
+        allowed_asset_paths.add(asset_path)
         expected_name = f"edgeboard--{entity_id}--portrait--v01.png"
         if Path(asset_path).name != expected_name or Path(asset_path).parent.as_posix() != "assets/illustrations/proof":
             errors.append(f"locked path mismatch for {entity_id}: {asset_path}")
@@ -289,7 +293,7 @@ def main() -> int:
         exact = [entry for entry in registry if entry.get("canonicalEntityId") == entity_id and entry.get("variant") == "portrait"]
         if len(exact) != 1:
             errors.append(f"approved proof identity must have exactly one active portrait: {entity_id}")
-        elif (exact[0].get("assetPath") != asset_path or exact[0].get("status") != "active"
+        elif (exact[0].get("assetPath") != delivery_path or exact[0].get("status") != "active"
               or exact[0].get("styleVersion") != STYLE_VERSION
               or exact[0].get("styleRole") != "production_proof_exemplar"):
             errors.append(f"active proof registry entry does not match approved exemplar metadata: {entity_id}")
@@ -321,11 +325,22 @@ def main() -> int:
         if hashlib.sha256(candidate.read_bytes()).hexdigest() != provenance.get("exportSha256"):
             errors.append(f"proof export hash does not match provenance for {entity_id}")
 
+        delivery_candidate = ROOT / delivery_path
+        if not delivery_candidate.is_file():
+            errors.append(f"optimized proof delivery asset is missing: {entity_id} ({delivery_path})")
+        else:
+            delivery_bytes = delivery_candidate.read_bytes()
+            if len(delivery_bytes) > MAX_DELIVERY_BYTES:
+                errors.append(f"optimized proof delivery asset exceeds {MAX_DELIVERY_BYTES} bytes: {entity_id}")
+            if not (delivery_bytes.startswith(b"RIFF") and delivery_bytes[8:12] == b"WEBP"):
+                errors.append(f"optimized proof delivery asset is not WebP: {entity_id}")
+            allowed_asset_paths.add(delivery_path)
+
     proof_dir = ROOT / "assets/illustrations/proof"
     if proof_dir.exists():
         for candidate in proof_dir.iterdir():
             relative = candidate.relative_to(ROOT).as_posix()
-            if candidate.is_file() and relative not in asset_paths:
+            if candidate.is_file() and relative not in allowed_asset_paths:
                 errors.append(f"orphan proof asset is not mapped by canonical identity: {relative}")
 
     print("EdgeBoard Illustration Style Proof · Asset Ingestion Readiness")

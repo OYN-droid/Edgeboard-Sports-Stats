@@ -43,7 +43,7 @@ The two roles per class are `weight_class_representative` and `featured_star`. N
 
 ## Production manifest
 
-The machine-readable manifest is `src/config/combat-illustration-showcase-batch-3.js`. Each entry includes canonical identity, current editorial weight class, replaceable role, portrait and action descriptions, planned immutable asset paths, review state, source type, fallback metadata, and an inactive registry draft.
+The machine-readable manifest is `tools/illustration-qa/combat-illustration-showcase-batch-3.js`. Each entry includes canonical identity, current editorial weight class, replaceable role, portrait and action descriptions, planned immutable asset paths, review state, source type, fallback metadata, and an inactive registry draft.
 
 ```text
 assets/illustrations/fighters/edgeboard--{canonical-fighter-id}--portrait--v01.svg

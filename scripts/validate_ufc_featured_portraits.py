@@ -155,7 +155,7 @@ def main() -> int:
             errors.append(f"{entity_id}: expected exactly one canonical portrait registry entry")
         else:
             entry = exact[0]
-            if (entry.get("id") != f"art-{entity_id}-portrait" or entry.get("assetPath") != expected_path
+            if (entry.get("id") != f"art-{entity_id}-portrait" or entry.get("assetPath") != Path(expected_path).with_suffix(".webp").as_posix()
                     or entry.get("entityType") != "fighter" or entry.get("league") != "ufc"
                     or entry.get("weightClass") != weight_class or entry.get("status") != "active"
                     or entry.get("assetType") != "original_generated" or entry.get("portraitMode") != "standard"

@@ -1,6 +1,6 @@
-import { WNBA_SHOWCASE_BATCH_2 } from "./basketball-illustration-showcase-batch-2.js";
-import { NFL_SHOWCASE_BATCH_4 } from "./football-hockey-illustration-showcase-batch-4.js";
-import { BOXING_SHOWCASE_BATCH_3, UFC_SHOWCASE_BATCH_3 } from "./combat-illustration-showcase-batch-3.js";
+import { WNBA_SHOWCASE_BATCH_2 } from "../../tools/illustration-qa/basketball-illustration-showcase-batch-2.js";
+import { NFL_SHOWCASE_BATCH_4 } from "../../tools/illustration-qa/football-hockey-illustration-showcase-batch-4.js";
+import { BOXING_SHOWCASE_BATCH_3, UFC_SHOWCASE_BATCH_3 } from "../../tools/illustration-qa/combat-illustration-showcase-batch-3.js";
 import { EDGEBOARD_ILLUSTRATION_STYLE_VERSION } from "./illustration-style-v1.js";
 import { ILLUSTRATION_REGISTRY } from "./illustration-registry.js";
 import { CANONICAL_ENTITIES } from "../data/canonical-entities.js";

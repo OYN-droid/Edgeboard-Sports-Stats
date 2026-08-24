@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .cache import CachePolicy, MemoryCache
 from .edge_trust import evaluate_edge_trust, trust_from_provenance
 from .errors import ProviderError, ProviderValidationError, ValidationError
+from .mlb_domain_service import MlbDomainService
 from .provider_contracts import CapabilityDeclaration, ProvenanceEnvelope
 from .shadow import compare_shadow
 
@@ -379,8 +380,10 @@ class MlbScheduleEntityAdapter:
         return result
 
 
-class MlbScheduleEntityService:
+class MlbScheduleEntityService(MlbDomainService):
     """Cached, provider-bound MLB schedule/entity read model."""
+
+    provider_status_fields = ("schedule_entity_source", "schedule_entity_edge_trust")
 
     def __init__(
         self, cache: MemoryCache, rollout: Any, shadow: Any, *,
@@ -392,16 +395,12 @@ class MlbScheduleEntityService:
         shadow_validator: Callable[..., tuple[dict[str, Any] | None, list[dict[str, Any]], ProviderError | None]] | None = None,
         identity_service: Any | None = None,
     ):
-        self.cache = cache
-        self.rollout = rollout
-        self.shadow = shadow
+        super().__init__(cache, rollout, shadow, payload_loader=payload_loader, shadow_validator=shadow_validator)
         self.adapter = MlbScheduleEntityAdapter()
-        self.payload_loader = payload_loader or self._fixture
         self.live_payload_loader = live_payload_loader
         self.payload_source_mode = payload_source_mode
         self.cache_provider_id = cache_provider_id
         self.fallback_payload_loader = fallback_payload_loader
-        self.shadow_validator = shadow_validator
         self.identity_service = identity_service
         self._lock = threading.Lock()
         self._shadow_lock = threading.Lock()
@@ -423,12 +422,12 @@ class MlbScheduleEntityService:
         if not refresh:
             cached, _ = self.cache.get(cache_key)
             if cached is not None:
-                return cached
+                return copy.deepcopy(cached)
         with self._lock:
             if not refresh:
                 cached, _ = self.cache.get(cache_key)
                 if cached is not None:
-                    return cached
+                    return copy.deepcopy(cached)
             # A provider-specific loader may be injected server-side after its contract is reviewed.
             # Without one, live states fail closed rather than relabeling fixtures.
             if mode in {"live", "degraded"} and self.live_payload_loader is None:
@@ -487,18 +486,10 @@ class MlbScheduleEntityService:
     def game(self, canonical_id: str) -> dict[str, Any] | None:
         return next((item for item in self.read()["games"] if item["id"] == canonical_id), None)
 
-    def provider_bundle(self, base: dict[str, Any]) -> dict[str, Any]:
-        data = self.read()
-        bundle = copy.deepcopy(base)
+    def _extend_provider_bundle(self, bundle: dict[str, Any], data: dict[str, Any]) -> None:
         bundle["events"] = [item for item in bundle.get("events", []) if item.get("league_key") != "mlb"] + data["games"]
         bundle["league_statuses"] = [item for item in bundle.get("league_statuses", []) if item.get("league_key") != "mlb"] + [data["leagueStatus"]]
         bundle["entities"] = data["entities"]
-        bundle["provider_status"] = {
-            **bundle.get("provider_status", {}),
-            "schedule_entity_source": data["source"],
-            "schedule_entity_edge_trust": data["edgeTrust"],
-        }
-        return bundle
 
     def compare_shadow_candidate(self, candidate: dict[str, Any], provider: str) -> dict[str, Any]:
         if self.rollout.get("mlb")["rolloutState"] != "shadow":

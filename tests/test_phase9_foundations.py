@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import gzip
 import http.client
 import json
 import threading
@@ -339,6 +340,56 @@ class DatabaseTests(unittest.TestCase):
                 raise RuntimeError("rollback")
         self.assertEqual(self.db.execute("SELECT * FROM sports"), [])
 
+    def test_read_waits_for_in_flight_write_transaction(self):
+        writer_started = threading.Event()
+        release_writer = threading.Event()
+        reader_started = threading.Event()
+        reader_finished = threading.Event()
+        rows: list[dict[str, object]] = []
+        errors: list[Exception] = []
+
+        def write() -> None:
+            try:
+                with self.db.transaction() as connection:
+                    now = utc_now()
+                    connection.execute(
+                        "INSERT INTO sports(id,name,ingested_at,updated_at) VALUES(?,?,?,?)",
+                        ("concurrent-sport", "Concurrent Sport", now, now),
+                    )
+                    writer_started.set()
+                    if not release_writer.wait(timeout=2):
+                        raise TimeoutError("Reader concurrency test did not release writer.")
+            except Exception as error:
+                errors.append(error)
+
+        def read() -> None:
+            try:
+                reader_started.set()
+                rows.extend(self.db.execute("SELECT id FROM sports WHERE id=?", ("concurrent-sport",)))
+            except Exception as error:
+                errors.append(error)
+            finally:
+                reader_finished.set()
+
+        writer = threading.Thread(target=write)
+        reader = threading.Thread(target=read)
+        writer.start()
+        try:
+            self.assertTrue(writer_started.wait(timeout=2))
+            reader.start()
+            self.assertTrue(reader_started.wait(timeout=2))
+            self.assertFalse(reader_finished.wait(timeout=0.1))
+        finally:
+            release_writer.set()
+            writer.join(timeout=2)
+            if reader.ident is not None:
+                reader.join(timeout=2)
+
+        self.assertFalse(writer.is_alive())
+        self.assertFalse(reader.is_alive())
+        self.assertEqual(errors, [])
+        self.assertEqual(rows, [{"id": "concurrent-sport"}])
+
     def test_unique_event_constraint_and_provider_correction(self):
         event = {"event_id": "event-1", "league_key": "nba", "event_type": "team", "status": "scheduled", "starts_at": "2026-08-01T00:00:00Z"}
         first = self.db.upsert_event(event, "fixture")
@@ -412,6 +463,14 @@ class DatabaseTests(unittest.TestCase):
 
 
 class CacheAndResilienceTests(unittest.TestCase):
+    def test_cache_values_are_read_only_shared_references(self):
+        cache = MemoryCache()
+        value = {"rows": [{"value": 1}]}
+        cache.set("shared", value, 60, 60)
+        cached, state = cache.get("shared")
+        self.assertEqual(state, "fresh")
+        self.assertIs(cached, value)
+
     def test_cache_hit_miss_stale_and_invalidation(self):
         clock = MutableClock()
         cache = MemoryCache(clock)
@@ -897,6 +956,48 @@ class HttpBoundaryTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertIn('<article class="about-view" id="aboutView"', body)
         self.assertRegex(body, r'<script type="module" src="app\.js(?:\?v=[a-zA-Z0-9-]+)?"></script>')
+
+    def test_static_cache_headers_etags_and_gzip(self):
+        immutable = "public, max-age=31536000, immutable"
+        for path in ("/app.js?v=test", "/styles.css?v=test"):
+            with self.subTest(path=path):
+                self.connection.request("GET", path, headers={"Accept-Encoding": "gzip"})
+                response = self.connection.getresponse()
+                body = response.read()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.getheader("Cache-Control"), immutable)
+                self.assertEqual(response.getheader("Content-Encoding"), "gzip")
+                self.assertIn("Accept-Encoding", response.getheader("Vary"))
+                self.assertGreater(len(gzip.decompress(body)), 1024)
+                etag = response.getheader("ETag")
+                self.connection.request("GET", path, headers={"Accept-Encoding": "gzip", "If-None-Match": etag})
+                cached = self.connection.getresponse()
+                cached.read()
+                self.assertEqual(cached.status, 304)
+
+        self.connection.request("GET", "/", headers={"Accept-Encoding": "gzip"})
+        index = self.connection.getresponse()
+        index_body = gzip.decompress(index.read())
+        self.assertEqual(index.getheader("Cache-Control"), "no-cache")
+        self.assertEqual(index.getheader("Content-Encoding"), "gzip")
+        self.assertIn(b"<main>", index_body)
+
+    def test_illustration_caching_skips_png_compression_and_api_is_unchanged(self):
+        immutable = "public, max-age=31536000, immutable"
+        path = "/assets/illustrations/proof/edgeboard--mlb-aaron-judge--portrait--v01.png"
+        self.connection.request("GET", path, headers={"Accept-Encoding": "gzip"})
+        image = self.connection.getresponse()
+        image.read()
+        self.assertEqual(image.status, 200)
+        self.assertEqual(image.getheader("Cache-Control"), immutable)
+        self.assertIsNone(image.getheader("Content-Encoding"))
+        self.assertTrue(image.getheader("ETag"))
+
+        self.connection.request("GET", "/api/status", headers={"Accept-Encoding": "gzip"})
+        api = self.connection.getresponse()
+        api.read()
+        self.assertEqual(api.getheader("Cache-Control"), "no-store, private")
+        self.assertIsNone(api.getheader("Content-Encoding"))
 
     def test_nested_spa_routes_and_missing_static_files_are_distinct(self):
         for route in ("/history/records", "/markets/screener?scope=system:all"):

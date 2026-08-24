@@ -11,7 +11,7 @@ from validate_illustration_style_proof import STYLE_VERSION, extract_json, parse
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST_PATH = ROOT / "src/config/basketball-illustration-showcase-batch-2.js"
+MANIFEST_PATH = ROOT / "tools/illustration-qa/basketball-illustration-showcase-batch-2.js"
 REGISTRY_PATH = ROOT / "src/config/illustration-registry.js"
 CANONICAL_PATH = ROOT / "src/data/canonical-entities.js"
 MAX_BYTES = 5_000_000
@@ -44,9 +44,10 @@ def main() -> int:
             continue
         entry = exact[0]
         expected_path = "assets/illustrations/proof/edgeboard--nba-stephen-curry--portrait--v01.png" if athlete_id == "nba-stephen-curry" else f"assets/illustrations/nba/edgeboard--{athlete_id}--portrait--v01.png"
-        if entry.get("assetPath") != expected_path or expected_path in exact_paths:
+        delivery_path = Path(expected_path).with_suffix(".webp").as_posix()
+        if entry.get("assetPath") != delivery_path or delivery_path in exact_paths:
             errors.append(f"{athlete_id}: portrait path is wrong or duplicated")
-        exact_paths.add(expected_path)
+        exact_paths.add(delivery_path)
         if entry.get("styleVersion") != STYLE_VERSION:
             errors.append(f"{athlete_id}: portrait style version is invalid")
         if athlete_id != "nba-stephen-curry" and entry.get("styleRole") != "showcase_production_portrait":
