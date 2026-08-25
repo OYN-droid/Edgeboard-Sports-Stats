@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import json
 import os
 import signal
@@ -20,6 +21,17 @@ ROOT = Path(__file__).resolve().parent.parent
 SPA_ROUTE_ROOTS = frozenset({"about", "history", "markets", "stories"})
 GZIP_MINIMUM_BYTES = 1024
 GZIP_SUFFIXES = frozenset({".html", ".js", ".css", ".json", ".svg"})
+
+
+def render_versioned_index(source: bytes, root: Path = ROOT) -> bytes:
+    """Add content-derived URLs for static assets that are cached as immutable."""
+    replacements = {
+        b'href="styles.css"': f'href="styles.css?v={hashlib.sha256((root / "styles.css").read_bytes()).hexdigest()[:12]}"'.encode(),
+        b'src="app.js"': f'src="app.js?v={hashlib.sha256((root / "app.js").read_bytes()).hexdigest()[:12]}"'.encode(),
+    }
+    for original, versioned in replacements.items():
+        source = source.replace(original, versioned, 1)
+    return source
 
 
 def is_spa_route(path: str) -> bool:
@@ -87,13 +99,18 @@ def create_handler(runtime: Runtime):
                 metadata = os.fstat(source.fileno())
                 relative = file_path.relative_to(ROOT)
                 content_type = self.guess_type(str(file_path))
+                index_body = render_versioned_index(source.read()) if relative.parts == ("index.html",) else None
+                representation_size = len(index_body) if index_body is not None else metadata.st_size
                 use_gzip = (
-                    metadata.st_size >= GZIP_MINIMUM_BYTES
+                    representation_size >= GZIP_MINIMUM_BYTES
                     and file_path.suffix.casefold() in GZIP_SUFFIXES
                     and self._accepts_gzip()
                 )
                 etag_suffix = "-gzip" if use_gzip else ""
-                etag = f'"{metadata.st_mtime_ns:x}-{metadata.st_size:x}{etag_suffix}"'
+                if index_body is not None:
+                    etag = f'"{hashlib.sha256(index_body).hexdigest()[:16]}{etag_suffix}"'
+                else:
+                    etag = f'"{metadata.st_mtime_ns:x}-{metadata.st_size:x}{etag_suffix}"'
                 cache_control = self._static_cache_control(relative)
                 if self.headers.get("If-None-Match") in {etag, "*"}:
                     self.send_response(304)
@@ -104,7 +121,10 @@ def create_handler(runtime: Runtime):
                         self.send_header("Vary", "Accept-Encoding")
                     self.end_headers()
                     return True
-                body = gzip.compress(source.read(), compresslevel=6, mtime=0) if use_gzip else None
+                if index_body is not None:
+                    body = gzip.compress(index_body, compresslevel=6, mtime=0) if use_gzip else index_body
+                else:
+                    body = gzip.compress(source.read(), compresslevel=6, mtime=0) if use_gzip else None
                 self.send_response(200)
                 self.send_header("Content-Type", content_type)
                 self.send_header("Content-Length", str(len(body) if body is not None else metadata.st_size))

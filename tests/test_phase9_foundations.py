@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import io
 import gzip
+import hashlib
 import http.client
 import json
+import re
+import tempfile
 import threading
 import time
 import unittest
 import urllib.error
 from http.server import ThreadingHTTPServer
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 from server.api import Api
-from server.app import create_handler
+from server.app import ROOT, create_handler, render_versioned_index
 from server.auth import Principal, SessionManager
 from server.cache import CachePolicy, MemoryCache
 from server.config import ProviderConfig
@@ -889,6 +893,25 @@ class IngestionAuthSyncAlertAndApiTests(unittest.TestCase):
 
 
 class HttpBoundaryTests(unittest.TestCase):
+    def test_index_asset_versions_are_stable_and_content_derived(self):
+        source = b'<link rel="stylesheet" href="styles.css"><script src="app.js"></script>'
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "app.js").write_bytes(b"first app")
+            (root / "styles.css").write_bytes(b"first styles")
+            first = render_versioned_index(source, root)
+            self.assertEqual(first, render_versioned_index(source, root))
+            self.assertIn(hashlib.sha256(b"first app").hexdigest()[:12].encode(), first)
+            self.assertIn(hashlib.sha256(b"first styles").hexdigest()[:12].encode(), first)
+            (root / "app.js").write_bytes(b"changed app")
+            changed = render_versioned_index(source, root)
+            self.assertNotEqual(first, changed)
+            self.assertIn(hashlib.sha256(b"changed app").hexdigest()[:12].encode(), changed)
+            (root / "styles.css").write_bytes(b"changed styles")
+            changed_again = render_versioned_index(source, root)
+            self.assertNotEqual(changed, changed_again)
+            self.assertIn(hashlib.sha256(b"changed styles").hexdigest()[:12].encode(), changed_again)
+
     def setUp(self):
         config = ProviderConfig.from_env({
             "APP_ENV": "test", "REQUEST_BODY_LIMIT_BYTES": "1024",
@@ -981,6 +1004,10 @@ class HttpBoundaryTests(unittest.TestCase):
         self.assertEqual(index.getheader("Cache-Control"), "no-cache")
         self.assertEqual(index.getheader("Content-Encoding"), "gzip")
         self.assertIn(b"<main>", index_body)
+        app_version = re.search(rb'src="app\.js\?v=([0-9a-f]{12})"', index_body)
+        styles_version = re.search(rb'href="styles\.css\?v=([0-9a-f]{12})"', index_body)
+        self.assertEqual(app_version.group(1).decode(), hashlib.sha256((ROOT / "app.js").read_bytes()).hexdigest()[:12])
+        self.assertEqual(styles_version.group(1).decode(), hashlib.sha256((ROOT / "styles.css").read_bytes()).hexdigest()[:12])
 
     def test_illustration_caching_skips_png_compression_and_api_is_unchanged(self):
         immutable = "public, max-age=31536000, immutable"
