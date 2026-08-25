@@ -19,7 +19,7 @@ const waitFor = async (predicate, timeout = 5000) => {
 if (frame.contentWindow.location.href === "about:blank" || frame.contentDocument?.readyState !== "complete") {
   await new Promise((resolve) => frame.addEventListener("load", resolve, { once: true }));
 }
-await waitFor(() => frame.contentDocument?.querySelectorAll("#todayPulseGrid [data-home-card]").length >= 4);
+await waitFor(() => frame.contentDocument?.querySelectorAll("#homeCommandCenter [data-command-story]").length >= 4);
 const view = frame.contentWindow;
 const app = frame.contentDocument;
 await waitFor(() => app.querySelector(".primary-button"));
@@ -33,9 +33,9 @@ const demo = app.querySelector("#dataStatus");
 check(demo?.textContent.includes("Portfolio demo") && demo?.textContent.includes("Validated sample data"), "sample mode is presented as an intentional validated portfolio demo");
 check(demo?.getAttribute("aria-description")?.includes("No live feeds"), "demo disclosure is available to assistive technology");
 
-const launchCards = [...app.querySelectorAll("#todayPulseGrid [data-home-card]")];
+const launchCards = [...app.querySelectorAll("#homeCommandCenter [data-command-story]")];
 const launchSports = new Set(launchCards.map((card) => card.dataset.sportId));
-const launchHero = launchCards[0];
+const launchHero = app.querySelector("#homeCommandCenter [data-command-feature]");
 const launchHeroImage = launchHero?.querySelector("img");
 if (launchHeroImage) launchHeroImage.loading = "eager";
 launchHeroImage?.scrollIntoView({ block: "center" });
@@ -46,12 +46,12 @@ if (launchHeroImage && (!launchHeroImage.complete || !launchHeroImage.naturalWid
   ]);
 }
 view.scrollTo(0, 0);
-check(app.querySelector("#todayPulse")?.dataset.scope === "system:all" && launchSports.size >= 4, "fresh Home defaults to a deterministic multi-sport story mix");
-check(app.querySelector("#todayPulseTitle")?.textContent === "Stories behind the numbers" && app.querySelector("#todayPulseSummary")?.textContent.includes("Evidence-backed sports intelligence"), "first view states the product value in plain language");
-check(launchHero?.dataset.homeCard === "story-fixture-ended-streak" && launchHero?.dataset.leagueId === "mlb", "canonical recruiter story leads the launch presentation");
+check(!app.querySelector("#homeCommandCenter")?.hidden && launchSports.size >= 4, "fresh Home defaults to a deterministic multi-sport story mix");
+check(app.querySelector("#commandHeadlinesTitle")?.textContent === "Top Headlines" && app.querySelector("#commandStoriesTitle")?.textContent === "Top Stories & Insights", "first view states the product value in plain language");
+check(launchHero?.dataset.commandFeature === "story-fixture-ended-streak" && launchHero?.dataset.leagueId === "mlb", "canonical recruiter story leads the launch presentation");
 check(launchHero?.querySelector("[data-illustration-level]")?.dataset.illustrationLevel === "exact" && launchHero?.querySelector("[data-illustration-registry-id]")?.dataset.illustrationRegistryId === "art-mlb-aaron-judge-portrait", "hero portrait resolves through the centralized exact-art registry");
 check(launchHeroImage?.complete && launchHeroImage?.naturalWidth > 0, "hero artwork is present and decoded");
-check(launchHero?.querySelector("[data-view-story]") && launchHero?.querySelector("[data-open-athlete='mlb-aaron-judge']") && launchHero?.querySelector("[data-research-story]") && launchHero?.querySelector("[data-home-action='comparison']"), "hero exposes story, profile, structured research, and comparison paths");
+check(launchHero?.querySelector("[data-view-story]") && launchHero?.querySelector("[data-open-athlete='mlb-aaron-judge']") && launchHero?.querySelector("[data-research-story]"), "hero exposes story, profile, and structured research paths");
 check(!app.querySelector("#researchIntentNav")?.textContent.includes("AI Research") && app.querySelector("#researchIntentNav")?.textContent.includes("Edge Research"), "research navigation describes deterministic Edge Research without a generative AI claim");
 check(app.querySelector("#researchIntentNav")?.textContent.includes("Parlay Research") && app.querySelector("#researchIntentNav")?.textContent.includes("Value Research"), "market navigation is framed as research rather than advice");
 

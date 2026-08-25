@@ -33,6 +33,7 @@ const boundaryModel = createHomeCommandCenterModel({
 check(isSyntheticFixturePersonId("boxing-sample-boxer-a") && !isSyntheticFixturePersonId("boxing-canelo-alvarez"), "Home eligibility uses canonical fixture-person ID conventions rather than display names");
 check(!isHomeStoryEligible(fixturePersonStory) && isHomeStoryEligible(realAthleteStory) && isHomeStoryEligible(teamStory), "Home eligibility excludes synthetic people while retaining real athletes and team stories");
 check(boundaryModel.topStories.map((story) => story.id).join("|") === "real-athlete|fixture-team", "Home story filtering removes fixture people without remapping their evidence to a real athlete");
+check(boundaryModel.featuredStory.id === "real-athlete" && boundaryModel.headlines.every(isHomeStoryEligible), "Home featured story and headlines use the same synthetic-person eligibility boundary");
 check(boundaryModel.schedule.length === 1 && boundaryModel.schedule[0].event.id === "team-match", "Home schedule retains eligible team events while excluding fixture-person matchups");
 check(boundaryModel.markets.length === 1 && boundaryModel.markets[0].id === "team-market", "Home markets retain eligible team records while excluding fixture-person selections");
 check(boundaryModel.disclosure.includes("fixture") && boundaryModel.disclosure.includes("sample"), "Home sample and fixture disclosure remains intact");
@@ -112,11 +113,38 @@ check(featureImage?.complete && featureImage?.naturalWidth > 0, "featured artwor
 check(app.querySelectorAll(".home-command-center button:not([type])").length === 0, "command-center buttons retain explicit semantics");
 
 app.querySelector('#sportTabs [data-nav-view="for-you"]').click();
-await waitFor(() => app.querySelector("#todayPulse")?.dataset.scope === "system:for-you");
-const forYouStories = [...app.querySelectorAll("#todayPulseGrid .home-discovery-card")];
-check(forYouStories.length > 1, `For You renders multiple real-entity stories (found ${forYouStories.length})`);
-check(forYouStories.every((card) => !card.textContent.includes("Sample Boxer A")), "For You excludes synthetic fixture-person stories");
-check(forYouStories.filter((card) => card.querySelector("[data-open-athlete], [data-open-entity]")).length > 1, "For You includes multiple stories linked to canonical real-entity profiles");
+await waitFor(() => !app.querySelector("#homeCommandCenter")?.hidden && app.querySelector("#homeCommandCenter [data-command-center-version]"));
+const forYouCommand = app.querySelector("#homeCommandCenter");
+check(Boolean(forYouCommand.querySelector("[data-command-feature]")
+  && forYouCommand.querySelector(".command-headlines")
+  && forYouCommand.querySelector(".command-stories")
+  && forYouCommand.querySelector(".command-markets")), "For You nav renders the full rich command-center dashboard");
+check(forYouCommand.querySelectorAll(".command-story-card").length === 6
+  && forYouCommand.querySelectorAll(".command-headlines li").length >= 6
+  && forYouCommand.querySelectorAll(".command-market-card").length >= 4, "For You nav retains the full story, headline, and market collections");
+check([...app.querySelectorAll(".legacy-home-section")].every((section) => section.hidden)
+  && app.querySelectorAll(".legacy-home-section .home-discovery-card").length === 0, "For You nav hides and clears the legacy discovery-card layout");
+check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(forYouCommand.textContent), "For You rich dashboard excludes every synthetic fixture-person identity");
+
+const directForYouFrame = document.createElement("iframe");
+directForYouFrame.src = "/?mode=both&scope=system%3Afor-you&testFixtureTimestamp=2026-07-28T15%3A20%3A00.000Z";
+directForYouFrame.style.cssText = "width:1280px;height:900px;border:0;position:absolute;left:-10000px";
+document.body.append(directForYouFrame);
+await new Promise((resolve) => directForYouFrame.addEventListener("load", resolve, { once: true }));
+await waitFor(() => directForYouFrame.contentDocument?.querySelector("#homeCommandCenter [data-command-center-version]"));
+const directForYou = directForYouFrame.contentDocument;
+const directCommand = directForYou.querySelector("#homeCommandCenter");
+check(!directCommand.hidden && Boolean(directCommand.querySelector("[data-command-feature]")
+  && directCommand.querySelector(".command-headlines")
+  && directCommand.querySelector(".command-stories")
+  && directCommand.querySelector(".command-markets")), "direct system:for-you landing renders the same rich dashboard regions as system:all");
+check(directCommand.querySelectorAll(".command-story-card").length === 6
+  && directCommand.querySelectorAll(".command-headlines li").length >= 6
+  && directCommand.querySelectorAll(".command-market-card").length >= 4, "direct system:for-you landing fills the rich dashboard collections");
+check([...directForYou.querySelectorAll(".legacy-home-section")].every((section) => section.hidden)
+  && directForYou.querySelectorAll(".legacy-home-section .home-discovery-card").length === 0, "direct system:for-you landing does not render legacy discovery cards");
+check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(directCommand.textContent), "direct system:for-you dashboard contains no synthetic fixture-person identity");
+directForYouFrame.remove();
 check(window.testErrors.length === 0, `no application console errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
 
 output.dataset.status = failures.length ? "failed" : "passed";

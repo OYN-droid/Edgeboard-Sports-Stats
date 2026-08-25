@@ -275,7 +275,9 @@ await wait(30);
 check(app.querySelector("#todayPulseGrid [data-home-card]"), "105 Both mode retains factual stories");
 check(app.querySelector("#todayMarketGrid"), "106 Today’s Markets remains present");
 check(app.querySelector("#researchAnswer") && app.querySelector("#personalWorkspaceView"), "107 Edge Intelligence and Workspace remain present");
-const scopedCards = () => [...app.querySelectorAll("#todayPulseGrid [data-home-card]")];
+const scopedCards = () => app.querySelector("#homeCommandCenter")?.hidden
+  ? [...app.querySelectorAll("#todayPulseGrid [data-home-card]")]
+  : [...app.querySelectorAll("#homeCommandCenter [data-command-feature], #homeCommandCenter [data-command-story]")];
 app.querySelector('#sportTabs [data-nav-view="more"]')?.click();
 await wait(20);
 app.querySelector('#discoveryContent [data-league="mlb"]')?.click();

@@ -3067,7 +3067,9 @@ function renderHomeCommandCenter(model) {
 
 function renderHomeDiscovery() {
   const summary = getSelectionSummary(state.navigationSelection);
-  const portfolioLaunch = summary.selection.type === "system" && summary.selection.id === "all";
+  const portfolioLaunch = summary.selection.type === "system" && ["all", "for-you"].includes(summary.selection.id);
+  elements.homeCommandCenter.hidden = !portfolioLaunch;
+  document.querySelectorAll(".legacy-home-section").forEach((section) => { section.hidden = portfolioLaunch; });
   const model = createHomeDiscoveryModel({
     selection: summary,
     visibleLeagues: summary.visibleLeagues,
@@ -3083,11 +3085,6 @@ function renderHomeDiscovery() {
     currentDate: new Date(),
     canonicalStoryId: portfolioLaunch ? "story-fixture-ended-streak" : "",
   });
-  const sections = new Map(model.sections.map((item) => [item.id, item]));
-  const stories = sections.get("stories");
-  const trending = sections.get("trending");
-  elements.homeCommandCenter.hidden = !portfolioLaunch;
-  document.querySelectorAll(".legacy-home-section").forEach((section) => { section.hidden = portfolioLaunch; });
   if (portfolioLaunch) {
     const storyViews = storyEngine.getFeaturedStories({}, {
       limit: 30,
@@ -3100,7 +3097,15 @@ function renderHomeDiscovery() {
     const marketRecords = marketScreenerService.getRecords({ leagueIds: summary.visibleLeagues.map((league) => league.leagueId) }, new Date(testFixtureTimestamp || Date.now()));
     const commandModel = createHomeCommandCenterModel({ storyViews, eventEntries, marketRecords });
     replaceHomeDiscoveryContent(elements.homeCommandCenter, renderHomeCommandCenter(commandModel));
+    replaceHomeDiscoveryContent(elements.todayPulseGrid, "");
+    replaceHomeDiscoveryContent(elements.insightDiscoveryGrid, "");
+    replaceHomeDiscoveryContent(elements.homeDiscoverySections, "");
+    renderDiscoveryExplorer();
+    return;
   }
+  const sections = new Map(model.sections.map((item) => [item.id, item]));
+  const stories = sections.get("stories");
+  const trending = sections.get("trending");
   elements.todayPulse.dataset.scope = serializeNavigationSelection(summary.selection);
   elements.todayPulseTitle.textContent = stories.title;
   elements.todayPulseSummary.textContent = `${stories.description} ${model.disclaimer}`;

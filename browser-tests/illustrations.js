@@ -200,15 +200,15 @@ homeFrame.style.cssText = "width:390px;height:900px;border:0";
 document.body.append(homeFrame);
 homeFrame.contentWindow.addEventListener("error", (event) => window.testErrors.push(`home: ${event.message}`));
 await new Promise((resolve) => homeFrame.addEventListener("load", resolve, { once: true }));
-await waitFor(() => homeFrame.contentDocument?.querySelector(".home-discovery-card"));
-const storyArt = homeFrame.contentDocument.querySelector(".home-card-illustration img");
+await waitFor(() => homeFrame.contentDocument?.querySelector("[data-command-feature]"));
+const storyArt = homeFrame.contentDocument.querySelector("[data-command-feature] .command-story-media img");
 check(Boolean(storyArt), "prominent deterministic discovery story can render contextual illustration");
-check(storyArt?.getAttribute("alt") === "" && storyArt?.getAttribute("aria-hidden") === "true", "story illustration is decorative when adjacent claim text identifies the entity");
-const featureCard = homeFrame.contentDocument.querySelector("#todayPulseGrid .home-discovery-card.feature");
-const featureArt = featureCard?.querySelector(".home-card-illustration");
+check(storyArt?.closest(".command-story-media")?.getAttribute("aria-hidden") === "true", "story illustration is decorative when adjacent claim text identifies the entity");
+const featureCard = homeFrame.contentDocument.querySelector("[data-command-feature]");
+const featureArt = featureCard?.querySelector(".command-feature-art");
 check(featureArt?.dataset.illustrationLevel === "exact"
   && !featureCard?.textContent.includes("Sample Boxer A"), "For You hero resolves exact artwork for a non-synthetic entity");
-check(Boolean(homeFrame.contentDocument.querySelector("#insightDiscoveryGrid .home-discovery-card:first-child .home-card-illustration img")), "first Trending Research card uses the centralized illustration renderer");
+check(Boolean(homeFrame.contentDocument.querySelector(".command-story-card:first-child .command-card-art img")), "first Top Stories card uses the centralized illustration renderer");
 for (const [width, label, minimumArtWidth] of [[390, "mobile", 180], [768, "tablet", 190], [1280, "desktop", 230]]) {
   homeFrame.style.width = `${width}px`;
   await wait(80);
