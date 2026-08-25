@@ -3,8 +3,10 @@ export const HOME_COMMAND_CENTER_STORY_IDS = Object.freeze([
   "story-fixture-dataset-high",
   "story-fixture-wnba-assist-streak",
   "story-fixture-nhl-point-streak",
+  "story-fixture-provider-milestone",
+  "story-fixture-ufc-finish-streak",
+  "story-fixture-boxing-knockout-milestone",
   "story-fixture-f1-top-ten",
-  "story-fixture-soccer-clean-sheet",
 ]);
 
 export const HOME_COMMAND_CENTER_SCHEDULE_LEAGUES = Object.freeze([

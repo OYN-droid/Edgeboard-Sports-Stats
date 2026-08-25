@@ -16,9 +16,11 @@ const waitFor = async (predicate, timeout = 7000) => {
   return false;
 };
 
-const fixturePersonStory = Object.freeze({ id: "fixture-person", primaryEntity: Object.freeze({ id: "boxing-sample-boxer-a", entityType: "competitor" }) });
-const realAthleteStory = Object.freeze({ id: "real-athlete", primaryEntity: Object.freeze({ id: "boxing-canelo-alvarez", entityType: "competitor" }) });
-const teamStory = Object.freeze({ id: "fixture-team", primaryEntity: Object.freeze({ id: "sample-team", entityType: "team" }) });
+const exactMedia = Object.freeze({ illustration: Object.freeze({ fallbackLevel: "exact" }) });
+const fallbackMedia = Object.freeze({ illustration: Object.freeze({ fallbackLevel: "team" }) });
+const fixturePersonStory = Object.freeze({ id: "fixture-person", primaryEntity: Object.freeze({ id: "boxing-sample-boxer-a", entityType: "competitor" }), media: exactMedia });
+const realAthleteStory = Object.freeze({ id: "real-athlete", primaryEntity: Object.freeze({ id: "boxing-canelo-alvarez", entityType: "competitor" }), media: exactMedia });
+const teamStory = Object.freeze({ id: "fixture-team", primaryEntity: Object.freeze({ id: "sample-team", entityType: "team" }), media: fallbackMedia });
 const boundaryModel = createHomeCommandCenterModel({
   storyViews: [fixturePersonStory, realAthleteStory, teamStory],
   eventEntries: [
@@ -31,9 +33,9 @@ const boundaryModel = createHomeCommandCenterModel({
   ],
 });
 check(isSyntheticFixturePersonId("boxing-sample-boxer-a") && !isSyntheticFixturePersonId("boxing-canelo-alvarez"), "Home eligibility uses canonical fixture-person ID conventions rather than display names");
-check(!isHomeStoryEligible(fixturePersonStory) && isHomeStoryEligible(realAthleteStory) && isHomeStoryEligible(teamStory), "Home eligibility excludes synthetic people while retaining real athletes and team stories");
-check(boundaryModel.topStories.map((story) => story.id).join("|") === "real-athlete|fixture-team", "Home story filtering removes fixture people without remapping their evidence to a real athlete");
-check(boundaryModel.featuredStory.id === "real-athlete" && boundaryModel.headlines.every(isHomeStoryEligible), "Home featured story and headlines use the same synthetic-person eligibility boundary");
+check(!isHomeStoryEligible(fixturePersonStory) && isHomeStoryEligible(realAthleteStory) && !isHomeStoryEligible(teamStory), "Home eligibility requires unique exact art and excludes synthetic people and shared team fallbacks");
+check(boundaryModel.topStories.map((story) => story.id).join("|") === "real-athlete", "Home story filtering retains only real entities with unique exact artwork");
+check(boundaryModel.featuredStory.id === "real-athlete" && boundaryModel.headlines.every(isHomeStoryEligible), "Home featured story and headlines use the same exact-art eligibility boundary");
 check(boundaryModel.schedule.length === 1 && boundaryModel.schedule[0].event.id === "team-match", "Home schedule retains eligible team events while excluding fixture-person matchups");
 check(boundaryModel.markets.length === 1 && boundaryModel.markets[0].id === "team-market", "Home markets retain eligible team records while excluding fixture-person selections");
 check(boundaryModel.disclosure.includes("fixture") && boundaryModel.disclosure.includes("sample"), "Home sample and fixture disclosure remains intact");
@@ -60,26 +62,24 @@ check(feature?.querySelector("[data-view-story]") && feature?.querySelector("[da
 const headlines = [...app.querySelectorAll(".command-headlines li")];
 const headlineOrder = headlines.map((item) => item.querySelector("strong")?.textContent || "");
 const expectedHeadlineOrder = [
+  "Canelo Álvarez reached 5 knockout wins in the attributed sample",
   "Stephen Curry produced the highest three-pointers made value in the available dataset",
-  "Max Verstappen's top-10 finishes streak reached 4 events",
+  "Lando Norris's top-10 finishes streak reached 4 events",
   "Auston Matthews's points streak reached 3 events",
+  "Islam Makhachev's finishes streak reached 3 events",
   "Caitlin Clark's assists streak reached 3 events",
-  "Inter Miami's clean sheets streak reached 3 events",
-  "AME vs TIG is next on the sample schedule",
-  "Toronto Open is next on the sample schedule",
-  "CIN vs BAL is next on the sample schedule",
+  "Patrick Mahomes reached 2500 passing yards in the attributed sample",
 ];
-check(JSON.stringify(headlineOrder) === JSON.stringify(expectedHeadlineOrder), "Top Headlines fills synthetic-person vacancies in the expected deterministic order");
-check(headlines.length >= 6 && headlines.every((item) => item.querySelector("[data-view-story]")), "Top Headlines contains six or more valid EdgeBoard story destinations");
+check(JSON.stringify(headlineOrder) === JSON.stringify(expectedHeadlineOrder), "Top Headlines fills in the expected deterministic exact-art order");
+check(headlines.length === 7 && headlines.every((item) => item.querySelector("[data-view-story]")), "Top Headlines contains the seven remaining exact-art story destinations in Both mode");
 check(new Set(headlines.map((item) => item.querySelector("[data-view-story]")?.dataset.viewStory)).size === headlines.length, "Top Headlines is deterministic and duplicate-free");
 check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(app.querySelector(".command-headlines")?.textContent || ""), "Top Headlines excludes synthetic fixture-person identities");
 check(!/ESPN|The Athletic|NFL\.com|NBC Sports/i.test(app.querySelector(".command-headlines")?.textContent || ""), "Top Headlines does not fabricate external publishers");
 
 const stories = [...app.querySelectorAll(".command-story-card")];
 const storySports = new Set(stories.map((story) => story.dataset.sportId));
-check(stories.length === 6 && storySports.size >= 4, "Top Stories & Insights shows six cards across at least four sports");
-check(stories.filter((story) => story.querySelector("[data-illustration-level='exact']")).length >= 5, "Top Stories & Insights resolves exact athlete artwork across the dense card row");
-check(stories.some((story) => story.querySelector("[data-illustration-level]:not([data-illustration-level='exact'])")?.querySelector("img, [role='img']")), "Top Stories & Insights retains a rendered centralized fallback for an entity without exact art");
+check(stories.length === 6 && storySports.size === 5, "Top Stories & Insights shows six curated exact-art cards across five sports in Both mode");
+check([feature, ...headlines, ...stories].every((story) => story?.dataset.illustrationLevel === "exact"), "every featured story, headline, and top-story card requires unique exact artwork");
 check(stories.every((story) => story.querySelector(".command-card-metric") && story.querySelector("[data-view-story]")), "story cards retain deterministic metric context and actions");
 check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(app.querySelector(".command-stories")?.textContent || ""), "Top Stories & Insights excludes synthetic fixture-person identities");
 
@@ -120,8 +120,10 @@ check(Boolean(forYouCommand.querySelector("[data-command-feature]")
   && forYouCommand.querySelector(".command-stories")
   && forYouCommand.querySelector(".command-markets")), "For You nav renders the full rich command-center dashboard");
 check(forYouCommand.querySelectorAll(".command-story-card").length === 6
-  && forYouCommand.querySelectorAll(".command-headlines li").length >= 6
-  && forYouCommand.querySelectorAll(".command-market-card").length >= 4, "For You nav retains the full story, headline, and market collections");
+  && forYouCommand.querySelectorAll(".command-headlines li").length === 7
+  && forYouCommand.querySelectorAll(".command-market-card").length >= 4, "For You nav retains the full exact-art story, headline, and market collections");
+check([...forYouCommand.querySelectorAll("[data-command-feature], .command-headlines li, [data-command-story]")]
+  .every((story) => story.dataset.illustrationLevel === "exact"), "For You nav renders only unique exact-art story surfaces");
 check([...app.querySelectorAll(".legacy-home-section")].every((section) => section.hidden)
   && app.querySelectorAll(".legacy-home-section .home-discovery-card").length === 0, "For You nav hides and clears the legacy discovery-card layout");
 check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(forYouCommand.textContent), "For You rich dashboard excludes every synthetic fixture-person identity");
@@ -139,12 +141,42 @@ check(!directCommand.hidden && Boolean(directCommand.querySelector("[data-comman
   && directCommand.querySelector(".command-stories")
   && directCommand.querySelector(".command-markets")), "direct system:for-you landing renders the same rich dashboard regions as system:all");
 check(directCommand.querySelectorAll(".command-story-card").length === 6
-  && directCommand.querySelectorAll(".command-headlines li").length >= 6
-  && directCommand.querySelectorAll(".command-market-card").length >= 4, "direct system:for-you landing fills the rich dashboard collections");
+  && directCommand.querySelectorAll(".command-headlines li").length === 7
+  && directCommand.querySelectorAll(".command-market-card").length >= 4, "direct system:for-you landing fills the rich exact-art dashboard collections");
+check([...directCommand.querySelectorAll("[data-command-feature], .command-headlines li, [data-command-story]")]
+  .every((story) => story.dataset.illustrationLevel === "exact"), "direct system:for-you landing renders only unique exact-art story surfaces");
 check([...directForYou.querySelectorAll(".legacy-home-section")].every((section) => section.hidden)
   && directForYou.querySelectorAll(".legacy-home-section .home-discovery-card").length === 0, "direct system:for-you landing does not render legacy discovery cards");
 check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(directCommand.textContent), "direct system:for-you dashboard contains no synthetic fixture-person identity");
 directForYouFrame.remove();
+
+const statsFrame = document.createElement("iframe");
+statsFrame.src = "/?mode=stats&scope=system%3Aall&testFixtureTimestamp=2026-07-28T15%3A20%3A00.000Z";
+statsFrame.style.cssText = "width:1280px;height:900px;border:0;position:absolute;left:-10000px";
+document.body.append(statsFrame);
+await new Promise((resolve) => statsFrame.addEventListener("load", resolve, { once: true }));
+await waitFor(() => statsFrame.contentDocument?.querySelector("#homeCommandCenter [data-command-center-version]"));
+const statsCommand = statsFrame.contentDocument.querySelector("#homeCommandCenter");
+const statsStories = [...statsCommand.querySelectorAll("[data-command-story]")];
+const statsHeadlines = [...statsCommand.querySelectorAll(".command-headlines [data-view-story]")];
+const statsStoryIds = statsStories.map((item) => item.dataset.commandStory);
+const expectedStatsStoryIds = [
+  "story-fixture-ended-streak",
+  "story-fixture-dataset-high",
+  "story-fixture-wnba-assist-streak",
+  "story-fixture-nhl-point-streak",
+  "story-fixture-provider-milestone",
+  "story-fixture-ufc-finish-streak",
+];
+check(JSON.stringify(statsStoryIds) === JSON.stringify(expectedStatsStoryIds), "fresh Stats-mode Home fills all six curated slots with eligible exact-art stories, including NFL and UFC");
+check(statsHeadlines.some((item) => item.textContent.includes("Canelo Álvarez"))
+  && statsHeadlines.some((item) => item.textContent.includes("Lando Norris")), "fresh Stats-mode headlines surface the corrected boxing and Formula 1 fixtures");
+const statsLeagues = new Set([...statsCommand.querySelectorAll("[data-league-id]")].map((item) => item.dataset.leagueId));
+check(["mlb", "nba", "wnba", "nhl", "nfl", "ufc", "boxing", "f1"].every((league) => statsLeagues.has(league)), "fresh Stats-mode Home represents MLB, NBA, WNBA, NHL, NFL, UFC, boxing, and Formula 1 across its story surfaces");
+check([...statsCommand.querySelectorAll("[data-command-feature], .command-headlines li, [data-command-story]")]
+  .every((story) => story.dataset.illustrationLevel === "exact"), "fresh Stats-mode Home renders only unique exact-art story surfaces");
+check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(statsCommand.textContent), "fresh Stats-mode Home contains no synthetic fixture-person identity");
+statsFrame.remove();
 check(window.testErrors.length === 0, `no application console errors${window.testErrors.length ? `: ${window.testErrors.join(" | ")}` : ""}`);
 
 output.dataset.status = failures.length ? "failed" : "passed";

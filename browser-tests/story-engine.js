@@ -133,9 +133,12 @@ check(all.some((item) => item.leagueId === "f1" && item.statIds.includes("motors
 check(Boolean(byFixture("story-fixture-golf-course")), "59 golf course-history fixture is represented");
 check(Boolean(byFixture("story-fixture-tennis-upset")), "60 tennis upset fixture is represented");
 check(Boolean(byFixture("story-fixture-corrected")) && Boolean(byFixture("story-fixture-expired")), "61 corrected and expired fixture stories are retained for audit");
-const syntheticBoxingFixture = byFixture("story-fixture-boxing-knockout-milestone");
-check(syntheticBoxingFixture?.primaryEntity?.id === "boxing-sample-boxer-a" && syntheticBoxingFixture?.claimData?.entityName === "Sample Boxer A", "61.a synthetic boxing fixture remains available with its original canonical identity");
-check(!syntheticBoxingFixture?.entityIds?.includes("boxing-canelo-alvarez"), "61.b synthetic fixture evidence is never remapped to a real athlete");
+const boxingFixture = byFixture("story-fixture-boxing-knockout-milestone");
+const ufcFixture = byFixture("story-fixture-ufc-finish-streak");
+const f1Fixture = byFixture("story-fixture-f1-top-ten");
+check(boxingFixture?.primaryEntity?.id === "boxing-canelo-alvarez" && boxingFixture?.claimData?.entityName === "Canelo Alvarez", "61.a boxing fixture identity and claim name agree on the illustrated real athlete");
+check(ufcFixture?.primaryEntity?.id === "ufc-islam-makhachev" && ufcFixture?.claimData?.entityName === "Islam Makhachev", "61.b UFC fixture identity and claim name agree on the illustrated real athlete");
+check(f1Fixture?.primaryEntity?.id === "f1-lando-norris" && f1Fixture?.claimData?.entityName === "Lando Norris", "61.c Formula 1 fixture identity and claim name agree on the illustrated real driver");
 
 // Edge Trust, view models, actions, and betting separation.
 const view = buildStoryViewModel(valid, { presentation: "hero", mode: "stats" });

@@ -21,7 +21,9 @@ const check = (condition, label) => { checks.push(label); if (!condition) failur
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const waitFor = async (predicate, timeout = 3000) => { const deadline = Date.now() + timeout; while (Date.now() < deadline) { if (predicate()) return true; await wait(30); } return false; };
 const approvedProofIds = new Set(ILLUSTRATION_STYLE_PROOF_BATCH.map((slot) => slot.canonicalEntityId));
-const approvedExactIds = new Set(ILLUSTRATION_REGISTRY.filter((entry) => entry.status === "active" && entry.variant === "portrait" && ["athlete", "fighter", "driver"].includes(entry.entityType)).map((entry) => entry.canonicalEntityId));
+const assetPathUseCounts = ILLUSTRATION_REGISTRY.reduce((counts, entry) => counts.set(entry.assetPath, (counts.get(entry.assetPath) || 0) + 1), new Map());
+const approvedExactIds = new Set(ILLUSTRATION_REGISTRY.filter((entry) => entry.status === "active" && entry.variant === "portrait"
+  && ["athlete", "fighter", "driver"].includes(entry.entityType) && assetPathUseCounts.get(entry.assetPath) === 1).map((entry) => entry.canonicalEntityId));
 const resolvesAsApprovedProofOr = (entity, fallbackLevel, context = {}) => {
   const resolved = getIllustration(entity, context);
   return resolved?.fallbackLevel === (approvedExactIds.has(entity?.id) ? "exact" : fallbackLevel);
@@ -54,7 +56,7 @@ check(exact.fallbackLevel === "exact" && exact.canonicalEntityId === "wnba-caitl
 const sampleFighter = getIllustration({ id: "ufc-sample-fighter-a", name: "Sample Fighter A", sportId: "mma", leagueId: "ufc", weightClass: "Lightweight" }, { context: "profile" });
 check(sampleFighter.fallbackLevel === "weight_class" && sampleFighter.registryId === "art-weight-mma-lightweight", "deterministic sample fighter resolves to explicit combat context instead of fabricated person art");
 check(getIllustration({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", leagueId: "f1", series: "Formula 1" }, { desiredVariant: "portrait" }).variantFallback === false, "preferred available variant resolves without fallback");
-check(getIllustration({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", leagueId: "f1", series: "Formula 1" }).fallbackLevel === "exact", "driver resolves to exact canonical illustration");
+check(getIllustration({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", leagueId: "f1", series: "Formula 1" }).fallbackLevel === "series", "driver sharing editorial artwork resolves as a series fallback rather than exact art");
 check(exact.variantFallback && exact.requestedVariant === "profile", "missing requested rendition reports deterministic variant fallback");
 const traded = getIllustration({ id: "wnba-caitlin-clark", name: "Caitlin Clark", sportId: "basketball", leagueId: "wnba", teamId: "OTHER" }, { context: "profile" });
 check(traded.registryId === exact.registryId, "team changes do not silently change exact canonical art");
@@ -76,7 +78,12 @@ check(!validateIllustrationRegistry([{ ...ILLUSTRATION_REGISTRY[0], id: "missing
 check(!validateIllustrationRegistry([{ ...ILLUSTRATION_REGISTRY[0], id: "type-test", assetType: "third_party_unknown" }]).valid, "invalid asset types fail validation");
 check(!validateIllustrationRegistry([{ ...ILLUSTRATION_REGISTRY[0], id: "source-test", source: "" }]).valid, "missing source metadata fails validation");
 const injectedResolver = createIllustrationResolver(ILLUSTRATION_REGISTRY);
-check(injectedResolver.resolve({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", series: "Formula 1" })?.fallbackLevel === "exact", "resolver can be dependency-injected with the canonical registry");
+check(injectedResolver.resolve({ id: "f1-max-verstappen", name: "Max Verstappen", sportId: "motorsport", series: "Formula 1" })?.fallbackLevel === "series", "dependency-injected resolver preserves shared-asset exactness rules");
+const sharedCombatPath = "assets/illustrations/fighters/edgeboard-combat-editorial.svg";
+const sharedFighterRegistry = ILLUSTRATION_REGISTRY.map((entry) => ["ufc-islam-makhachev", "ufc-joshua-van"].includes(entry.canonicalEntityId)
+  ? { ...entry, assetPath: sharedCombatPath } : entry);
+const sharedFighter = createIllustrationResolver(sharedFighterRegistry).resolve({ id: "ufc-islam-makhachev", name: "Islam Makhachev", sportId: "mma", leagueId: "ufc", weightClass: "Lightweight" });
+check(sharedFighter?.fallbackLevel === "weight_class" && sharedFighter.assetPath === sharedCombatPath, "fighter sharing a reused asset path resolves as contextual fallback rather than exact art");
 const curryEntity = { id: "nba-stephen-curry", name: "Stephen Curry", entityType: "player", sportId: "basketball", leagueId: "nba", teamId: "GSW" };
 const featuredContext = { context: "story", fallbackPolicy: "featured_story" };
 check(getIllustration(curryEntity, featuredContext)?.fallbackLevel === "exact", "featured real athlete resolves exact art first");
@@ -161,7 +168,7 @@ check(motorsportsBatch.seriesCounts.supercross === 6 && motorsportsBatch.seriesC
 check(motorsportsBatch.portraitPrompts === 62 && motorsportsBatch.deferredActionPrompts === 62 && motorsportsBatch.registryReady === 62 && motorsportsBatch.exactActive === 2, "Batch 6 prepares portrait-first production, defers variants, and recognizes both approved exact portraits");
 check(MOTORSPORTS_SHOWCASE_BATCH_6.every((item) => item.seriesAssignment.seriesId === item.seriesId && item.teamAssignment.canonicalTeamId === item.canonicalTeamId), "series and team assignments remain explicit contextual records separate from competitor IDs");
 check(MOTORSPORTS_SHOWCASE_BATCH_6.every((item) => item.fallback.order.join(">") === "driver_or_rider>constructor_or_team>series>motorsport>neutral"), "every Batch 6 slot declares the complete motorsport fallback chain");
-check(MOTORSPORTS_SHOWCASE_BATCH_6.every((item) => ["exact", "team"].includes(getIllustration({ ...CANONICAL_ENTITIES.find((entity) => entity.id === item.canonicalCompetitorId), leagueId: item.seriesId, teamId: item.canonicalTeamId, series: item.seriesDisplayName })?.fallbackLevel)), "all 62 Batch 6 slots resolve through approved exact or team artwork without broken images");
+check(MOTORSPORTS_SHOWCASE_BATCH_6.every((item) => ["exact", "team", "series"].includes(getIllustration({ ...CANONICAL_ENTITIES.find((entity) => entity.id === item.canonicalCompetitorId), leagueId: item.seriesId, teamId: item.canonicalTeamId, series: item.seriesDisplayName })?.fallbackLevel)), "all 62 Batch 6 slots resolve through unique exact or contextual fallback artwork without broken images");
 check(MOTORSPORTS_SHOWCASE_BATCH_6.every((item) => /no sponsor marks|omit exact constructor/i.test(item.portraitPrompt) && !/best driver|best rider|champion/i.test(`${item.showcaseRole} ${item.portraitPrompt}`)), "Batch 6 prompts avoid sponsor-heavy reproduction and subjective or championship claims");
 check(MOTORSPORTS_SHOWCASE_BATCH_6_METADATA.additionalConfiguredSeriesEvaluation.map((item) => item.seriesId).join(",") === "wrc,nascar-xfinity,nascar-trucks", "Batch 6 explicitly evaluates every additional configured major motorsport series");
 

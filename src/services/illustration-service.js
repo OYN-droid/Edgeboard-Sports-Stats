@@ -46,6 +46,13 @@ export class IllustrationResolver {
     const validation = validateIllustrationRegistry(entries);
     if (!validation.valid) throw new Error(`Invalid illustration registry: ${validation.errors.join("; ")}`);
     this.entries = Object.freeze([...entries]);
+    const assetPathUseCounts = this.entries.reduce((counts, entry) => {
+      counts.set(entry.assetPath, (counts.get(entry.assetPath) || 0) + 1);
+      return counts;
+    }, new Map());
+    this.entitySpecificAssetPaths = new Set([...assetPathUseCounts]
+      .filter(([, count]) => count === 1)
+      .map(([assetPath]) => assetPath));
   }
 
   resolve(entity, options = {}) {
@@ -61,7 +68,10 @@ export class IllustrationResolver {
     const desiredVariant = options.desiredVariant || (context === "profile" ? "profile" : context === "story" ? "story" : "compact");
     const active = this.entries.filter((entry) => entry.status === "active");
     const deterministicSample = /(^|-)sample(-|$)/i.test(canonicalEntityId) || /^sample\b/i.test(String(entity?.displayName || entity?.name || ""));
-    const exactCandidates = active.filter((entry) => !deterministicSample && canonicalEntityId && entry.canonicalEntityId === canonicalEntityId && !["generic_sport", "team"].includes(entry.entityType));
+    const exactCandidates = active.filter((entry) => !deterministicSample && canonicalEntityId
+      && entry.canonicalEntityId === canonicalEntityId
+      && this.entitySpecificAssetPaths.has(entry.assetPath)
+      && !["generic_sport", "team"].includes(entry.entityType));
     const teamCandidates = active.filter((entry) => teamId && entry.assetType === "team_fallback" && entry.teamId === teamId);
     const genericCandidates = active.filter((entry) => sport && entry.assetType === "generic_sport" && normalized(entry.sport) === sport);
     const neutralCandidates = active.filter((entry) => entry.assetType === "placeholder");

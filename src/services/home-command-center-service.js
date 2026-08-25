@@ -16,7 +16,8 @@ export function isSyntheticFixturePersonId(value) {
 
 export function isHomeStoryEligible(story) {
   const entity = story?.primaryEntity;
-  return !entity || entity.entityType === "team" || !isSyntheticFixturePersonId(entity.id);
+  return story?.media?.illustration?.fallbackLevel === "exact"
+    && (!entity || entity.entityType === "team" || !isSyntheticFixturePersonId(entity.id));
 }
 
 function eventHasSyntheticFixturePerson(event) {

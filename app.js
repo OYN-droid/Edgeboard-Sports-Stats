@@ -2992,7 +2992,7 @@ function renderCommandScheduleItem({ event, league }) {
 function renderCommandFeaturedStory(story) {
   if (!story) return '<div class="discovery-empty" role="status">No supported featured story is available.</div>';
   const researchAction = story.secondaryActions.find((action) => action.type === "research-story");
-  return `<article class="command-feature-card" data-command-feature="${escapeHtml(story.id)}" data-league-id="${escapeHtml(story.leagueId)}" data-sport-id="${escapeHtml(story.sportId)}">
+  return `<article class="command-feature-card" data-command-feature="${escapeHtml(story.id)}" data-league-id="${escapeHtml(story.leagueId)}" data-sport-id="${escapeHtml(story.sportId)}" data-illustration-level="${escapeHtml(story.media?.illustration?.fallbackLevel || "none")}">
     <div class="command-feature-copy">
       <div class="home-card-kickers"><span>Featured story</span><span class="sample-badge">Fixture sample</span></div>
       <h1>${escapeHtml(story.headline)}</h1>
@@ -3010,11 +3010,11 @@ function renderCommandFeaturedStory(story) {
 }
 
 function renderCommandHeadline(story, index) {
-  return `<li><button type="button" data-view-story="${escapeHtml(story.id)}"><span class="command-headline-index" aria-hidden="true">${String(index + 1).padStart(2, "0")}</span><span><strong>${escapeHtml(story.headline)}</strong><small>${escapeHtml(story.leagueId.toUpperCase())} · ${escapeHtml(story.sourceMode === "fixture" ? "Fixture sample" : story.sourceLabel)}</small></span><span aria-hidden="true">→</span></button></li>`;
+  return `<li data-league-id="${escapeHtml(story.leagueId)}" data-illustration-level="${escapeHtml(story.media?.illustration?.fallbackLevel || "none")}"><button type="button" data-view-story="${escapeHtml(story.id)}"><span class="command-headline-index" aria-hidden="true">${String(index + 1).padStart(2, "0")}</span><span><strong>${escapeHtml(story.headline)}</strong><small>${escapeHtml(story.leagueId.toUpperCase())} · ${escapeHtml(story.sourceMode === "fixture" ? "Fixture sample" : story.sourceLabel)}</small></span><span aria-hidden="true">→</span></button></li>`;
 }
 
 function renderCommandStoryCard(story) {
-  return `<article class="command-story-card" data-command-story="${escapeHtml(story.id)}" data-sport-id="${escapeHtml(story.sportId)}" data-league-id="${escapeHtml(story.leagueId)}">
+  return `<article class="command-story-card" data-command-story="${escapeHtml(story.id)}" data-sport-id="${escapeHtml(story.sportId)}" data-league-id="${escapeHtml(story.leagueId)}" data-illustration-level="${escapeHtml(story.media?.illustration?.fallbackLevel || "none")}">
     <div class="home-card-kickers"><span>${escapeHtml(story.leagueId.toUpperCase())}</span><span class="sample-badge">Sample</span></div>
     ${commandCenterStoryMedia(story, "command-card-art")}
     <h3>${escapeHtml(story.headline)}</h3>
@@ -3087,7 +3087,7 @@ function renderHomeDiscovery() {
   });
   if (portfolioLaunch) {
     const storyViews = storyEngine.getFeaturedStories({}, {
-      limit: 30,
+      limit: 60,
       mode: state.researchMode,
       now: new Date(testFixtureTimestamp || Date.now()),
       visibleLeagues: summary.visibleLeagues,
