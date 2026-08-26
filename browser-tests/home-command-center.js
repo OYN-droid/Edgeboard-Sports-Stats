@@ -128,6 +128,34 @@ check([...app.querySelectorAll(".legacy-home-section")].every((section) => secti
   && app.querySelectorAll(".legacy-home-section .home-discovery-card").length === 0, "For You nav hides and clears the legacy discovery-card layout");
 check(!/Sample (?:Fighter|Boxer|Driver|Golfer|Tennis Player|Player)/i.test(forYouCommand.textContent), "For You rich dashboard excludes every synthetic fixture-person identity");
 
+const openMarketsThenSelect = async (viewId) => {
+  app.querySelector("#openMarkets")?.click();
+  await waitFor(() => !app.querySelector("#marketResearchView")?.hidden);
+  app.querySelector(`#sportTabs [data-nav-view="${viewId}"]`)?.click();
+  await waitFor(() => app.querySelector("#marketResearchView")?.hidden
+    && !app.body.classList.contains("markets-active"));
+};
+await openMarketsThenSelect("for-you");
+check(app.querySelector("#marketResearchView")?.hidden && !app.querySelector("#homeCommandCenter")?.hidden, "For You exits Edge Markets and restores the rich Home command center");
+await openMarketsThenSelect("live");
+check(app.querySelector("#marketResearchView")?.hidden && !app.querySelector("#todayPulse")?.hidden
+  && app.querySelector("#todayPulse")?.dataset.scope === "system:live", "Live exits Edge Markets and restores its scoped discovery view");
+await openMarketsThenSelect("today");
+check(app.querySelector("#marketResearchView")?.hidden && !app.querySelector("#todayPulse")?.hidden
+  && app.querySelector("#todayPulse")?.dataset.scope === "system:today", "Today exits Edge Markets and restores its scoped discovery view");
+
+app.querySelector("#openHistory")?.click();
+await waitFor(() => !app.querySelector("#historicalExplorer")?.hidden);
+app.querySelector('#sportTabs [data-nav-view="for-you"]')?.click();
+await waitFor(() => app.querySelector("#historicalExplorer")?.hidden && !app.querySelector("#homeCommandCenter")?.hidden);
+check(app.querySelector("#historicalExplorer")?.hidden && !app.body.classList.contains("history-active"), "For You exits Historical Explorer and restores Home");
+
+app.querySelector("#openWorkspace")?.click();
+await waitFor(() => !app.querySelector("#personalWorkspaceView")?.hidden);
+app.querySelector('#sportTabs [data-nav-view="for-you"]')?.click();
+await waitFor(() => app.querySelector("#personalWorkspaceView")?.hidden && !app.querySelector("#homeCommandCenter")?.hidden);
+check(app.querySelector("#personalWorkspaceView")?.hidden && !app.body.classList.contains("workspace-active"), "For You exits Workspace and restores Home");
+
 const directForYouFrame = document.createElement("iframe");
 directForYouFrame.src = "/?mode=both&scope=system%3Afor-you&testFixtureTimestamp=2026-07-28T15%3A20%3A00.000Z";
 directForYouFrame.style.cssText = "width:1280px;height:900px;border:0;position:absolute;left:-10000px";

@@ -774,20 +774,24 @@ function applyAboutVisibility({ focus = false } = {}) {
   if (state.aboutActive && focus) elements.aboutView.focus({ preventScroll: true });
 }
 
+function closeFullPageViews() {
+  state.marketResearchActive = false;
+  state.marketResearchRoute = null;
+  state.historyActive = false;
+  state.historyRoute = null;
+  state.workspaceActive = false;
+  state.workspaceRoute = null;
+  applyMarketResearchVisibility();
+  applyHistoryVisibility();
+  applyWorkspaceVisibility();
+}
+
 function setAboutRoute(active, { replace = false, focus = true } = {}) {
   state.aboutActive = Boolean(active);
   const url = new URL(window.location.href);
   url.pathname = state.aboutActive ? "/about" : "/";
   if (!state.aboutActive) {
-    state.marketResearchActive = false;
-    state.marketResearchRoute = null;
-    state.historyActive = false;
-    state.historyRoute = null;
-    state.workspaceActive = false;
-    state.workspaceRoute = null;
-    applyMarketResearchVisibility();
-    applyHistoryVisibility();
-    applyWorkspaceVisibility();
+    closeFullPageViews();
   }
   history[replace ? "replaceState" : "pushState"]({ edgeboardAbout: state.aboutActive }, "", url);
   applyAboutVisibility({ focus });
@@ -4976,6 +4980,7 @@ function activateNavigationSelection(selection, {
   restoreFocus = true,
   resetResearch = true,
 } = {}) {
+  closeFullPageViews();
   const normalized = normalizeNavigationSelection(selection, navigationModel.allLeagues, defaultLeague?.leagueId);
   const previousSportId = currentLeague()?.sportId;
   const resolvedLeague = researchLeagueForSelection(normalized, state.leagueId);
@@ -6739,7 +6744,7 @@ document.addEventListener("click", (event) => {
   const visualLinkTarget = event.target.closest("[data-open-visual]");
   if (visualLinkTarget) {
     event.preventDefault();
-    if (state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
+    closeFullPageViews();
     const entity = entityRegistry.getEntity(visualLinkTarget.dataset.visualEntity);
     openVisualAnalytics({
       visualizationType: visualLinkTarget.dataset.openVisual || defaultVisualizationType(entity),
@@ -6755,7 +6760,7 @@ document.addEventListener("click", (event) => {
   const athleteLinkTarget = event.target.closest("[data-open-athlete]");
   if (athleteLinkTarget) {
     event.preventDefault();
-    if (state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
+    closeFullPageViews();
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
     renderAthleteSearchResults();
@@ -6765,7 +6770,7 @@ document.addEventListener("click", (event) => {
   const entityLinkTarget = event.target.closest("[data-open-entity]");
   if (entityLinkTarget) {
     event.preventDefault();
-    if (state.marketResearchActive) { state.marketResearchActive = false; state.marketResearchRoute = null; applyMarketResearchVisibility(); }
+    closeFullPageViews();
     state.athleteSearchResults = [];
     state.athleteSearchIndex = -1;
     renderAthleteSearchResults();
